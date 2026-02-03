@@ -1,6 +1,10 @@
 package Controllers
 
-import "database/sql"
+import (
+	"cuento-backend/src/Entities"
+	"database/sql"
+	"encoding/json"
+)
 
 func GetCharacterTemplate(db *sql.DB) (string, error) {
 	var config string
@@ -12,4 +16,30 @@ func GetCharacterTemplate(db *sql.DB) (string, error) {
 		return "", err
 	}
 	return config, nil
+}
+
+func UpdateCharacterTemplate(db *sql.DB, config string) error {
+	_, err := db.Exec("UPDATE custom_field_config SET config = ? WHERE entity_type = 'character'", config)
+	if err != nil {
+		return err
+	}
+	res, err := db.Exec("SHOW TABLES LIKE 'character_flattened';")
+	if err != nil {
+		return err
+	}
+
+	var customConfig []Entities.CustomFieldConfig
+	err = json.Unmarshal([]byte(config), &customConfig)
+	if err != nil {
+		return err
+	}
+	customFieldEntity := Entities.CustomFieldEntity{FieldConfig: customConfig}
+
+	n, _ := res.RowsAffected()
+	if n == int64(0) {
+		Entities.GenerateEntityTables(customFieldEntity, "character", db)
+	} else {
+		Entities.UpdateFlattenedTable(customFieldEntity, "character", db)
+	}
+	return nil
 }
