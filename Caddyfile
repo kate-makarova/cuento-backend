@@ -1,0 +1,11 @@
+:80 {
+    # Serve frontend files
+    root * /usr/share/caddy
+    file_server
+
+    # Proxy API requests to the Go backend
+    # handle_path strips the /api prefix before forwarding
+    handle_path /api/* {
+        reverse_proxy app:8080
+    }
+}
