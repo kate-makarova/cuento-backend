@@ -23,7 +23,10 @@ func UpdateCharacterTemplate(db *sql.DB, config string) error {
 	if err != nil {
 		return err
 	}
-	res, err := db.Exec("SHOW TABLES LIKE 'character_flattened';")
+
+	// Check if the flattened table exists using a reliable query
+	var tableExists int
+	err = db.QueryRow("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?", "character_flattened").Scan(&tableExists)
 	if err != nil {
 		return err
 	}
@@ -35,11 +38,9 @@ func UpdateCharacterTemplate(db *sql.DB, config string) error {
 	}
 	customFieldEntity := Entities.CustomFieldEntity{FieldConfig: customConfig}
 
-	n, _ := res.RowsAffected()
-	if n == int64(0) {
-		Entities.GenerateEntityTables(customFieldEntity, "character", db)
-	} else {
-		Entities.UpdateFlattenedTable(customFieldEntity, "character", db)
+	if tableExists == 0 {
+		return Entities.GenerateEntityTables(customFieldEntity, "character", db)
 	}
-	return nil
+
+	return Entities.UpdateFlattenedTable(customFieldEntity, "character", db)
 }

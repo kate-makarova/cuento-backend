@@ -51,7 +51,7 @@ func getCustomFields(entity CustomFieldEntity) map[string]CustomFieldData {
 }
 
 func GenerateEntityTables(entity CustomFieldEntity, entityName string, db *sql.DB) error {
-	customFieldMainTableSQL := "CREATE TABLE " + entityName + "_main (" +
+	customFieldMainTableSQL := "CREATE TABLE IF NOT EXISTS " + entityName + "_main (" +
 		"entity_id INT," +
 		"field_machine_name VARCHAR(255)," +
 		"field_type INT," +
@@ -61,7 +61,7 @@ func GenerateEntityTables(entity CustomFieldEntity, entityName string, db *sql.D
 		"value_text TEXT," +
 		"value_date DATETIME)"
 
-	customFieldFlattenedTableSQL := "CREATE TABLE " + entityName + "_flattened (" +
+	customFieldFlattenedTableSQL := "CREATE TABLE IF NOT EXISTS " + entityName + "_flattened (" +
 		"entity_id INT"
 
 	fieldTypeMap := map[string]string{
@@ -87,7 +87,7 @@ func GenerateEntityTables(entity CustomFieldEntity, entityName string, db *sql.D
 		}
 		customFieldFlattenedTableSQL +=
 			", " + config.MachineFieldName + " " + fieldTypeMap[config.FieldType] +
-			" AS (SELECT " + valCol + " FROM " + entityName + "_main WHERE " + entityName + "_main.entity_id = entity_id AND field_machine_name = '" + config.MachineFieldName + "') PERSISTENT"
+				" AS (SELECT " + valCol + " FROM " + entityName + "_main WHERE " + entityName + "_main.entity_id = entity_id AND field_machine_name = '" + config.MachineFieldName + "') PERSISTENT"
 	}
 	customFieldFlattenedTableSQL += ")"
 
