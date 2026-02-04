@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cuento-backend/src/Controllers"
 	"cuento-backend/src/Install"
 	"fmt"
 	"net/http"
@@ -25,6 +26,23 @@ func main() {
 			fmt.Println(err.Error())
 			return
 		}
+	})
+	r.POST("/character-template/update", func(c *gin.Context) {
+		// Get the raw request body (JSON config)
+		jsonData, err := c.GetRawData()
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+			return
+		}
+
+		if err := Controllers.UpdateCharacterTemplate(Services.DB, jsonData); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "updated",
+		})
 	})
 	r.Run() // listen and serve on 0.0.0.0:8080
 }

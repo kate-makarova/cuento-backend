@@ -11,10 +11,10 @@ type CustomField struct {
 }
 
 type CustomFieldConfig struct {
-	MachineFieldName string
-	HumanFieldName   string
-	FieldType        string
-	FieldValue       interface{}
+	MachineFieldName string `json:"machine_field_name"`
+	HumanFieldName   string `json:"human_field_name"`
+	FieldType        string `json:"field_type"`
+	Order            int    `json:"order"`
 }
 
 type CustomFieldData struct {
@@ -62,7 +62,7 @@ func GenerateEntityTables(entity CustomFieldEntity, entityName string, db *sql.D
 		"value_date DATETIME)"
 
 	customFieldFlattenedTableSQL := "CREATE TABLE IF NOT EXISTS " + entityName + "_flattened (" +
-		"entity_id INT"
+		"entity_id INT PRIMARY KEY"
 
 	fieldTypeMap := map[string]string{
 		"int":     "INT",
@@ -85,9 +85,7 @@ func GenerateEntityTables(entity CustomFieldEntity, entityName string, db *sql.D
 		if valCol == "" {
 			valCol = "value_string"
 		}
-		customFieldFlattenedTableSQL +=
-			", " + config.MachineFieldName + " " + fieldTypeMap[config.FieldType] +
-				" AS (SELECT " + valCol + " FROM " + entityName + "_main WHERE " + entityName + "_main.entity_id = entity_id AND field_machine_name = '" + config.MachineFieldName + "') PERSISTENT"
+		customFieldFlattenedTableSQL += ", " + config.MachineFieldName + " " + fieldTypeMap[config.FieldType]
 	}
 	customFieldFlattenedTableSQL += ")"
 
@@ -97,7 +95,7 @@ func GenerateEntityTables(entity CustomFieldEntity, entityName string, db *sql.D
 	if _, err := db.Exec(customFieldFlattenedTableSQL); err != nil {
 		return fmt.Errorf("error creating flattened table: %w", err)
 	}
-	return nil
+	return UpdateTriggers(entity, entityName, db)
 }
 
 func UpdateFlattenedTable(entity CustomFieldEntity, entityName string, db *sql.DB) error {
@@ -155,8 +153,7 @@ func UpdateFlattenedTable(entity CustomFieldEntity, entityName string, db *sql.D
 
 			// Note: Table and column names cannot be parameterized in SQL.
 			// Ensure MachineFieldName is sanitized in production to prevent SQL injection.
-			alterSQL := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s AS (SELECT %s FROM %s_main WHERE %s_main.entity_id = entity_id AND field_machine_name = '%s') PERSISTENT",
-				tableName, config.MachineFieldName, sqlType, valCol, entityName, entityName, config.MachineFieldName)
+			alterSQL := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", tableName, config.MachineFieldName, sqlType)
 
 			if _, err := db.Exec(alterSQL); err != nil {
 				return fmt.Errorf("failed to add column %s: %w", config.MachineFieldName, err)
@@ -177,6 +174,58 @@ func UpdateFlattenedTable(entity CustomFieldEntity, entityName string, db *sql.D
 				return fmt.Errorf("failed to drop column %s: %w", colName, err)
 			}
 		}
+	}
+
+	return UpdateTriggers(entity, entityName, db)
+}
+
+func UpdateTriggers(entity CustomFieldEntity, entityName string, db *sql.DB) error {
+	valueColumnMap := map[string]string{
+		"int":     "value_int",
+		"decimal": "value_decimal",
+		"string":  "value_string",
+		"text":    "value_text",
+		"date":    "value_date",
+	}
+
+	triggerBody := ""
+	deleteTriggerBody := ""
+
+	for _, config := range entity.FieldConfig {
+		valCol := valueColumnMap[config.FieldType]
+		if valCol == "" {
+			valCol = "value_string"
+		}
+		// Update the specific column in the flattened table when the main table row matches the field name
+		triggerBody += fmt.Sprintf("IF NEW.field_machine_name = '%s' THEN UPDATE %s_flattened SET %s = NEW.%s WHERE entity_id = NEW.entity_id; END IF; ", config.MachineFieldName, entityName, config.MachineFieldName, valCol)
+		deleteTriggerBody += fmt.Sprintf("IF OLD.field_machine_name = '%s' THEN UPDATE %s_flattened SET %s = NULL WHERE entity_id = OLD.entity_id; END IF; ", config.MachineFieldName, entityName, config.MachineFieldName)
+	}
+
+	// Drop existing triggers to ensure we update them with new fields
+	triggers := []string{"insert", "update", "delete"}
+	for _, t := range triggers {
+		if _, err := db.Exec(fmt.Sprintf("DROP TRIGGER IF EXISTS %s_main_after_%s", entityName, t)); err != nil {
+			return fmt.Errorf("failed to drop trigger %s: %w", t, err)
+		}
+	}
+
+	// Create INSERT Trigger
+	// We use INSERT IGNORE to ensure the row exists in flattened table (requires entity_id to be PRIMARY KEY or UNIQUE)
+	insertSQL := fmt.Sprintf("CREATE TRIGGER %s_main_after_insert AFTER INSERT ON %s_main FOR EACH ROW BEGIN INSERT IGNORE INTO %s_flattened (entity_id) VALUES (NEW.entity_id); %s END", entityName, entityName, entityName, triggerBody)
+	if _, err := db.Exec(insertSQL); err != nil {
+		return fmt.Errorf("failed to create insert trigger: %w", err)
+	}
+
+	// Create UPDATE Trigger
+	updateSQL := fmt.Sprintf("CREATE TRIGGER %s_main_after_update AFTER UPDATE ON %s_main FOR EACH ROW BEGIN INSERT IGNORE INTO %s_flattened (entity_id) VALUES (NEW.entity_id); %s END", entityName, entityName, entityName, triggerBody)
+	if _, err := db.Exec(updateSQL); err != nil {
+		return fmt.Errorf("failed to create update trigger: %w", err)
+	}
+
+	// Create DELETE Trigger
+	deleteSQL := fmt.Sprintf("CREATE TRIGGER %s_main_after_delete AFTER DELETE ON %s_main FOR EACH ROW BEGIN %s END", entityName, entityName, deleteTriggerBody)
+	if _, err := db.Exec(deleteSQL); err != nil {
+		return fmt.Errorf("failed to create delete trigger: %w", err)
 	}
 
 	return nil

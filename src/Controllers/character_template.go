@@ -18,8 +18,8 @@ func GetCharacterTemplate(db *sql.DB) (string, error) {
 	return config, nil
 }
 
-func UpdateCharacterTemplate(db *sql.DB, config string) error {
-	_, err := db.Exec("UPDATE custom_field_config SET config = ? WHERE entity_type = 'character'", config)
+func UpdateCharacterTemplate(db *sql.DB, config []byte) error {
+	_, err := db.Exec("UPDATE custom_field_config SET config = ? WHERE entity_type = 'character'", string(config))
 	if err != nil {
 		return err
 	}
@@ -32,7 +32,7 @@ func UpdateCharacterTemplate(db *sql.DB, config string) error {
 	}
 
 	var customConfig []Entities.CustomFieldConfig
-	err = json.Unmarshal([]byte(config), &customConfig)
+	err = json.Unmarshal(config, &customConfig)
 	if err != nil {
 		return err
 	}
