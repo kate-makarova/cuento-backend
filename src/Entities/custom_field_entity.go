@@ -54,7 +54,7 @@ func GenerateEntityTables(entity CustomFieldEntity, entityName string, db *sql.D
 	customFieldMainTableSQL := "CREATE TABLE IF NOT EXISTS " + entityName + "_main (" +
 		"entity_id INT," +
 		"field_machine_name VARCHAR(255)," +
-		"field_type INT," +
+		"field_type VARCHAR(10)," +
 		"value_int INT," +
 		"value_decimal DECIMAL(10,2)," +
 		"value_string VARCHAR(255)," +
