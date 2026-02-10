@@ -10,6 +10,19 @@ import (
 	"strings"
 )
 
+func IdentifyBaseEntity(className string) (interface{}, error) {
+	var entity interface{}
+	switch className {
+	case "character":
+		entity = &Entities.Character{}
+	case "character_profile":
+		entity = &Entities.CharacterProfile{}
+	default:
+		return nil, fmt.Errorf("unknown entity class: %s", className)
+	}
+	return entity, nil
+}
+
 func GetEntity(id int64, className string, db *sql.DB) (interface{}, error) {
 	// Basic validation
 	for _, r := range className {
@@ -83,12 +96,9 @@ func GetEntity(id int64, className string, db *sql.DB) (interface{}, error) {
 	}
 
 	// 2. Instantiate struct
-	var entity interface{}
-	switch className {
-	case "character":
-		entity = &Entities.Character{}
-	default:
-		return nil, fmt.Errorf("unknown entity class: %s", className)
+	var entity, er = IdentifyBaseEntity(className)
+	if er != nil {
+		return nil, er
 	}
 
 	// 3. Fill struct
@@ -346,12 +356,9 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 	}
 
 	// 1. Identify base fields
-	var entity interface{}
-	switch className {
-	case "character":
-		entity = &Entities.Character{}
-	default:
-		return nil, fmt.Errorf("unknown entity class: %s", className)
+	var entity, err = IdentifyBaseEntity(className)
+	if err != nil {
+		return nil, err
 	}
 
 	v := reflect.ValueOf(entity).Elem()
