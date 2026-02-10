@@ -11,6 +11,7 @@ create table users
     date_last_visit    datetime     null,
     interface_language varchar(50)  null,
     interface_timezone varchar(50)  null,
+    PRIMARY KEY (id),
     constraint users_pk_2
         unique (username),
     constraint users_pk_3
@@ -21,7 +22,6 @@ CREATE TABLE custom_field_config
 (
     entity_type VARCHAR(255) NOT NULL,
     config      JSON         NULL,
-    -- It is highly recommended to add a Primary Key for InnoDB performance
     PRIMARY KEY (entity_type)
 );
 
@@ -44,7 +44,8 @@ CREATE TABLE subforums (
     name VARCHAR(255) NULL,
     position INT NULL,
     topic_number INT NULL,
-    post_number INT NULL
+    post_number INT NULL,
+    PRIMARY KEY (id)
 );
 
 CREATE TABLE topics (
@@ -56,6 +57,7 @@ CREATE TABLE topics (
     post_number INT,
     author_user_id INT NOT NULL,
     subforum_id BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (id),
     CONSTRAINT fk_topics_subforum
         FOREIGN KEY (subforum_id) REFERENCES subforums (id) ON DELETE CASCADE,
     CONSTRAINT fk_topics_user
@@ -69,6 +71,7 @@ CREATE TABLE posts (
     date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
     content TEXT NOT NULL,
     character_profile_id BIGINT UNSIGNED,
+    PRIMARY KEY (id),
     CONSTRAINT fk_posts_topic
         FOREIGN KEY (topic_id) REFERENCES topics (id) ON DELETE CASCADE,
     CONSTRAINT fk_posts_user
@@ -82,17 +85,15 @@ create table character_base
 		user_id int          null,
 		name    varchar(255) null,
 		avatar  varchar(255) null,
-		constraint id,
-		unique (id),
+		PRIMARY KEY (id),
 		constraint character_base_users_id_fk
 		foreign key (user_id) references users (id)
 		);
 
-create table character_base
+create table character_profile_base
 		(id      bigint unsigned auto_increment,
 		character_id int          null,
-		constraint id
-		unique (id),
+		PRIMARY KEY (id),
 		constraint character_profile_base_character_id_fk
 		foreign key (character_id) references character_base (id)
 		);
@@ -101,8 +102,7 @@ create table episode_base
 		(id      bigint unsigned auto_increment,
 		topic_id int          null,
 		name    varchar(255) null,
-		constraint id
-		unique (id),
+		PRIMARY KEY (id),
 		constraint episode_base_topics_id_fk
 		foreign key (topic_id) references topics (id)
 		);
