@@ -3,10 +3,10 @@ package Entities
 import "database/sql"
 
 type Character struct {
-	Id           int
-	Name         string
-	Avatar       *string
-	CustomFields CustomFieldEntity
+	Id           int               `json:"id"`
+	Name         string            `json:"name"`
+	Avatar       *string           `json:"avatar"`
+	CustomFields CustomFieldEntity `json:"custom_fields"`
 }
 
 func GenerateCharacterTable(db *sql.DB) {
