@@ -5,8 +5,8 @@ import "time"
 type TopicType int
 
 const (
-	General TopicType = 0
-	Episode TopicType = 1
+	GeneralTopic TopicType = 0
+	EpisodeTopic TopicType = 1
 )
 
 type Topic struct {
