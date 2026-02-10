@@ -140,7 +140,7 @@ func UpdateFlattenedTable(entity CustomFieldEntity, entityName string, db *sql.D
 
 	// 3. Remove columns that are no longer in the config
 	for colName := range existingColumns {
-		// Skip the primary identifier column so we don't delete the ID
+		// Skip the primary identifier column so we don't delete the Id
 		if colName == "entity_id" {
 			continue
 		}

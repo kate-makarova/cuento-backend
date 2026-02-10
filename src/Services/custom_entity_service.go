@@ -236,7 +236,7 @@ func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}
 			return nil, fmt.Errorf("failed to get insert id: %w", err)
 		}
 
-		// Set ID back to struct
+		// Set Id back to struct
 		idField := v.FieldByName("Id")
 		if idField.IsValid() && idField.CanSet() {
 			idField.SetInt(id)

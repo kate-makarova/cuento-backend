@@ -49,11 +49,11 @@ func Register(c *gin.Context, db *sql.DB) {
 
 	id, err := res.LastInsertId()
 	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get user ID"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get user Id"})
 		c.Abort()
 		return
 	}
-	user.ID = int(id)
+	user.Id = int(id)
 	user.Password = "" // Don't return password
 	user.Roles = []string{defaultRole}
 
@@ -71,7 +71,7 @@ func Login(c *gin.Context, db *sql.DB) {
 	var user Entities.User
 	var rolesStr string
 	query := "SELECT id, username, email, password, roles FROM users WHERE username = ?"
-	err := db.QueryRow(query, creds.Username).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &rolesStr)
+	err := db.QueryRow(query, creds.Username).Scan(&user.Id, &user.Username, &user.Email, &user.Password, &rolesStr)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Invalid credentials"})
