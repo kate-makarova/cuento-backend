@@ -4,6 +4,7 @@ import (
 	"cuento-backend/src/Entities"
 	"database/sql"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -34,8 +35,10 @@ func Register(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	query := "INSERT INTO users (username, email, password) VALUES (?, ?, ?)"
-	res, err := db.Exec(query, user.Username, user.Email, user.Password)
+	// Default role is "user"
+	defaultRole := "user"
+	query := "INSERT INTO users (username, email, password, roles, date_registered) VALUES (?, ?, ?, ?, ?)"
+	res, err := db.Exec(query, user.Username, user.Email, user.Password, defaultRole, time.Now())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
@@ -48,6 +51,7 @@ func Register(c *gin.Context, db *sql.DB) {
 	}
 	user.ID = int(id)
 	user.Password = "" // Don't return password
+	user.Roles = []string{defaultRole}
 
 	c.JSON(http.StatusCreated, user)
 }
@@ -60,8 +64,9 @@ func Login(c *gin.Context, db *sql.DB) {
 	}
 
 	var user Entities.User
-	query := "SELECT id, username, email, password FROM users WHERE username = ?"
-	err := db.QueryRow(query, creds.Username).Scan(&user.ID, &user.Username, &user.Email, &user.Password)
+	var rolesStr string
+	query := "SELECT id, username, email, password, roles FROM users WHERE username = ?"
+	err := db.QueryRow(query, creds.Username).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &rolesStr)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
@@ -69,6 +74,12 @@ func Login(c *gin.Context, db *sql.DB) {
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
+	}
+
+	if rolesStr != "" {
+		user.Roles = strings.Split(rolesStr, ",")
+	} else {
+		user.Roles = []string{}
 	}
 
 	if err := user.CheckPassword(creds.Password); err != nil {
@@ -92,5 +103,5 @@ func Login(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": tokenString})
+	c.JSON(http.StatusOK, gin.H{"token": tokenString, "user": user})
 }

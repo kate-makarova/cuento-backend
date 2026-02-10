@@ -1,3 +1,22 @@
+create table users
+(
+    id                 int auto_increment
+        primary key,
+    username           varchar(255) null,
+    email              varchar(255) null,
+    password           varchar(255) null,
+    date_registered    datetime     null,
+    roles              varchar(255) null,
+    avatar             varchar(255) null,
+    date_last_visit    datetime     null,
+    interface_language varchar(50)  null,
+    interface_timezone varchar(50)  null,
+    constraint users_pk_2
+        unique (username),
+    constraint users_pk_3
+        unique (email)
+);
+
 CREATE TABLE custom_field_config
 (
     entity_type VARCHAR(255) NOT NULL,
