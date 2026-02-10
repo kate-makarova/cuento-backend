@@ -18,6 +18,29 @@ func GetEntity(id int64, className string, db *sql.DB) (interface{}, error) {
 		}
 	}
 
+	// Fetch Config
+	queryConfig := fmt.Sprintf("SELECT config FROM custom_field_config WHERE entity_type = '%s'", className)
+	rowsConfig, err := db.Query(queryConfig)
+	if err != nil {
+		return nil, err
+	}
+	defer rowsConfig.Close()
+
+	config := make([]Entities.CustomFieldConfig, 0)
+	if rowsConfig.Next() {
+		var configBytes []byte
+		if err := rowsConfig.Scan(&configBytes); err != nil {
+			return nil, err
+		}
+		if len(configBytes) > 0 {
+			if err := json.Unmarshal(configBytes, &config); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		return nil, fmt.Errorf("no configuration found for entity type %s", className)
+	}
+
 	// 1. Fetch data as map
 	query := fmt.Sprintf("SELECT * FROM %s_base LEFT JOIN %s_flattened ON %s_base.id = %s_flattened.entity_id WHERE %s_base.id = ?", className, className, className, className, className)
 
@@ -69,14 +92,14 @@ func GetEntity(id int64, className string, db *sql.DB) (interface{}, error) {
 	}
 
 	// 3. Fill struct
-	if err := fillEntity(entity, data); err != nil {
+	if err := fillEntity(entity, data, config); err != nil {
 		return nil, err
 	}
 
 	return entity, nil
 }
 
-func fillEntity(entity interface{}, data map[string]interface{}) error {
+func fillEntity(entity interface{}, data map[string]interface{}, config []Entities.CustomFieldConfig) error {
 	v := reflect.ValueOf(entity).Elem()
 	t := v.Type()
 
@@ -102,20 +125,22 @@ func fillEntity(entity interface{}, data map[string]interface{}) error {
 	// Look for a field of type CustomFieldEntity
 	cfField := v.FieldByName("CustomFields")
 	if cfField.IsValid() && cfField.Type() == reflect.TypeOf(Entities.CustomFieldEntity{}) {
-		var cfSlice []Entities.CustomField
+		cfMap := make(map[string]interface{})
 		for key, val := range data {
 			if !usedKeys[key] && key != "entity_id" { // Ignore entity_id as it's duplicate of id
-				cfSlice = append(cfSlice, Entities.CustomField{
-					FieldName:  key,
-					FieldValue: val,
-				})
+				cfMap[key] = val
 			}
 		}
 
-		// Set the CustomFields slice in the CustomFieldEntity struct
-		cfListField := cfField.FieldByName("CustomFields")
-		if cfListField.IsValid() && cfListField.CanSet() {
-			cfListField.Set(reflect.ValueOf(cfSlice))
+		// Set the CustomFields map in the CustomFieldEntity struct
+		cfMapField := cfField.FieldByName("CustomFields")
+		if cfMapField.IsValid() && cfMapField.CanSet() {
+			cfMapField.Set(reflect.ValueOf(cfMap))
+		}
+
+		cfConfigField := cfField.FieldByName("FieldConfig")
+		if cfConfigField.IsValid() && cfConfigField.CanSet() {
+			cfConfigField.Set(reflect.ValueOf(config))
 		}
 	}
 
@@ -223,8 +248,8 @@ func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}
 	// 2. Insert custom fields
 	cfField := v.FieldByName("CustomFields")
 	if cfField.IsValid() {
-		cfListField := cfField.FieldByName("CustomFields")
-		if cfListField.IsValid() && cfListField.Kind() == reflect.Slice && cfListField.Len() > 0 {
+		cfMapField := cfField.FieldByName("CustomFields")
+		if cfMapField.IsValid() && cfMapField.Kind() == reflect.Map && cfMapField.Len() > 0 {
 			// Get column types from flattened table
 			rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s_flattened WHERE 1=0", className))
 			if err != nil {
@@ -248,10 +273,10 @@ func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}
 			}
 			defer stmt.Close()
 
-			for i := 0; i < cfListField.Len(); i++ {
-				cf := cfListField.Index(i)
-				fieldName := cf.FieldByName("FieldName").String()
-				fieldValue := cf.FieldByName("FieldValue").Interface()
+			iter := cfMapField.MapRange()
+			for iter.Next() {
+				fieldName := iter.Key().String()
+				fieldValue := iter.Value().Interface()
 
 				dbType, ok := colTypeMap[fieldName]
 				if !ok {
@@ -362,19 +387,17 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 
 	// 3. Update custom fields
 	if cfVal, ok := updates["custom_fields"]; ok {
-		var fields []interface{}
-		// Handle nested structure: custom_fields: { custom_fields: [...] }
-		if cfMap, ok := cfVal.(map[string]interface{}); ok {
-			if fVal, ok := cfMap["custom_fields"]; ok {
-				if fList, ok := fVal.([]interface{}); ok {
-					fields = fList
+		var fieldsMap map[string]interface{}
+
+		if cfEntityMap, ok := cfVal.(map[string]interface{}); ok {
+			if fVal, ok := cfEntityMap["custom_fields"]; ok {
+				if fMap, ok := fVal.(map[string]interface{}); ok {
+					fieldsMap = fMap
 				}
 			}
-		} else if fList, ok := cfVal.([]interface{}); ok {
-			fields = fList
 		}
 
-		if len(fields) > 0 {
+		if len(fieldsMap) > 0 {
 			// Get column types from flattened table
 			rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s_flattened WHERE 1=0", className))
 			if err != nil {
@@ -410,14 +433,7 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 			}
 			defer updateStmt.Close()
 
-			for _, f := range fields {
-				fieldMap, ok := f.(map[string]interface{})
-				if !ok {
-					continue
-				}
-				fieldName, _ := fieldMap["field_name"].(string)
-				fieldValue := fieldMap["field_value"]
-
+			for fieldName, fieldValue := range fieldsMap {
 				if fieldName == "" {
 					continue
 				}

@@ -27,6 +27,9 @@ func main() {
 			return
 		}
 	})
+	r.GET("/character/get/:id", func(c *gin.Context) {
+		Controllers.GetCharacter(c, Services.DB)
+	})
 	r.POST("/character-template/update", func(c *gin.Context) {
 		// Get the raw request body (JSON config)
 		jsonData, err := c.GetRawData()

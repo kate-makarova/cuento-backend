@@ -23,31 +23,8 @@ type CustomFieldData struct {
 }
 
 type CustomFieldEntity struct {
-	CustomFields []CustomField       `json:"custom_fields"`
-	FieldConfig  []CustomFieldConfig `json:"field_config"`
-}
-
-func getCustomFields(entity CustomFieldEntity) map[string]CustomFieldData {
-	// Create a map for faster lookup of custom field values
-	valuesMap := make(map[string]interface{})
-	for _, field := range entity.CustomFields {
-		valuesMap[field.FieldName] = field.FieldValue
-	}
-
-	result := make(map[string]CustomFieldData)
-
-	for _, config := range entity.FieldConfig {
-		if val, ok := valuesMap[config.MachineFieldName]; ok {
-			// Convert interface{} to string
-			strValue := fmt.Sprintf("%v", val)
-			result[config.MachineFieldName] = CustomFieldData{
-				HumanFieldName: config.HumanFieldName,
-				FieldValue:     strValue,
-			}
-		}
-	}
-
-	return result
+	CustomFields map[string]interface{} `json:"custom_fields"`
+	FieldConfig  []CustomFieldConfig    `json:"field_config"`
 }
 
 func GenerateEntityTables(entity CustomFieldEntity, entityName string, db *sql.DB) error {
