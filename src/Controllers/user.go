@@ -2,6 +2,7 @@ package Controllers
 
 import (
 	"cuento-backend/src/Entities"
+	"cuento-backend/src/Middlewares"
 	"database/sql"
 	"net/http"
 	"strings"
@@ -26,27 +27,30 @@ type Claims struct {
 func Register(c *gin.Context, db *sql.DB) {
 	var user Entities.User
 	if err := c.ShouldBindJSON(&user); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
 		return
 	}
 
 	if err := user.HashPassword(user.Password); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to hash password"})
+		c.Abort()
 		return
 	}
 
-	// Default role is "user"
 	defaultRole := "user"
 	query := "INSERT INTO users (username, email, password, roles, date_registered) VALUES (?, ?, ?, ?, ?)"
 	res, err := db.Exec(query, user.Username, user.Email, user.Password, defaultRole, time.Now())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create user"})
+		c.Abort()
 		return
 	}
 
 	id, err := res.LastInsertId()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user ID"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get user ID"})
+		c.Abort()
 		return
 	}
 	user.ID = int(id)
@@ -59,7 +63,8 @@ func Register(c *gin.Context, db *sql.DB) {
 func Login(c *gin.Context, db *sql.DB) {
 	var creds Credentials
 	if err := c.ShouldBindJSON(&creds); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
 		return
 	}
 
@@ -69,10 +74,11 @@ func Login(c *gin.Context, db *sql.DB) {
 	err := db.QueryRow(query, creds.Username).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &rolesStr)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
-			return
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Invalid credentials"})
+		} else {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Database error"})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		c.Abort()
 		return
 	}
 
@@ -83,7 +89,8 @@ func Login(c *gin.Context, db *sql.DB) {
 	}
 
 	if err := user.CheckPassword(creds.Password); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Invalid credentials"})
+		c.Abort()
 		return
 	}
 
@@ -99,7 +106,8 @@ func Login(c *gin.Context, db *sql.DB) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to generate token"})
+		c.Abort()
 		return
 	}
 

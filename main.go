@@ -16,6 +16,9 @@ func main() {
 
 	r := gin.Default()
 
+	// Apply error middleware globally
+	r.Use(Middlewares.ErrorMiddleware())
+
 	// Public routes
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -52,22 +55,12 @@ func main() {
 			Controllers.PatchCharacter(c, Services.DB)
 		})
 
+		// Character Template routes
+		protected.GET("/character-template/get", func(c *gin.Context) {
+			Controllers.GetCharacterTemplate(c, Services.DB)
+		})
 		protected.POST("/character-template/update", func(c *gin.Context) {
-			// Get the raw request body (JSON config)
-			jsonData, err := c.GetRawData()
-			if err != nil {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
-				return
-			}
-
-			if err := Controllers.UpdateCharacterTemplate(Services.DB, jsonData); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-				return
-			}
-
-			c.JSON(http.StatusOK, gin.H{
-				"message": "updated",
-			})
+			Controllers.UpdateCharacterTemplate(c, Services.DB)
 		})
 	}
 
