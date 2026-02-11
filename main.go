@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -15,6 +16,7 @@ func main() {
 	Services.InitDB()
 
 	r := gin.Default()
+	r.Use(cors.Default())
 
 	// Apply error middleware globally
 	r.Use(Middlewares.ErrorMiddleware())
