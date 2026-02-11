@@ -12,6 +12,11 @@ type User struct {
 	Roles    []string `json:"roles"`
 }
 
+type ShortUser struct {
+	Id       int    `json:"id"`
+	Username string `json:"username"`
+}
+
 func (u *User) HashPassword(password string) error {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
 	if err != nil {

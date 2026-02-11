@@ -106,3 +106,11 @@ create table episode_character
          foreign key (episode_id) references episode_base (id),
          foreign key (character_id) references character_base (id)
 		);
+
+create table global_stats
+(
+    stat_name   varchar(255) null
+        primary key,
+    stat_number decimal      null
+);
+

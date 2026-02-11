@@ -40,6 +40,9 @@ func main() {
 	r.POST("/login", func(c *gin.Context) {
 		Controllers.Login(c, Services.DB)
 	})
+	r.GET("/board/info", func(c *gin.Context) {
+		Controllers.GetBoard(c, Services.DB)
+	})
 
 	// Protected routes
 	protected := r.Group("/")
