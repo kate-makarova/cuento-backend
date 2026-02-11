@@ -49,7 +49,9 @@ func GetHomeCategories(c *gin.Context, db *sql.DB) {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan categories: " + err.Error()})
 		}
 		if category.Id != tempCategory.Id {
-			categories = append(categories, category)
+			if category.Id != 0 {
+				categories = append(categories, category)
+			}
 			category = tempCategory
 		}
 		category.Subforums = append(category.Subforums, tempSubforum)
