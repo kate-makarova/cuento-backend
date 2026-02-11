@@ -38,12 +38,22 @@ CREATE TABLE global_settings
 INSERT INTO global_settings (setting_name, setting_value)
 VALUES ('site_name', 'Site Name');
 
+CREATE TABLE categories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NULL,
+    position INT NULL
+);
+
 CREATE TABLE subforums (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    category_id INT NULL,
     name VARCHAR(255) NULL,
+    description TINYTEXT NULL,
     position INT NULL,
     topic_number INT NULL,
-    post_number INT NULL
+    post_number INT NULL,
+    constraint subforums_categories_id_fk
+        foreign key (category_id) references categories (id);
 );
 
 CREATE TABLE topics (

@@ -87,5 +87,5 @@ func GetBoard(c *gin.Context, db *sql.DB) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"board_info": boardInfo})
+	c.JSON(http.StatusOK, boardInfo)
 }
