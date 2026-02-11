@@ -103,6 +103,8 @@ func Login(c *gin.Context, db *sql.DB) {
 		},
 	}
 
+	user.Password = "" // Don't return password
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {

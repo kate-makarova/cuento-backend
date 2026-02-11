@@ -1,7 +1,7 @@
 package Entities
 
 type Subform struct {
-	Id          int    `json:"int"`
+	Id          int    `json:"id"`
 	CategoryId  int    `json:"category_id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
