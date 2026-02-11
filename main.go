@@ -45,6 +45,9 @@ func main() {
 	r.GET("/board/info", func(c *gin.Context) {
 		Controllers.GetBoard(c, Services.DB)
 	})
+	r.GET("/categories/home", func(c *gin.Context) {
+		Controllers.GetHomeCategories(c, Services.DB)
+	})
 
 	// Protected routes
 	protected := r.Group("/")
