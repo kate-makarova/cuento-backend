@@ -52,15 +52,20 @@ CREATE TABLE subforums (
     position INT NULL,
     topic_number INT NULL,
     post_number INT NULL,
+    last_post_topic_id bigint unsigned null;
+    last_post_topic_name varchar(255) null;
+    last_post_id bigint unsigned null;
     constraint subforums_categories_id_fk
         foreign key (category_id) references categories (id);
 );
 
 CREATE TABLE topics (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    status INT NOT NULL,
     name VARCHAR(255) NOT NULL,
     type INT NOT NULL,
     date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_post_id BIGINT UNSIGNED NULL,
     date_last_post DATETIME,
     last_post_author_user_id INT NULL,
     post_number INT,
@@ -71,7 +76,9 @@ CREATE TABLE topics (
     CONSTRAINT fk_topics_user
         FOREIGN KEY (author_user_id) REFERENCES users (id) ON DELETE NO ACTION,
     CONSTRAINT fk_topics_last_post_user
-        FOREIGN KEY (last_post_author_user_id) REFERENCES users (id) ON DELETE NO ACTION
+        FOREIGN KEY (last_post_author_user_id) REFERENCES users (id) ON DELETE NO ACTION,
+    constraint topics_posts_id_fk
+        foreign key (last_post_id) references posts (id);
 );
 
 create table character_base

@@ -48,7 +48,7 @@ func main() {
 	r.GET("/categories/home", func(c *gin.Context) {
 		Controllers.GetHomeCategories(c, Services.DB)
 	})
-	r.GET("/viewforum/:subforum/:page", func(c *gin.Context) {
+	r.GET("/viewforum/:subforum/:pag", func(c *gin.Context) {
 		Controllers.GetTopicsBySubforum(c, Services.DB)
 	})
 

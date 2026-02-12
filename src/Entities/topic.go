@@ -9,13 +9,21 @@ const (
 	EpisodeTopic TopicType = 1
 )
 
+type TopicStatus int
+
+const (
+	Active   TopicStatus = 0
+	Inactive TopicStatus = 1
+)
+
 type Topic struct {
-	Id                   int       `json:"id"`
-	Name                 string    `json:"name"`
-	Type                 TopicType `json:"type"`
-	DateCreated          time.Time `json:"date_created"`
-	DateLastPost         time.Time `json:"date_last_post"`
-	PostNumber           int       `json:"post_number"`
-	AuthorUserId         int       `json:"author_user_id"`
-	LastPostAuthorUserId int       `json:"last_post_author_user_id"`
+	Id                   int         `json:"id"`
+	Status               TopicStatus `json:"status"`
+	Name                 string      `json:"name"`
+	Type                 TopicType   `json:"type"`
+	DateCreated          time.Time   `json:"date_created"`
+	DateLastPost         time.Time   `json:"date_last_post"`
+	PostNumber           int         `json:"post_number"`
+	AuthorUserId         int         `json:"author_user_id"`
+	LastPostAuthorUserId int         `json:"last_post_author_user_id"`
 }
