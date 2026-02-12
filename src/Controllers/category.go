@@ -17,6 +17,11 @@ func GetHomeCategories(c *gin.Context, db *sql.DB) {
 		"    subforums.position as subforum_position," +
 		"   subforums.topic_number," +
 		"    subforums.post_number," +
+		"    subforums.last_post_topic_id," +
+		"    subforums.last_post_topic_name," +
+		"    subforums.last_post_id," +
+		"    subforum.date_last_post, " +
+		"    subforum.last_post_author_user_name," +
 		"    categories.id as category_id," +
 		"    categories.name as category_name," +
 		"    categories.position as category_position" +
@@ -42,6 +47,11 @@ func GetHomeCategories(c *gin.Context, db *sql.DB) {
 			&tempSubforum.Position,
 			&tempSubforum.TopicNumber,
 			&tempSubforum.PostNumber,
+			&tempSubforum.LastPostTopicId,
+			&tempSubforum.LastPostTopicName,
+			&tempSubforum.LastPostId,
+			&tempSubforum.DateLastPost,
+			&tempSubforum.LastPostAuthorName,
 			&tempCategory.Id,
 			&tempCategory.Name,
 			&tempCategory.Position,
