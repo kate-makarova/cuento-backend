@@ -62,13 +62,16 @@ CREATE TABLE topics (
     type INT NOT NULL,
     date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
     date_last_post DATETIME,
+    last_post_author_user_id INT NULL,
     post_number INT,
     author_user_id INT NOT NULL,
     subforum_id BIGINT UNSIGNED NOT NULL,
     CONSTRAINT fk_topics_subforum
-        FOREIGN KEY (subforum_id) REFERENCES subforums (id) ON DELETE CASCADE,
+        FOREIGN KEY (subforum_id) REFERENCES subforums (id) ON DELETE NO ACTION ,
     CONSTRAINT fk_topics_user
-        FOREIGN KEY (author_user_id) REFERENCES users (id) ON DELETE CASCADE
+        FOREIGN KEY (author_user_id) REFERENCES users (id) ON DELETE NO ACTION,
+    CONSTRAINT fk_topics_last_post_user
+        FOREIGN KEY (last_post_author_user_id) REFERENCES users (id) ON DELETE NO ACTION
 );
 
 create table character_base
