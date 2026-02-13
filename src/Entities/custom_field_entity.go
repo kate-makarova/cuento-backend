@@ -3,6 +3,8 @@ package Entities
 import (
 	"database/sql"
 	"fmt"
+
+	"github.com/frustra/bbcode"
 )
 
 type CustomField struct {
@@ -20,11 +22,20 @@ type CustomFieldConfig struct {
 type CustomFieldData struct {
 	HumanFieldName string `json:"human_field_name"`
 	FieldValue     string `json:"field_value"`
+	FormattedValue string `json:"formatted_value,omitempty"` // Optional: Only populated for text fields
 }
 
 type CustomFieldEntity struct {
 	CustomFields map[string]interface{} `json:"custom_fields"`
 	FieldConfig  []CustomFieldConfig    `json:"field_config"`
+}
+
+// Compile-time check or global compiler initialization
+var compiler = bbcode.NewCompiler(true, true)
+
+func ParseBBCode(text string) string {
+	// You can customize tags here if needed
+	return compiler.Compile(text)
 }
 
 func GenerateEntityTables(entity CustomFieldEntity, entityName string, db *sql.DB) error {

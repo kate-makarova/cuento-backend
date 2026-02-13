@@ -5,15 +5,16 @@ import "time"
 type TopicType int
 
 const (
-	GeneralTopic TopicType = 0
-	EpisodeTopic TopicType = 1
+	GeneralTopic        TopicType = 0
+	EpisodeTopic        TopicType = 1
+	CharacterSheetTopic TopicType = 2
 )
 
 type TopicStatus int
 
 const (
-	Active   TopicStatus = 0
-	Inactive TopicStatus = 1
+	ActiveTopic   TopicStatus = 0
+	InactiveTopic TopicStatus = 1
 )
 
 type Topic struct {

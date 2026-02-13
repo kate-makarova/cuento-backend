@@ -36,6 +36,7 @@ require (
 )
 
 require (
+	github.com/frustra/bbcode v0.0.0-20201127003707-6ef347fbe1c8
 	github.com/gin-contrib/cors v1.7.6
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/golang-jwt/jwt/v5 v5.3.1

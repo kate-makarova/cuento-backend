@@ -30,9 +30,18 @@ type CreateTopicRequest struct {
 	Content    string `json:"content" binding:"required"`
 }
 
+type PostRow struct {
+	Id             int       `json:"id"`
+	AuthorUserId   int       `json:"author_user_id"`
+	AuthorUsername string    `json:"author_username"`
+	Content        string    `json:"content"`
+	ContentHtml    string    `json:"content_html"`
+	DatePosted     time.Time `json:"date_posted"`
+}
+
 func GetTopicsBySubforum(c *gin.Context, db *sql.DB) {
 	subforumStr := c.Param("subforum")
-	pageStr := c.Param("pag")
+	pageStr := c.Param("page")
 	subforum64, err := strconv.ParseInt(subforumStr, 10, 0)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Incorrect subforum parameter"})
@@ -152,4 +161,47 @@ func CreateTopic(c *gin.Context, db *sql.DB) {
 	})
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Topic created successfully", "topic_id": topicID})
+}
+
+func GetPostsByTopic(c *gin.Context, db *sql.DB) {
+	topicIDStr := c.Param("id")
+	pageStr := c.Param("page")
+
+	topicID64, err := strconv.ParseInt(topicIDStr, 10, 0)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Incorrect topic ID"})
+		return
+	}
+	topicID := int(topicID64)
+
+	page64, err := strconv.ParseInt(pageStr, 10, 0)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Incorrect page parameter"})
+		return
+	}
+	page := int(page64) - 1
+	if page < 0 {
+		page = 0
+	}
+
+	limit := 15
+	rows, err := db.Query("SELECT p.id, p.author_user_id, u.username, p.content, p.date_created FROM posts p JOIN users u ON p.author_user_id = u.id WHERE p.topic_id = ? ORDER BY p.date_created ASC LIMIT ? OFFSET ?", topicID, limit, page*limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get posts: " + err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	var posts []PostRow
+	for rows.Next() {
+		var post PostRow
+		if err := rows.Scan(&post.Id, &post.AuthorUserId, &post.AuthorUsername, &post.Content, &post.DatePosted); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to scan posts: " + err.Error()})
+			return
+		}
+		post.ContentHtml = Entities.ParseBBCode(post.Content)
+		posts = append(posts, post)
+	}
+
+	c.JSON(http.StatusOK, posts)
 }

@@ -17,7 +17,10 @@ func main() {
 	Services.RegisterEventHandlers(Services.DB)
 
 	r := gin.Default()
-	r.Use(cors.Default())
+	config := cors.DefaultConfig()
+	config.AllowAllOrigins = true
+	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
+	r.Use(cors.New(config))
 
 	// Apply error middleware globally
 	r.Use(Middlewares.ErrorMiddleware())
@@ -49,8 +52,11 @@ func main() {
 	r.GET("/categories/home", func(c *gin.Context) {
 		Controllers.GetHomeCategories(c, Services.DB)
 	})
-	r.GET("/viewforum/:subforum/:pag", func(c *gin.Context) {
+	r.GET("/viewforum/:subforum/:page", func(c *gin.Context) {
 		Controllers.GetTopicsBySubforum(c, Services.DB)
+	})
+	r.GET("/viewtopic/:id/:page", func(c *gin.Context) {
+		Controllers.GetPostsByTopic(c, Services.DB)
 	})
 
 	// Protected routes
@@ -73,6 +79,9 @@ func main() {
 		})
 		protected.POST("/character-template/update", func(c *gin.Context) {
 			Controllers.UpdateCharacterTemplate(c, Services.DB)
+		})
+		protected.POST("/episode/create", func(c *gin.Context) {
+			Controllers.CreateEpisode(c, Services.DB)
 		})
 	}
 
