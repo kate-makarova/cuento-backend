@@ -2,6 +2,7 @@ package Controllers
 
 import (
 	"cuento-backend/src/Entities"
+	"cuento-backend/src/Events"
 	"database/sql"
 	"net/http"
 	"strconv"
@@ -21,6 +22,12 @@ type ViewforumRow struct {
 	AuthorUsername         string               `json:"author_username"`
 	LastPostAuthorUserId   int                  `json:"last_post_author_user_id"`
 	LastPostAuthorUsername string               `json:"las_post_author_username"`
+}
+
+type CreateTopicRequest struct {
+	SubforumId int    `json:"subforum_id" binding:"required"`
+	Title      string `json:"title" binding:"required"`
+	Content    string `json:"content" binding:"required"`
 }
 
 func GetTopicsBySubforum(c *gin.Context, db *sql.DB) {
@@ -63,4 +70,86 @@ func GetTopicsBySubforum(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, topics)
+}
+
+func CreateTopic(c *gin.Context, db *sql.DB) {
+	var req CreateTopicRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
+		return
+	}
+
+	userIDVal, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var userID int
+	switch v := userIDVal.(type) {
+	case int:
+		userID = v
+	case float64:
+		userID = int(v)
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID type"})
+		return
+	}
+
+	var username string
+	err := db.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details: " + err.Error()})
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Insert Topic
+	res, err := tx.Exec("INSERT INTO topics (subforum_id, name, author_user_id, date_created, date_last_post, status, type, post_number, last_post_author_user_id) VALUES (?, ?, ?, NOW(), NOW(), 0, 0, 1, ?)",
+		req.SubforumId, req.Title, userID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert topic: " + err.Error()})
+		return
+	}
+	topicID, err := res.LastInsertId()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get topic ID"})
+		return
+	}
+
+	// Insert Post
+	res, err = tx.Exec("INSERT INTO posts (topic_id, author_user_id, content, date_created) VALUES (?, ?, ?, NOW())",
+		topicID, userID, req.Content)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert post: " + err.Error()})
+		return
+	}
+	postID, err := res.LastInsertId()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get post ID"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		return
+	}
+
+	// Publish event to update stats asynchronously
+	Events.Publish(db, Events.TopicCreated, Events.TopicCreatedEvent{
+		TopicID:    topicID,
+		SubforumID: req.SubforumId,
+		Title:      req.Title,
+		PostID:     postID,
+		UserID:     userID,
+		Username:   username,
+	})
+
+	c.JSON(http.StatusCreated, gin.H{"message": "Topic created successfully", "topic_id": topicID})
 }

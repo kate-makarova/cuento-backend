@@ -14,6 +14,7 @@ import (
 
 func main() {
 	Services.InitDB()
+	Services.RegisterEventHandlers(Services.DB)
 
 	r := gin.Default()
 	r.Use(cors.Default())
