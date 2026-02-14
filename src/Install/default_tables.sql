@@ -86,8 +86,11 @@ create table character_base
 		user_id int          null,
 		name    varchar(255) null,
 		avatar  varchar(255) null,
+        topic_id bigint unsigned null,
 		constraint character_base_users_id_fk
-		foreign key (user_id) references users (id)
+		foreign key (user_id) references users (id),
+        constraint character_base_topics_id_fk
+		foreign key (topic_id) references topics (id)
 		);
 
 create table character_profile_base

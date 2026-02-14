@@ -2,6 +2,7 @@ package Services
 
 import (
 	"cuento-backend/src/Events"
+	"cuento-backend/src/Websockets"
 	"database/sql"
 	"fmt"
 )
@@ -37,5 +38,14 @@ func RegisterEventHandlers(db *sql.DB) {
 		if err != nil {
 			fmt.Printf("Error updating subforum stats: %v\n", err)
 		}
+	})
+
+	// Subscriber 3: Send Live Notifications
+	Events.Subscribe(Events.NotificationCreated, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.NotificationEvent)
+		if !ok {
+			return
+		}
+		Websockets.MainHub.SendNotification(event.UserID, event)
 	})
 }

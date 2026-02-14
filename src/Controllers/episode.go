@@ -3,9 +3,8 @@ package Controllers
 import (
 	"cuento-backend/src/Entities"
 	"cuento-backend/src/Middlewares"
+	"cuento-backend/src/Services"
 	"database/sql"
-	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -45,25 +44,6 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	// Fetch Custom Field Config for "episode"
-	var configJSON string
-	var fieldConfigs []Entities.CustomFieldConfig
-	err := db.QueryRow("SELECT config FROM custom_field_config WHERE entity_type = 'episode'").Scan(&configJSON)
-	if err != nil {
-		if err != sql.ErrNoRows {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get episode config: " + err.Error()})
-			c.Abort()
-			return
-		}
-		// If no config, fieldConfigs remains empty, which is fine.
-	} else {
-		if err := json.Unmarshal([]byte(configJSON), &fieldConfigs); err != nil {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to parse episode config: " + err.Error()})
-			c.Abort()
-			return
-		}
-	}
-
 	tx, err := db.Begin()
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start transaction"})
@@ -88,79 +68,71 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	// 2. Insert Episode
-	// Assuming 'episodes' table has columns: topic_id, name.
-	res, err = tx.Exec("INSERT INTO episode_base (topic_id, name) VALUES (?, ?)", topicID, req.Name)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to insert episode: " + err.Error()})
-		c.Abort()
-		return
-	}
-	episodeID, err := res.LastInsertId()
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get episode ID"})
-		c.Abort()
-		return
-	}
-
-	// 3. Insert Custom Fields
-	for _, fieldConfig := range fieldConfigs {
-		if val, ok := req.CustomFields[fieldConfig.MachineFieldName]; ok {
-			var colName string
-			var dbVal interface{} = val
-
-			switch fieldConfig.FieldType {
-			case "int":
-				colName = "value_int"
-				if f, ok := val.(float64); ok {
-					dbVal = int(f)
-				}
-			case "decimal":
-				colName = "value_decimal"
-			case "string":
-				colName = "value_string"
-			case "text":
-				colName = "value_text"
-			case "date":
-				colName = "value_date"
-			default:
-				colName = "value_string"
-			}
-
-			query := fmt.Sprintf("INSERT INTO episode_main (entity_id, field_machine_name, field_type, %s) VALUES (?, ?, ?, ?)", colName)
-			_, err := tx.Exec(query, episodeID, fieldConfig.MachineFieldName, fieldConfig.FieldType, dbVal)
-			if err != nil {
-				_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to insert custom field " + fieldConfig.MachineFieldName + ": " + err.Error()})
-				c.Abort()
-				return
-			}
-		}
-	}
-
-	// 4. Insert Episode-Character Relations
-	if len(req.CharacterIDs) > 0 {
-		stmt, err := tx.Prepare("INSERT INTO episode_character (episode_id, character_id) VALUES (?, ?)")
-		if err != nil {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to prepare character relation statement"})
-			c.Abort()
-			return
-		}
-		defer stmt.Close()
-		for _, charID := range req.CharacterIDs {
-			_, err := stmt.Exec(episodeID, charID)
-			if err != nil {
-				_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to insert character relation: " + err.Error()})
-				c.Abort()
-				return
-			}
-		}
-	}
-
 	if err := tx.Commit(); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
 		c.Abort()
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Episode created successfully", "episode_id": episodeID, "topic_id": topicID})
+	// 2. Create Episode Entity using Service
+	episode := Entities.Episode{
+		TopicId:      int(topicID),
+		Name:         req.Name,
+		CharacterIds: req.CharacterIDs,
+		CustomFields: Entities.CustomFieldEntity{
+			CustomFields: req.CustomFields,
+		},
+	}
+
+	createdEntity, err := Services.CreateEntity("episode", &episode, db)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create episode entity: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	createdEpisode, ok := createdEntity.(*Entities.Episode)
+	if !ok {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to cast created entity"})
+		c.Abort()
+		return
+	}
+
+	// 3. Insert Episode-Character Relations
+	if len(req.CharacterIDs) > 0 {
+		// Start a new transaction for relations
+		txRel, err := db.Begin()
+		if err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start transaction for relations"})
+			c.Abort()
+			return
+		}
+
+		stmt, err := txRel.Prepare("INSERT INTO episode_character (episode_id, character_id) VALUES (?, ?)")
+		if err != nil {
+			txRel.Rollback()
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to prepare character relation statement"})
+			c.Abort()
+			return
+		}
+		defer stmt.Close()
+
+		for _, charID := range req.CharacterIDs {
+			_, err := stmt.Exec(createdEpisode.Id, charID)
+			if err != nil {
+				txRel.Rollback()
+				_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to insert character relation: " + err.Error()})
+				c.Abort()
+				return
+			}
+		}
+
+		if err := txRel.Commit(); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit relation transaction"})
+			c.Abort()
+			return
+		}
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "Episode created successfully", "episode_id": createdEpisode.Id, "topic_id": topicID})
 }

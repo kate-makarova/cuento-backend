@@ -5,6 +5,7 @@ import (
 	"cuento-backend/src/Install"
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
+	"cuento-backend/src/Websockets"
 	"fmt"
 	"net/http"
 
@@ -15,6 +16,9 @@ import (
 func main() {
 	Services.InitDB()
 	Services.RegisterEventHandlers(Services.DB)
+
+	// Start WebSocket Hub
+	go Websockets.MainHub.Run()
 
 	r := gin.Default()
 	config := cors.DefaultConfig()
@@ -74,14 +78,17 @@ func main() {
 		})
 
 		// Character Template routes
-		protected.GET("/character-template/get", func(c *gin.Context) {
-			Controllers.GetCharacterTemplate(c, Services.DB)
+		protected.GET("/template/:type", func(c *gin.Context) {
+			Controllers.GetTemplate(c, Services.DB)
 		})
-		protected.POST("/character-template/update", func(c *gin.Context) {
-			Controllers.UpdateCharacterTemplate(c, Services.DB)
+		protected.POST("/template/update/:type", func(c *gin.Context) {
+			Controllers.UpdateTemplate(c, Services.DB)
 		})
 		protected.POST("/episode/create", func(c *gin.Context) {
 			Controllers.CreateEpisode(c, Services.DB)
+		})
+		protected.GET("/ws", func(c *gin.Context) {
+			Controllers.HandleWebSocket(c)
 		})
 	}
 

@@ -7,7 +7,7 @@ type Character struct {
 	Avatar          *string           `json:"avatar"`
 	CustomFields    CustomFieldEntity `json:"custom_fields"`
 	CharacterStatus CharacterStatus   `json:"character_status"`
-	TopicId         *int              `json:"topic_id"`
+	TopicId         int               `json:"topic_id"`
 }
 
 type CharacterStatus int
