@@ -62,6 +62,9 @@ func main() {
 	r.GET("/viewtopic/:id/:page", func(c *gin.Context) {
 		Controllers.GetPostsByTopic(c, Services.DB)
 	})
+	r.GET("/character-list", func(c *gin.Context) {
+		Controllers.GetCharacterList(c, Services.DB)
+	})
 
 	// Protected routes
 	protected := r.Group("/")
@@ -78,10 +81,10 @@ func main() {
 		})
 
 		// Character Template routes
-		protected.GET("/template/:type", func(c *gin.Context) {
+		protected.GET("/template/:type/get", func(c *gin.Context) {
 			Controllers.GetTemplate(c, Services.DB)
 		})
-		protected.POST("/template/update/:type", func(c *gin.Context) {
+		protected.POST("/template/:type/update", func(c *gin.Context) {
 			Controllers.UpdateTemplate(c, Services.DB)
 		})
 		protected.POST("/episode/create", func(c *gin.Context) {

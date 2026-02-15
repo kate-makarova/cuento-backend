@@ -140,3 +140,64 @@ func PatchCharacter(c *gin.Context, db *sql.DB) {
 
 	c.JSON(http.StatusOK, updatedEntity)
 }
+
+func GetCharacterList(c *gin.Context, db *sql.DB) {
+	// 1. Get the faction tree
+	factions, err := Services.GetFactionTree(db)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get faction tree: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	// 2. Create a map for easy access to factions by ID
+	factionMap := make(map[int]*Entities.Faction)
+	for i := range factions {
+		factions[i].Characters = []Entities.Character{}
+		factionMap[factions[i].Id] = &factions[i]
+	}
+
+	// 3. Fetch active characters and their factions
+	query := `
+		WITH RankedFactions AS (
+			SELECT
+				c.id,
+				c.name,
+				c.avatar,
+				f.id as faction_id,
+				ROW_NUMBER() OVER(PARTITION BY c.id ORDER BY f.level DESC) as rn
+			FROM
+				character_base c
+			JOIN
+				character_faction cf ON c.id = cf.character_id
+			JOIN
+				factions f ON cf.faction_id = f.id
+			WHERE
+				c.character_status = 0
+		)
+		SELECT id, name, avatar, faction_id FROM RankedFactions WHERE rn = 1
+	`
+	rows, err := db.Query(query)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get characters: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	// 4. Assign characters to their determined faction
+	for rows.Next() {
+		var char Entities.Character
+		var factionID int
+		if err := rows.Scan(&char.Id, &char.Name, &char.Avatar, &factionID); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan character: " + err.Error()})
+			c.Abort()
+			return
+		}
+		if faction, ok := factionMap[factionID]; ok {
+			faction.Characters = append(faction.Characters, char)
+		}
+	}
+
+	c.JSON(http.StatusOK, factions)
+}

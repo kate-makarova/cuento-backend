@@ -87,6 +87,7 @@ create table character_base
 		name    varchar(255) null,
 		avatar  varchar(255) null,
         topic_id bigint unsigned null,
+        character_status int default 2 not null,
 		constraint character_base_users_id_fk
 		foreign key (user_id) references users (id),
         constraint character_base_topics_id_fk
@@ -135,5 +136,28 @@ create table global_stats
     stat_name   varchar(255) null
         primary key,
     stat_number decimal      null
+);
+
+create table factions
+(
+    id              int          auto_increment  primary key,
+    name            varchar(255) not null,
+    parent_id       int          null,
+    level           int          not null,
+    description     text         null,
+    icon            varchar(255) null,
+    show_on_profile boolean      not null,
+    can_be_multiple bool default FALSE null,
+    root_id         int          null,
+);
+
+create table character_faction
+(
+    character_id bigint unsigned null,
+    faction_id   int             null,
+    constraint character_faction_character_base_id_fk
+        foreign key (character_id) references character_base (id),
+    constraint character_faction_factions_id_fk
+        foreign key (faction_id) references factions (id)
 );
 

@@ -16,6 +16,7 @@ type CustomFieldConfig struct {
 	MachineFieldName string `json:"machine_field_name"`
 	HumanFieldName   string `json:"human_field_name"`
 	FieldType        string `json:"field_type"`
+	ContentFieldType string `json:"content_field_type"`
 	Order            int    `json:"order"`
 }
 
