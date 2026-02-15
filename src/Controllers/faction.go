@@ -11,7 +11,7 @@ import (
 )
 
 func GetFactionChildren(c *gin.Context, db *sql.DB) {
-	parentIDStr := c.Query("parent_id")
+	parentIDStr := c.Param("parent_id")
 
 	var rows *sql.Rows
 	var err error

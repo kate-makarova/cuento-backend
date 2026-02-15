@@ -79,7 +79,7 @@ func main() {
 		protected.PATCH("/character/update/:id", func(c *gin.Context) {
 			Controllers.PatchCharacter(c, Services.DB)
 		})
-		protected.GET("/faction-children/get", func(c *gin.Context) {
+		protected.GET("/faction-children/:parent_id/get", func(c *gin.Context) {
 			Controllers.GetFactionChildren(c, Services.DB)
 		})
 
