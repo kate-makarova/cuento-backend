@@ -149,6 +149,7 @@ create table factions
     show_on_profile boolean      not null,
     can_be_multiple bool default FALSE null,
     root_id         int          null,
+    faction_status int default 2 not null
 );
 
 create table character_faction

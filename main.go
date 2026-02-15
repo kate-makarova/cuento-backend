@@ -79,6 +79,9 @@ func main() {
 		protected.PATCH("/character/update/:id", func(c *gin.Context) {
 			Controllers.PatchCharacter(c, Services.DB)
 		})
+		protected.GET("/faction-children/get", func(c *gin.Context) {
+			Controllers.GetFactionChildren(c, Services.DB)
+		})
 
 		// Character Template routes
 		protected.GET("/template/:type/get", func(c *gin.Context) {
