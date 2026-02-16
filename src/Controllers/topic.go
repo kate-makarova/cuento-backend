@@ -3,6 +3,7 @@ package Controllers
 import (
 	"cuento-backend/src/Entities"
 	"cuento-backend/src/Events"
+	"cuento-backend/src/Services"
 	"database/sql"
 	"net/http"
 	"strconv"
@@ -88,20 +89,9 @@ func CreateTopic(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	userIDVal, exists := c.Get("userID")
-	if !exists {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-		return
-	}
-
-	var userID int
-	switch v := userIDVal.(type) {
-	case int:
-		userID = v
-	case float64:
-		userID = int(v)
-	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID type"})
 		return
 	}
 

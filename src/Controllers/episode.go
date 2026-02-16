@@ -43,21 +43,9 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	userIDVal, exists := c.Get("userID")
-	if !exists {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
-		c.Abort()
-		return
-	}
-
-	var userID int
-	switch v := userIDVal.(type) {
-	case int:
-		userID = v
-	case float64:
-		userID = int(v)
-	default:
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Invalid user ID type"})
 		c.Abort()
 		return
 	}
@@ -94,9 +82,8 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 
 	// 2. Create Episode Entity using Service
 	episode := Entities.Episode{
-		TopicId:      int(topicID),
-		Name:         req.Name,
-		CharacterIds: req.CharacterIDs,
+		Topic_Id: int(topicID),
+		Name:     req.Name,
 		CustomFields: Entities.CustomFieldEntity{
 			CustomFields: req.CustomFields,
 		},

@@ -2,6 +2,7 @@ package Controllers
 
 import (
 	"cuento-backend/src/Middlewares"
+	"cuento-backend/src/Services"
 	"cuento-backend/src/Websockets"
 	"net/http"
 
@@ -18,13 +19,12 @@ var upgrader = websocket.Upgrader{
 }
 
 func HandleWebSocket(c *gin.Context) {
-	userIDVal, exists := c.Get("userID")
-	if !exists {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
 		c.Abort()
 		return
 	}
-	userID := userIDVal.(int)
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
