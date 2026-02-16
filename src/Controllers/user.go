@@ -106,7 +106,7 @@ func Login(c *gin.Context, db *sql.DB) {
 		WHERE ur.user_id = ?`
 	rows, err := db.Query(rolesQuery, user.Id)
 	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch user roles"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch user roles: " + err.Error()})
 		c.Abort()
 		return
 	}
@@ -116,15 +116,22 @@ func Login(c *gin.Context, db *sql.DB) {
 	for rows.Next() {
 		var role Entities.Role
 		if err := rows.Scan(&role.Id, &role.Name); err != nil {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan role"})
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan role: " + err.Error()})
 			c.Abort()
 			return
 		}
 		user.Roles = append(user.Roles, role)
 	}
 
+	// Check for errors during iteration
+	if err := rows.Err(); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Error iterating roles: " + err.Error()})
+		c.Abort()
+		return
+	}
+
 	if err := user.CheckPassword(creds.Password); err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Invalid credentials"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Invalid credentials: " + err.Error()})
 		c.Abort()
 		return
 	}
