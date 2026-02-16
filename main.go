@@ -4,6 +4,7 @@ import (
 	"cuento-backend/src/Controllers"
 	"cuento-backend/src/Install"
 	"cuento-backend/src/Middlewares"
+	"cuento-backend/src/Router"
 	"cuento-backend/src/Services"
 	"cuento-backend/src/Websockets"
 	"fmt"
@@ -30,12 +31,13 @@ func main() {
 	r.Use(Middlewares.ErrorMiddleware())
 
 	// Public routes
-	r.GET("/ping", func(c *gin.Context) {
+	publicRouter := Router.NewCustomRouter(r.Group("/"))
+	publicRouter.GET("/ping", "Health check endpoint", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "pong",
 		})
 	})
-	r.GET("/install", func(c *gin.Context) {
+	publicRouter.GET("/install", "Install default database tables", func(c *gin.Context) {
 		err := Install.ExecuteSQLFile(Services.DB, "./src/Install/default_tables.sql")
 		if err != nil {
 			fmt.Println(err.Error())
@@ -44,59 +46,59 @@ func main() {
 	})
 
 	// User routes (Public)
-	r.POST("/register", func(c *gin.Context) {
+	publicRouter.POST("/register", "Register a new user account", func(c *gin.Context) {
 		Controllers.Register(c, Services.DB)
 	})
-	r.POST("/login", func(c *gin.Context) {
+	publicRouter.POST("/login", "Login with user credentials", func(c *gin.Context) {
 		Controllers.Login(c, Services.DB)
 	})
-	r.GET("/board/info", func(c *gin.Context) {
+	publicRouter.GET("/board/info", "Get board information", func(c *gin.Context) {
 		Controllers.GetBoard(c, Services.DB)
 	})
-	r.GET("/categories/home", func(c *gin.Context) {
+	publicRouter.GET("/categories/home", "Get home page categories", func(c *gin.Context) {
 		Controllers.GetHomeCategories(c, Services.DB)
 	})
-	r.GET("/viewforum/:subforum/:page", func(c *gin.Context) {
+	publicRouter.GET("/viewforum/:subforum/:page", "Get topics in a subforum by page", func(c *gin.Context) {
 		Controllers.GetTopicsBySubforum(c, Services.DB)
 	})
-	r.GET("/viewtopic/:id/:page", func(c *gin.Context) {
+	publicRouter.GET("/viewtopic/:id/:page", "Get posts in a topic by page", func(c *gin.Context) {
 		Controllers.GetPostsByTopic(c, Services.DB)
 	})
-	r.GET("/character-list", func(c *gin.Context) {
+	publicRouter.GET("/character-list", "Get list of all characters", func(c *gin.Context) {
 		Controllers.GetCharacterList(c, Services.DB)
 	})
 
 	// Protected routes
-	protected := r.Group("/")
-	protected.Use(Middlewares.AuthMiddleware())
-	{
-		protected.GET("/character/get/:id", func(c *gin.Context) {
-			Controllers.GetCharacter(c, Services.DB)
-		})
-		protected.POST("/character/create", func(c *gin.Context) {
-			Controllers.CreateCharacter(c, Services.DB)
-		})
-		protected.PATCH("/character/update/:id", func(c *gin.Context) {
-			Controllers.PatchCharacter(c, Services.DB)
-		})
-		protected.GET("/faction-children/:parent_id/get", func(c *gin.Context) {
-			Controllers.GetFactionChildren(c, Services.DB)
-		})
+	protectedGroup := r.Group("/")
+	protectedGroup.Use(Middlewares.AuthMiddleware())
+	protectedRouter := Router.NewCustomRouter(protectedGroup)
 
-		// Character Template routes
-		protected.GET("/template/:type/get", func(c *gin.Context) {
-			Controllers.GetTemplate(c, Services.DB)
-		})
-		protected.POST("/template/:type/update", func(c *gin.Context) {
-			Controllers.UpdateTemplate(c, Services.DB)
-		})
-		protected.POST("/episode/create", func(c *gin.Context) {
-			Controllers.CreateEpisode(c, Services.DB)
-		})
-		protected.GET("/ws", func(c *gin.Context) {
-			Controllers.HandleWebSocket(c)
-		})
-	}
+	protectedRouter.GET("/character/get/:id", "Get character details by ID", func(c *gin.Context) {
+		Controllers.GetCharacter(c, Services.DB)
+	})
+	protectedRouter.POST("/character/create", "Create a new character", func(c *gin.Context) {
+		Controllers.CreateCharacter(c, Services.DB)
+	})
+	protectedRouter.PATCH("/character/update/:id", "Update character by ID", func(c *gin.Context) {
+		Controllers.PatchCharacter(c, Services.DB)
+	})
+	protectedRouter.GET("/faction-children/:parent_id/get", "Get child factions by parent ID", func(c *gin.Context) {
+		Controllers.GetFactionChildren(c, Services.DB)
+	})
+
+	// Character Template routes
+	protectedRouter.GET("/template/:type/get", "Get character template by type", func(c *gin.Context) {
+		Controllers.GetTemplate(c, Services.DB)
+	})
+	protectedRouter.POST("/template/:type/update", "Update character template by type", func(c *gin.Context) {
+		Controllers.UpdateTemplate(c, Services.DB)
+	})
+	protectedRouter.POST("/episode/create", "Create a new episode", func(c *gin.Context) {
+		Controllers.CreateEpisode(c, Services.DB)
+	})
+	protectedRouter.GET("/ws", "WebSocket connection endpoint", func(c *gin.Context) {
+		Controllers.HandleWebSocket(c)
+	})
 
 	r.Run() // listen and serve on 0.0.0.0:8080
 }

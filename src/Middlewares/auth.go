@@ -12,6 +12,7 @@ var jwtKey = []byte("your_secret_key") // Use same key as in user controller
 
 type Claims struct {
 	Username string `json:"username"`
+	UserID   int    `json:"user_id"`
 	jwt.RegisteredClaims
 }
 
@@ -54,6 +55,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		c.Set("username", claims.Username)
+		c.Set("user_id", claims.UserID)
 		c.Next()
 	}
 }

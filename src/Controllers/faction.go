@@ -16,7 +16,7 @@ func GetFactionChildren(c *gin.Context, db *sql.DB) {
 	var rows *sql.Rows
 	var err error
 
-	if parentIDStr == "" {
+	if parentIDStr == "" || parentIDStr == "0" {
 		rows, err = db.Query("SELECT id, name, parent_id, level, description, icon, show_on_profile FROM factions WHERE parent_id IS NULL ORDER BY name")
 	} else {
 		parentID, convErr := strconv.Atoi(parentIDStr)

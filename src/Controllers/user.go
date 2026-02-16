@@ -5,7 +5,6 @@ import (
 	"cuento-backend/src/Middlewares"
 	"database/sql"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,6 +20,7 @@ type Credentials struct {
 
 type Claims struct {
 	Username string `json:"username"`
+	UserID   int    `json:"user_id"`
 	jwt.RegisteredClaims
 }
 
@@ -38,9 +38,8 @@ func Register(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	defaultRole := "user"
-	query := "INSERT INTO users (username, email, password, roles, date_registered) VALUES (?, ?, ?, ?, ?)"
-	res, err := db.Exec(query, user.Username, user.Email, user.Password, defaultRole, time.Now())
+	query := "INSERT INTO users (username, email, password, date_registered) VALUES (?, ?, ?, ?)"
+	res, err := db.Exec(query, user.Username, user.Email, user.Password, time.Now())
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create user"})
 		c.Abort()
@@ -54,8 +53,26 @@ func Register(c *gin.Context, db *sql.DB) {
 		return
 	}
 	user.Id = int(id)
+
+	// Get default role ID (assuming role with name "user" exists)
+	var defaultRoleID int
+	err = db.QueryRow("SELECT id FROM roles WHERE name = ?", "user").Scan(&defaultRoleID)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get default role"})
+		c.Abort()
+		return
+	}
+
+	// Assign default role to user
+	_, err = db.Exec("INSERT INTO user_role (user_id, role_id) VALUES (?, ?)", user.Id, defaultRoleID)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to assign role to user"})
+		c.Abort()
+		return
+	}
+
 	user.Password = "" // Don't return password
-	user.Roles = []string{defaultRole}
+	user.Roles = []Entities.Role{{Id: defaultRoleID, Name: "user"}}
 
 	c.JSON(http.StatusCreated, user)
 }
@@ -69,9 +86,8 @@ func Login(c *gin.Context, db *sql.DB) {
 	}
 
 	var user Entities.User
-	var rolesStr string
-	query := "SELECT id, username, email, password, roles FROM users WHERE username = ?"
-	err := db.QueryRow(query, creds.Username).Scan(&user.Id, &user.Username, &user.Email, &user.Password, &rolesStr)
+	query := "SELECT id, username, email, password FROM users WHERE username = ?"
+	err := db.QueryRow(query, creds.Username).Scan(&user.Id, &user.Username, &user.Email, &user.Password)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Invalid credentials"})
@@ -82,10 +98,29 @@ func Login(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	if rolesStr != "" {
-		user.Roles = strings.Split(rolesStr, ",")
-	} else {
-		user.Roles = []string{}
+	// Fetch user roles from many-to-many relationship
+	rolesQuery := `
+		SELECT r.id, r.name
+		FROM roles r
+		INNER JOIN user_role ur ON r.id = ur.role_id
+		WHERE ur.user_id = ?`
+	rows, err := db.Query(rolesQuery, user.Id)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch user roles"})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	user.Roles = []Entities.Role{}
+	for rows.Next() {
+		var role Entities.Role
+		if err := rows.Scan(&role.Id, &role.Name); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan role"})
+			c.Abort()
+			return
+		}
+		user.Roles = append(user.Roles, role)
 	}
 
 	if err := user.CheckPassword(creds.Password); err != nil {
@@ -97,6 +132,7 @@ func Login(c *gin.Context, db *sql.DB) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
 		Username: user.Username,
+		UserID:   user.Id,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			Issuer:    "cuento-backend",

@@ -6,7 +6,6 @@ create table users
     email              varchar(255) null,
     password           varchar(255) null,
     date_registered    datetime     null,
-    roles              varchar(255) null,
     avatar             varchar(255) null,
     date_last_visit    datetime     null,
     interface_language varchar(50)  null,
@@ -15,6 +14,16 @@ create table users
         unique (username),
     constraint users_pk_3
         unique (email)
+);
+
+INSERT INTO cuento.users (id, username, email, password, date_registered, avatar, date_last_visit, interface_language, interface_timezone) VALUES (0, 'guest', null, null, null, null, null, null, null)
+
+create table user_role
+(
+    user_id int not null,
+    role_id int not null,
+    constraint user_role_pk
+        primary key (user_id, role_id)
 );
 
 CREATE TABLE custom_field_config
@@ -162,3 +171,25 @@ create table character_faction
         foreign key (faction_id) references factions (id)
 );
 
+create table roles
+(
+    id   int auto_increment
+        primary key,
+    name varchar(255) null
+);
+
+INSERT INTO cuento.roles (name) VALUES ('guest')
+
+INSERT INTO cuento.roles (name) VALUES ('user')
+
+INSERT INTO cuento.roles (name) VALUES ('admin')
+
+create table role_permission
+(
+    role_id    int          null,
+    permission varchar(255) null,
+    constraint role_permission_pk
+        primary key (role_id, permission),
+    constraint role_permission_roles_id_fk
+        foreign key (role_id) references roles (id)
+);

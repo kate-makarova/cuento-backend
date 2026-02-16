@@ -5,11 +5,11 @@ import (
 )
 
 type User struct {
-	Id       int      `json:"id"`
-	Username string   `json:"username"`
-	Email    string   `json:"email"`
-	Password string   `json:"password,omitempty"` // Don't return password in JSON
-	Roles    []string `json:"roles"`
+	Id       int    `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Password string `json:"password,omitempty"` // Don't return password in JSON
+	Roles    []Role `json:"roles"`
 }
 
 type ShortUser struct {
