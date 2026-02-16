@@ -110,6 +110,18 @@ create table character_profile_base
 		foreign key (character_id) references character_base (id)  ON DELETE CASCADE
 		);
 
+create table character_profile_main
+(
+    entity_id          int            null,
+    field_machine_name varchar(255)   null,
+    field_type         varchar(10)    null,
+    value_int          int            null,
+    value_decimal      decimal(10, 2) null,
+    value_string       varchar(255)   null,
+    value_text         text           null,
+    value_date         datetime       null
+);
+
 CREATE TABLE posts (
                        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
                        topic_id BIGINT UNSIGNED NOT NULL,
@@ -132,6 +144,18 @@ create table episode_base
 		constraint episode_base_topics_id_fk
 		foreign key (topic_id) references topics (id)
 		);
+
+create table episode_main
+(
+    entity_id          int            null,
+    field_machine_name varchar(255)   null,
+    field_type         varchar(10)    null,
+    value_int          int            null,
+    value_decimal      decimal(10, 2) null,
+    value_string       varchar(255)   null,
+    value_text         text           null,
+    value_date         datetime       null
+);
 
 create table episode_character
 		(episode_id bigint unsigned          null,
