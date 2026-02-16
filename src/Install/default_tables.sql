@@ -68,14 +68,6 @@ CREATE TABLE subforums (
         foreign key (category_id) references categories (id);
 );
 
-create table subforum_topic_type
-(
-    subforum_id bigint unsigned not null,
-    topic_type  int             not null,
-    constraint subforum_topic_type_subforums_id_fk
-        foreign key (subforum_id) references subforums (id)
-);
-
 CREATE TABLE topics (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     status INT NOT NULL,

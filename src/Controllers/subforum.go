@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -204,4 +205,127 @@ func GetShortSubforumList(c *gin.Context, db *sql.DB) {
 		subforums = append(subforums, tempSubforum)
 	}
 	c.JSON(http.StatusOK, subforums)
+}
+
+func GetSubforum(c *gin.Context, db *sql.DB) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid ID"})
+		c.Abort()
+		return
+	}
+
+	var subforum Entities.Subform
+	query := "SELECT id, category_id, name, description, position, topic_number, post_number, last_post_topic_id, last_post_topic_name, last_post_id, date_last_post, last_post_author_user_name FROM subforums WHERE id = ?"
+	err = db.QueryRow(query, id).Scan(
+		&subforum.Id,
+		&subforum.CategoryId,
+		&subforum.Name,
+		&subforum.Description,
+		&subforum.Position,
+		&subforum.TopicNumber,
+		&subforum.PostNumber,
+		&subforum.LastPostTopicId,
+		&subforum.LastPostTopicName,
+		&subforum.LastPostId,
+		&subforum.DateLastPost,
+		&subforum.LastPostAuthorName,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Subforum not found"})
+		} else {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get subforum: " + err.Error()})
+		}
+		c.Abort()
+		return
+	}
+
+	// Determine User Roles
+	var roleIDs []int
+	userIDVal, exists := c.Get("user_id")
+	if exists {
+		var userID int
+		switch v := userIDVal.(type) {
+		case int:
+			userID = v
+		case float64:
+			userID = int(v)
+		}
+
+		rows, err := db.Query("SELECT role_id FROM user_role WHERE user_id = ?", userID)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var rID int
+				if err := rows.Scan(&rID); err == nil {
+					roleIDs = append(roleIDs, rID)
+				}
+			}
+		}
+	}
+
+	if len(roleIDs) == 0 {
+		var guestID int
+		err := db.QueryRow("SELECT id FROM roles WHERE name = 'Guest'").Scan(&guestID)
+		if err == nil {
+			roleIDs = append(roleIDs, guestID)
+		}
+	}
+
+	// Check Permissions
+	permissions := &Entities.SubforumPermissions{}
+	subforum.Permissions = permissions
+
+	if len(roleIDs) > 0 {
+		permMap := map[string]*bool{
+			fmt.Sprintf("subforum_create_general_topic:%d", id):   &permissions.SubforumCreateGeneralTopic,
+			fmt.Sprintf("subforum_create_episode_topic:%d", id):   &permissions.SubforumCreateEpisodeTopic,
+			fmt.Sprintf("subforum_create_character_topic:%d", id): &permissions.SubforumCreateCharacterTopic,
+			fmt.Sprintf("subforum_post:%d", id):                   &permissions.SubforumPost,
+			fmt.Sprintf("subforum_delete_topic:%d", id):           &permissions.SubforumDeleteOwnTopic,
+			fmt.Sprintf("subforum_delete_others_topic:%d", id):    &permissions.SubforumDeleteOthersTopic,
+			fmt.Sprintf("subforum_edit_others_post:%d", id):       &permissions.SubforumEditOthersPost,
+			fmt.Sprintf("subforum_edit_own_post:%d", id):          &permissions.SubforumEditOwnPost,
+		}
+
+		var permStrings []string
+		var args []interface{}
+		for p := range permMap {
+			permStrings = append(permStrings, p)
+		}
+
+		placeholders := func(n int) string {
+			if n <= 0 {
+				return ""
+			}
+			return strings.Repeat("?,", n-1) + "?"
+		}
+
+		query := fmt.Sprintf("SELECT permission FROM role_permission WHERE type = 1 AND role_id IN (%s) AND permission IN (%s)",
+			placeholders(len(roleIDs)),
+			placeholders(len(permStrings)))
+
+		for _, rID := range roleIDs {
+			args = append(args, rID)
+		}
+		for _, p := range permStrings {
+			args = append(args, p)
+		}
+
+		rows, err := db.Query(query, args...)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var p string
+				if err := rows.Scan(&p); err == nil {
+					if val, ok := permMap[p]; ok {
+						*val = true
+					}
+				}
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, subforum)
 }
