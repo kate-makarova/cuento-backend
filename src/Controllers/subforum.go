@@ -3,6 +3,7 @@ package Controllers
 import (
 	"cuento-backend/src/Entities"
 	"cuento-backend/src/Middlewares"
+	"cuento-backend/src/Services"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -73,20 +74,8 @@ func GetHomeCategories(c *gin.Context, db *sql.DB) {
 
 	// 2. Determine User Roles
 	var roleIDs []int
-	userIDVal, exists := c.Get("user_id") // Changed from "userID" to "user_id"
-	if exists {
-		var userID int
-		switch v := userIDVal.(type) {
-		case int:
-			userID = v
-		case float64:
-			userID = int(v)
-		default:
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Invalid user ID type"})
-			c.Abort()
-			return
-		}
-
+	userID := Services.GetUserIdFromContext(c)
+	if userID > 0 {
 		// Fetch roles for logged-in user
 		rows, err := db.Query("SELECT role_id FROM user_role WHERE user_id = ?", userID)
 		if err != nil {
@@ -243,16 +232,8 @@ func GetSubforum(c *gin.Context, db *sql.DB) {
 
 	// Determine User Roles
 	var roleIDs []int
-	userIDVal, exists := c.Get("user_id")
-	if exists {
-		var userID int
-		switch v := userIDVal.(type) {
-		case int:
-			userID = v
-		case float64:
-			userID = int(v)
-		}
-
+	userID := Services.GetUserIdFromContext(c)
+	if userID > 0 {
 		rows, err := db.Query("SELECT role_id FROM user_role WHERE user_id = ?", userID)
 		if err == nil {
 			defer rows.Close()

@@ -2,7 +2,7 @@ package Controllers
 
 import (
 	"cuento-backend/src/Entities"
-	"cuento-backend/src/Middlewares" // Add this import
+	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
 	"database/sql"
 	"net/http"
@@ -49,21 +49,9 @@ func CreateCharacter(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	userIDVal, exists := c.Get("userID")
-	if !exists {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
-		c.Abort()
-		return
-	}
-
-	var userID int
-	switch v := userIDVal.(type) {
-	case int:
-		userID = v
-	case float64:
-		userID = int(v)
-	default:
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Invalid user ID type"})
 		c.Abort()
 		return
 	}
@@ -247,5 +235,36 @@ func GetCharacterAutocomplete(c *gin.Context, db *sql.DB) {
 		}
 		characters = append(characters, tempCharacter)
 	}
+	c.JSON(http.StatusOK, characters)
+}
+
+func GetUserCharacters(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
+		c.Abort()
+		return
+	}
+
+	query := "SELECT id, name FROM character_base WHERE user_id = ?"
+	rows, err := db.Query(query, userID)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get user characters: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	var characters []Entities.ShortCharacter
+	for rows.Next() {
+		var char Entities.ShortCharacter
+		if err := rows.Scan(&char.Id, &char.Name); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan character: " + err.Error()})
+			c.Abort()
+			return
+		}
+		characters = append(characters, char)
+	}
+
 	c.JSON(http.StatusOK, characters)
 }

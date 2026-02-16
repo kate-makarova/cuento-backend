@@ -103,6 +103,9 @@ func main() {
 	protectedRouter.PATCH("/character/update/:id", "Update character by ID", func(c *gin.Context) {
 		Controllers.PatchCharacter(c, Services.DB)
 	})
+	protectedRouter.GET("/user/characters", "Get current user's characters", func(c *gin.Context) {
+		Controllers.GetUserCharacters(c, Services.DB)
+	})
 	protectedRouter.GET("/faction-children/:parent_id/get", "Get child factions by parent ID", func(c *gin.Context) {
 		Controllers.GetFactionChildren(c, Services.DB)
 	})
