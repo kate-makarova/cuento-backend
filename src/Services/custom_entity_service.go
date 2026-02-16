@@ -201,11 +201,11 @@ func setField(field reflect.Value, val interface{}) error {
 	return nil
 }
 
-func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}, error) {
+func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}, int64, error) {
 	// Basic validation
 	for _, r := range className {
 		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' {
-			return nil, fmt.Errorf("invalid class name")
+			return nil, 0, fmt.Errorf("invalid class name")
 		}
 	}
 
@@ -215,7 +215,7 @@ func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}
 	}
 	t := v.Type()
 
-	// 1. Insert into base table
+	// 1. Insert into the base table
 	var cols []string
 	var vals []interface{}
 	var placeholders []string
@@ -239,11 +239,11 @@ func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}
 		query := fmt.Sprintf("INSERT INTO %s_base (%s) VALUES (%s)", className, strings.Join(cols, ", "), strings.Join(placeholders, ", "))
 		res, err := db.Exec(query, vals...)
 		if err != nil {
-			return nil, fmt.Errorf("failed to insert base entity: %w", err)
+			return nil, 0, fmt.Errorf("failed to insert base entity: %w", err)
 		}
 		id, err = res.LastInsertId()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get insert id: %w", err)
+			return nil, 0, fmt.Errorf("failed to get insert id: %w", err)
 		}
 
 		// Set Id back to struct
@@ -252,7 +252,7 @@ func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}
 			idField.SetInt(id)
 		}
 	} else {
-		return nil, fmt.Errorf("no base fields to insert")
+		return nil, 0, fmt.Errorf("no base fields to insert")
 	}
 
 	// 2. Insert custom fields
@@ -260,16 +260,16 @@ func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}
 	if cfField.IsValid() {
 		cfMapField := cfField.FieldByName("CustomFields")
 		if cfMapField.IsValid() && cfMapField.Kind() == reflect.Map && cfMapField.Len() > 0 {
-			// Get column types from flattened table
+			// Get column types from the flattened table
 			rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s_flattened WHERE 1=0", className))
 			if err != nil {
-				return nil, fmt.Errorf("failed to query custom fields metadata: %w", err)
+				return nil, 0, fmt.Errorf("failed to query custom fields metadata: %w", err)
 			}
 			defer rows.Close()
 
 			colTypes, err := rows.ColumnTypes()
 			if err != nil {
-				return nil, fmt.Errorf("failed to get column types: %w", err)
+				return nil, 0, fmt.Errorf("failed to get column types: %w", err)
 			}
 
 			colTypeMap := make(map[string]string)
@@ -279,7 +279,7 @@ func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}
 
 			stmt, err := db.Prepare(fmt.Sprintf("INSERT INTO %s_main (entity_id, field_machine_name, field_type, value_int, value_decimal, value_string, value_text, value_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", className))
 			if err != nil {
-				return nil, fmt.Errorf("failed to prepare custom field insert: %w", err)
+				return nil, 0, fmt.Errorf("failed to prepare custom field insert: %w", err)
 			}
 			defer stmt.Close()
 
@@ -338,13 +338,13 @@ func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}
 
 				_, err := stmt.Exec(id, fieldName, fieldType, valInt, valDecimal, valString, valText, valDate)
 				if err != nil {
-					return nil, fmt.Errorf("failed to insert custom field %s: %w", fieldName, err)
+					return nil, 0, fmt.Errorf("failed to insert custom field %s: %w", fieldName, err)
 				}
 			}
 		}
 	}
 
-	return entity, nil
+	return entity, id, nil
 }
 
 func PatchEntity(id int64, className string, updates map[string]interface{}, db *sql.DB) (interface{}, error) {
@@ -405,7 +405,7 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 		}
 
 		if len(fieldsMap) > 0 {
-			// Get column types from flattened table
+			// Get column types from the flattened table
 			rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s_flattened WHERE 1=0", className))
 			if err != nil {
 				return nil, fmt.Errorf("failed to query custom fields metadata: %w", err)

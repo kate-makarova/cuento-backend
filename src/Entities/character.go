@@ -8,6 +8,7 @@ type Character struct {
 	CustomFields    CustomFieldEntity `json:"custom_fields"`
 	CharacterStatus CharacterStatus   `json:"character_status"`
 	TopicId         int               `json:"topic_id"`
+	Factions        []Faction         `json:"factions"`
 }
 
 type CharacterStatus int

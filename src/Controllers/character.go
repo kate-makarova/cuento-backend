@@ -16,6 +16,7 @@ type CreateCharacterRequest struct {
 	Name         string                 `json:"name" binding:"required"`
 	Avatar       *string                `json:"avatar"`
 	CustomFields map[string]interface{} `json:"custom_fields"`
+	FactionIDs   []Entities.Faction     `json:"factions"`
 }
 
 func GetCharacter(c *gin.Context, db *sql.DB) {
@@ -106,11 +107,36 @@ func CreateCharacter(c *gin.Context, db *sql.DB) {
 		},
 	}
 
-	createdEntity, err := Services.CreateEntity("character", &character, db)
+	createdEntity, characterID, err := Services.CreateEntity("character", &character, db)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create character: " + err.Error()})
 		c.Abort()
 		return
+	}
+
+	// Handle factions
+	for _, faction := range req.FactionIDs {
+		var factionID int
+
+		// If faction ID is negative, create a new faction
+		if faction.Id < 0 {
+			newFactionID, err := Services.CreateFaction(faction, db)
+			if err != nil {
+				_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create faction: " + err.Error()})
+				c.Abort()
+				return
+			}
+			factionID = int(newFactionID)
+		} else {
+			factionID = faction.Id
+		}
+
+		// Add faction to character
+		if err := Services.AddFactionCharacter(factionID, int(characterID), db); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to add faction to character: " + err.Error()})
+			c.Abort()
+			return
+		}
 	}
 
 	c.JSON(http.StatusCreated, createdEntity)

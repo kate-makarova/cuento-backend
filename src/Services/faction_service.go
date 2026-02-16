@@ -136,3 +136,32 @@ func GetFactionTree(db *sql.DB) ([]Entities.Faction, error) {
 
 	return result, nil
 }
+
+func CreateFaction(faction Entities.Faction, db *sql.DB) (int64, error) {
+	query := `
+		INSERT INTO factions (name, parent_id, level, description, icon, show_on_profile) 
+		VALUES (?, ?, ?, ?, ?, ?)
+	`
+	res, err := db.Exec(query, faction.Name, faction.ParentId, faction.Level, faction.Description, faction.Icon, faction.ShowOnProfile)
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	return id, err
+}
+
+func AddFactionCharacter(factionID int, characterID int, db *sql.DB) error {
+	query := `
+		INSERT INTO character_faction (faction_id, character_id) VALUES (?, ?)
+	`
+	_, err := db.Exec(query, factionID, characterID)
+	return err
+}
+
+func RemoveFactionCharacter(factionID int, characterID int, db *sql.DB) error {
+	query := `
+		DELETE FROM character_faction WHERE faction_id = ? AND character_id = ?
+	`
+	_, err := db.Exec(query, factionID, characterID)
+	return err
+}

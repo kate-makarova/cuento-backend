@@ -84,7 +84,7 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 		},
 	}
 
-	createdEntity, err := Services.CreateEntity("episode", &episode, db)
+	createdEntity, _, err := Services.CreateEntity("episode", &episode, db)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create episode entity: " + err.Error()})
 		c.Abort()
