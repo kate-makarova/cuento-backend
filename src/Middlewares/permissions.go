@@ -16,8 +16,8 @@ func PermissionsMiddleware(db *sql.DB) gin.HandlerFunc {
 			userID = id.(int)
 		}
 
-		// Get the endpoint path
-		endpointPath := c.Request.URL.Path
+		// Get the matched route pattern from gin context
+		endpointPath := c.FullPath()
 
 		// Check if user has permission to access this endpoint
 		query := `

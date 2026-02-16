@@ -71,6 +71,7 @@ func main() {
 	// Protected routes
 	protectedGroup := r.Group("/")
 	protectedGroup.Use(Middlewares.AuthMiddleware())
+	protectedGroup.Use(Middlewares.PermissionsMiddleware(Services.DB))
 	protectedRouter := Router.NewCustomRouter(protectedGroup)
 
 	protectedRouter.GET("/character/get/:id", "Get character details by ID", func(c *gin.Context) {
