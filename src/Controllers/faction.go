@@ -3,6 +3,7 @@ package Controllers
 import (
 	"cuento-backend/src/Entities"
 	"cuento-backend/src/Middlewares"
+	"cuento-backend/src/Services"
 	"database/sql"
 	"net/http"
 	"strconv"
@@ -50,5 +51,14 @@ func GetFactionChildren(c *gin.Context, db *sql.DB) {
 		factions = []Entities.Faction{}
 	}
 
+	c.JSON(http.StatusOK, factions)
+}
+
+func GetFactionTree(c *gin.Context, db *sql.DB) {
+	factions, err := Services.GetFactionTree(db)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get faction tree: " + err.Error()})
+		c.Abort()
+	}
 	c.JSON(http.StatusOK, factions)
 }

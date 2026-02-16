@@ -6,6 +6,7 @@ import (
 	"cuento-backend/src/Services"
 	"database/sql"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,6 +16,20 @@ type CreateEpisodeRequest struct {
 	Name         string                 `json:"name" binding:"required"`
 	CharacterIDs []int                  `json:"character_ids"`
 	CustomFields map[string]interface{} `json:"custom_fields"`
+}
+
+type GetEpisodesRequest struct {
+	SubforumIDs  []int `json:"subforum_ids"`
+	CharacterIDs []int `json:"character_ids"`
+	FactionIDs   []int `json:"faction_ids"`
+	Page         int   `json:"page"`
+}
+
+type EpisodeListItem struct {
+	Id         int    `json:"id"`
+	Name       string `json:"name"`
+	TopicId    int    `json:"topic_id"`
+	SubforumId int    `json:"subforum_id"`
 }
 
 func CreateEpisode(c *gin.Context, db *sql.DB) {
@@ -135,4 +150,74 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Episode created successfully", "episode_id": createdEpisode.Id, "topic_id": topicID})
+}
+
+func GetEpisodes(c *gin.Context, db *sql.DB) {
+	var req GetEpisodesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	query := "SELECT e.id, e.name, e.topic_id, t.subforum_id FROM episode_base e JOIN topics t ON e.topic_id = t.id WHERE 1=1"
+	var args []interface{}
+
+	if len(req.SubforumIDs) > 0 {
+		placeholders := make([]string, len(req.SubforumIDs))
+		for i, id := range req.SubforumIDs {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		query += " AND t.subforum_id IN (" + strings.Join(placeholders, ",") + ")"
+	}
+
+	if len(req.CharacterIDs) > 0 {
+		placeholders := make([]string, len(req.CharacterIDs))
+		for i, id := range req.CharacterIDs {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		query += " AND EXISTS (SELECT 1 FROM episode_character ec WHERE ec.episode_id = e.id AND ec.character_id IN (" + strings.Join(placeholders, ",") + "))"
+	}
+
+	if len(req.FactionIDs) > 0 {
+		placeholders := make([]string, len(req.FactionIDs))
+		for i, id := range req.FactionIDs {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		query += " AND EXISTS (SELECT 1 FROM episode_character ec JOIN character_faction cf ON ec.character_id = cf.character_id WHERE ec.episode_id = e.id AND cf.faction_id IN (" + strings.Join(placeholders, ",") + "))"
+	}
+
+	limit := 20
+	page := req.Page
+	if page < 1 {
+		page = 1
+	}
+	offset := (page - 1) * limit
+
+	query += " ORDER BY t.date_last_post DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get episodes: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	var episodes []EpisodeListItem = []EpisodeListItem{}
+	for rows.Next() {
+		var ep EpisodeListItem
+		if err := rows.Scan(&ep.Id, &ep.Name, &ep.TopicId, &ep.SubforumId); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan episode: " + err.Error()})
+			c.Abort()
+			return
+		}
+		episodes = append(episodes, ep)
+	}
+
+	c.JSON(http.StatusOK, episodes)
 }

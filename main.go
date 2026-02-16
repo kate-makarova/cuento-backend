@@ -73,6 +73,12 @@ func main() {
 	publicRouter.GET("/character-autocomplete/:term", "Get list of characters matching search term", func(c *gin.Context) {
 		Controllers.GetCharacterAutocomplete(c, Services.DB)
 	})
+	publicRouter.GET("/factions/get", "Get faction tree", func(c *gin.Context) {
+		Controllers.GetFactionTree(c, Services.DB)
+	})
+	publicRouter.GET("/episodes/get", "Get episode list", func(c *gin.Context) {
+		Controllers.GetEpisodes(c, Services.DB)
+	})
 
 	// Protected routes
 	protectedGroup := r.Group("/")
