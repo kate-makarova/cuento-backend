@@ -11,6 +11,11 @@ type Character struct {
 	Factions        []Faction         `json:"factions"`
 }
 
+type ShortCharacter struct {
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+}
+
 type CharacterStatus int
 
 const (

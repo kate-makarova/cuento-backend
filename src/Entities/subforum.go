@@ -14,3 +14,8 @@ type Subform struct {
 	DateLastPost       *string `json:"date_last_post"`
 	LastPostAuthorName *string `json:"last_post_author_name"`
 }
+
+type ShortSubform struct {
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+}

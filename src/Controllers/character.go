@@ -227,3 +227,25 @@ func GetCharacterList(c *gin.Context, db *sql.DB) {
 
 	c.JSON(http.StatusOK, factions)
 }
+
+func GetCharacterAutocomplete(c *gin.Context, db *sql.DB) {
+	query := `
+		SELECT id, name FROM character_base WHERE name LIKE ? ORDER BY name ASC LIMIT 10
+	`
+	rows, err := db.Query(query, "%"+c.Param("term")+"%")
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get characters: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+	var characters []Entities.ShortCharacter
+	for rows.Next() {
+		var tempCharacter Entities.ShortCharacter
+		if err := rows.Scan(&tempCharacter.Id, &tempCharacter.Name); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan character: " + err.Error()})
+		}
+		characters = append(characters, tempCharacter)
+	}
+	c.JSON(http.StatusOK, characters)
+}

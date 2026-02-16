@@ -70,3 +70,22 @@ func GetHomeCategories(c *gin.Context, db *sql.DB) {
 
 	c.JSON(http.StatusOK, categories)
 }
+
+func GetShortSubforumList(c *gin.Context, db *sql.DB) {
+	rows, err := db.Query("SELECT id, name FROM subforums ORDER BY position")
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get subforums: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+	var subforums []Entities.ShortSubform
+	for rows.Next() {
+		var tempSubforum Entities.ShortSubform
+		if err := rows.Scan(&tempSubforum.Id, &tempSubforum.Name); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan subforums: " + err.Error()})
+		}
+		subforums = append(subforums, tempSubforum)
+	}
+	c.JSON(http.StatusOK, subforums)
+}
