@@ -24,7 +24,7 @@ func PermissionsMiddleware(db *sql.DB) gin.HandlerFunc {
 			SELECT COUNT(*)
 			FROM user_role ur
 			INNER JOIN role_permission rp ON ur.role_id = rp.role_id
-			WHERE ur.user_id = ? AND rp.permission = ?`
+			WHERE type = 0 AND ur.user_id = ? AND rp.permission = ?`
 
 		var count int
 		err := db.QueryRow(query, userID, endpointPath).Scan(&count)
@@ -52,3 +52,10 @@ func PermissionsMiddleware(db *sql.DB) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+type PermissionType int
+
+const (
+	EndpointPermission PermissionType = 0
+	SubforumPermission PermissionType = 1
+)

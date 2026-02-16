@@ -32,18 +32,6 @@ func main() {
 
 	// Public routes
 	publicRouter := Router.NewCustomRouter(r.Group("/"))
-	publicRouter.GET("/ping", "Health check endpoint", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "pong",
-		})
-	})
-	publicRouter.GET("/install", "Install default database tables", func(c *gin.Context) {
-		err := Install.ExecuteSQLFile(Services.DB, "./src/Install/default_tables.sql")
-		if err != nil {
-			fmt.Println(err.Error())
-			return
-		}
-	})
 
 	// User routes (Public)
 	publicRouter.POST("/register", "Register a new user account", func(c *gin.Context) {
@@ -55,28 +43,45 @@ func main() {
 	publicRouter.GET("/board/info", "Get board information", func(c *gin.Context) {
 		Controllers.GetBoard(c, Services.DB)
 	})
-	publicRouter.GET("/categories/home", "Get home page categories", func(c *gin.Context) {
+
+	// Optional Auth routes (Context populated if token present, otherwise Guest)
+	optionalAuthGroup := r.Group("/")
+	optionalAuthGroup.Use(Middlewares.OptionalAuthMiddleware())
+	optionalAuthRouter := Router.NewCustomRouter(optionalAuthGroup)
+	optionalAuthRouter.GET("/categories/home", "Get home page categories", func(c *gin.Context) {
 		Controllers.GetHomeCategories(c, Services.DB)
 	})
-	publicRouter.GET("/viewforum/:subforum/:page", "Get topics in a subforum by page", func(c *gin.Context) {
+	optionalAuthRouter.GET("/ping", "Health check endpoint", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "pong",
+		})
+	})
+	optionalAuthRouter.GET("/install", "Install default database tables", func(c *gin.Context) {
+		err := Install.ExecuteSQLFile(Services.DB, "./src/Install/default_tables.sql")
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+	})
+	optionalAuthRouter.GET("/viewforum/:subforum/:page", "Get topics in a subforum by page", func(c *gin.Context) {
 		Controllers.GetTopicsBySubforum(c, Services.DB)
 	})
-	publicRouter.GET("/viewtopic/:id/:page", "Get posts in a topic by page", func(c *gin.Context) {
+	optionalAuthRouter.GET("/viewtopic/:id/:page", "Get posts in a topic by page", func(c *gin.Context) {
 		Controllers.GetPostsByTopic(c, Services.DB)
 	})
-	publicRouter.GET("/character-list", "Get list of all characters", func(c *gin.Context) {
+	optionalAuthRouter.GET("/character-list", "Get list of all characters", func(c *gin.Context) {
 		Controllers.GetCharacterList(c, Services.DB)
 	})
-	publicRouter.GET("/subforum/list-short", "Get list of all subforums", func(c *gin.Context) {
+	optionalAuthRouter.GET("/subforum/list-short", "Get list of all subforums", func(c *gin.Context) {
 		Controllers.GetShortSubforumList(c, Services.DB)
 	})
-	publicRouter.GET("/character-autocomplete/:term", "Get list of characters matching search term", func(c *gin.Context) {
+	optionalAuthRouter.GET("/character-autocomplete/:term", "Get list of characters matching search term", func(c *gin.Context) {
 		Controllers.GetCharacterAutocomplete(c, Services.DB)
 	})
-	publicRouter.GET("/factions/get", "Get faction tree", func(c *gin.Context) {
+	optionalAuthRouter.GET("/factions/get", "Get faction tree", func(c *gin.Context) {
 		Controllers.GetFactionTree(c, Services.DB)
 	})
-	publicRouter.GET("/episodes/get", "Get episode list", func(c *gin.Context) {
+	optionalAuthRouter.POST("/episodes/get", "Get episode list", func(c *gin.Context) {
 		Controllers.GetEpisodes(c, Services.DB)
 	})
 

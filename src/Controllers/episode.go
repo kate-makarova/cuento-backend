@@ -26,10 +26,13 @@ type GetEpisodesRequest struct {
 }
 
 type EpisodeListItem struct {
-	Id         int    `json:"id"`
-	Name       string `json:"name"`
-	TopicId    int    `json:"topic_id"`
-	SubforumId int    `json:"subforum_id"`
+	Id           int    `json:"id"`
+	Name         string `json:"name"`
+	TopicId      int    `json:"topic_id"`
+	SubforumId   int    `json:"subforum_id"`
+	SubforumName string `json:"subforum_name"`
+	TopicStatus  int    `json:"topic_status"`
+	LastPostDate string `json:"last_post_date"`
 }
 
 func CreateEpisode(c *gin.Context, db *sql.DB) {
@@ -160,7 +163,11 @@ func GetEpisodes(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	query := "SELECT e.id, e.name, e.topic_id, t.subforum_id FROM episode_base e JOIN topics t ON e.topic_id = t.id WHERE 1=1"
+	query := `SELECT e.id, e.name, e.topic_id, t.subforum_id, s.name, t.status, t.date_last_post
+		FROM episode_base e
+		JOIN topics t ON e.topic_id = t.id
+		JOIN subforums s ON t.subforum_id = s.id
+		WHERE 1=1`
 	var args []interface{}
 
 	if len(req.SubforumIDs) > 0 {
@@ -211,7 +218,7 @@ func GetEpisodes(c *gin.Context, db *sql.DB) {
 	var episodes []EpisodeListItem = []EpisodeListItem{}
 	for rows.Next() {
 		var ep EpisodeListItem
-		if err := rows.Scan(&ep.Id, &ep.Name, &ep.TopicId, &ep.SubforumId); err != nil {
+		if err := rows.Scan(&ep.Id, &ep.Name, &ep.TopicId, &ep.SubforumId, &ep.SubforumName, &ep.TopicStatus, &ep.LastPostDate); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan episode: " + err.Error()})
 			c.Abort()
 			return

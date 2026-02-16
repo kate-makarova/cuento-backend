@@ -68,6 +68,14 @@ CREATE TABLE subforums (
         foreign key (category_id) references categories (id);
 );
 
+create table subforum_topic_type
+(
+    subforum_id bigint unsigned not null,
+    topic_type  int             not null,
+    constraint subforum_topic_type_subforums_id_fk
+        foreign key (subforum_id) references subforums (id)
+);
+
 CREATE TABLE topics (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     status INT NOT NULL,
@@ -187,6 +195,7 @@ INSERT INTO cuento.roles (name) VALUES ('admin')
 create table role_permission
 (
     role_id    int          null,
+    type       int          default 0,
     permission varchar(255) null,
     constraint role_permission_pk
         primary key (role_id, permission),
