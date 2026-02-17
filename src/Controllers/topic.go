@@ -239,7 +239,6 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 				_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get episode ID for topic: " + err.Error()})
 				c.Abort()
 			}
-			// If no episode is found, we can just return the topic without it.
 			c.JSON(http.StatusOK, topic)
 			return
 		}
@@ -252,6 +251,19 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 		}
 
 		if episode, ok := entity.(*Entities.Episode); ok {
+			// Fetch characters for the episode
+			charRows, err := db.Query("SELECT cb.id, cb.name FROM character_base cb JOIN episode_character ec ON cb.id = ec.character_id WHERE ec.episode_id = ?", episode.Id)
+			if err == nil {
+				var characters []*Entities.ShortCharacter
+				for charRows.Next() {
+					var char Entities.ShortCharacter
+					if err := charRows.Scan(&char.Id, &char.Name); err == nil {
+						characters = append(characters, &char)
+					}
+				}
+				episode.Characters = characters
+				charRows.Close()
+			}
 			topic.Episode = episode
 		}
 	}
