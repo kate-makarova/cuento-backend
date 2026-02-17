@@ -268,3 +268,47 @@ func GetUserCharacters(c *gin.Context, db *sql.DB) {
 
 	c.JSON(http.StatusOK, characters)
 }
+
+func GetCharacterProfilesByUser(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
+		c.Abort()
+		return
+	}
+
+	// Get IDs of profiles for this user
+	query := "SELECT cp.id, cp.character_id, cb.name, cp.avatar FROM character_profile_base cp JOIN character_base cb ON cp.character_id = cb.id WHERE cb.user_id = ?"
+	rows, err := db.Query(query, userID)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get character profiles: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	var profiles []Entities.CharacterProfile
+	for rows.Next() {
+		var id int
+		var characterId int
+		var name string
+		var avatar *string
+		if err := rows.Scan(&id, &characterId, &name, &avatar); err != nil {
+			continue
+		}
+
+		entity, err := Services.GetEntity(int64(id), "character_profile", db)
+		if err != nil {
+			continue
+		}
+
+		if profile, ok := entity.(*Entities.CharacterProfile); ok {
+			profile.CharacterId = characterId
+			profile.CharacterName = name
+			profile.Avatar = avatar
+			profiles = append(profiles, *profile)
+		}
+	}
+
+	c.JSON(http.StatusOK, profiles)
+}

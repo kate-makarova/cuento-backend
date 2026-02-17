@@ -106,6 +106,9 @@ func main() {
 	protectedRouter.GET("/user/characters", "Get current user's characters", func(c *gin.Context) {
 		Controllers.GetUserCharacters(c, Services.DB)
 	})
+	protectedRouter.GET("/user/character-profiles", "Get current user's character profiles", func(c *gin.Context) {
+		Controllers.GetCharacterProfilesByUser(c, Services.DB)
+	})
 	protectedRouter.GET("/faction-children/:parent_id/get", "Get child factions by parent ID", func(c *gin.Context) {
 		Controllers.GetFactionChildren(c, Services.DB)
 	})
