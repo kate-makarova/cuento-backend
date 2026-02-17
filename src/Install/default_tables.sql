@@ -106,6 +106,7 @@ create table character_base
 create table character_profile_base
 		(id      bigint unsigned auto_increment primary key,
 		character_id bigint unsigned          null,
+        avatar varchar(255) null,
 		constraint character_profile_base_character_id_fk
 		foreign key (character_id) references character_base (id)  ON DELETE CASCADE
 		);
