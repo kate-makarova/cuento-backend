@@ -17,6 +17,8 @@ func IdentifyBaseEntity(className string) (interface{}, error) {
 		entity = &Entities.Character{}
 	case "character_profile":
 		entity = &Entities.CharacterProfile{}
+	case "episode":
+		entity = &Entities.Episode{}
 	default:
 		return nil, fmt.Errorf("unknown entity class: %s", className)
 	}

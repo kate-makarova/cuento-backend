@@ -26,5 +26,9 @@ type Topic struct {
 	DateLastPost         time.Time   `json:"date_last_post"`
 	PostNumber           int         `json:"post_number"`
 	AuthorUserId         int         `json:"author_user_id"`
+	AuthorUsername       *string     `json:"author_username"`
 	LastPostAuthorUserId int         `json:"last_post_author_user_id"`
+	LastPostAuthorName   *string     `json:"last_post_author_name"`
+	SubforumId           int         `json:"subforum_id"`
+	Episode              *Episode    `json:"episode"`
 }

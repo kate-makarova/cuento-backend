@@ -69,6 +69,9 @@ func main() {
 	optionalAuthRouter.GET("/viewtopic/:id/:page", "Get posts in a topic by page", func(c *gin.Context) {
 		Controllers.GetPostsByTopic(c, Services.DB)
 	})
+	optionalAuthRouter.GET("/topic/get/:id", "Get topic details by ID", func(c *gin.Context) {
+		Controllers.GetTopic(c, Services.DB)
+	})
 	optionalAuthRouter.GET("/character-list", "Get list of all characters", func(c *gin.Context) {
 		Controllers.GetCharacterList(c, Services.DB)
 	})

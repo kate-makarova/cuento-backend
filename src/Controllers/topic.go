@@ -3,6 +3,7 @@ package Controllers
 import (
 	"cuento-backend/src/Entities"
 	"cuento-backend/src/Events"
+	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
 	"database/sql"
 	"net/http"
@@ -194,4 +195,66 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, posts)
+}
+
+func GetTopic(c *gin.Context, db *sql.DB) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid ID"})
+		c.Abort()
+		return
+	}
+
+	var topic Entities.Topic
+	query := "SELECT t.id, t.status, t.name, t.type, t.date_created, t.date_last_post, t.post_number, t.author_user_id, u.username, t.last_post_author_user_id, u2.username, t.subforum_id FROM topics t JOIN users u ON t.author_user_id = u.id LEFT JOIN users u2 ON t.last_post_author_user_id = u2.id WHERE t.id = ?"
+	err = db.QueryRow(query, id).Scan(
+		&topic.Id,
+		&topic.Status,
+		&topic.Name,
+		&topic.Type,
+		&topic.DateCreated,
+		&topic.DateLastPost,
+		&topic.PostNumber,
+		&topic.AuthorUserId,
+		&topic.AuthorUsername,
+		&topic.LastPostAuthorUserId,
+		&topic.LastPostAuthorName,
+		&topic.SubforumId,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Topic not found"})
+		} else {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get topic: " + err.Error()})
+		}
+		c.Abort()
+		return
+	}
+
+	if topic.Type == Entities.EpisodeTopic {
+		var episodeID int
+		err := db.QueryRow("SELECT id FROM episode_base WHERE topic_id = ?", topic.Id).Scan(&episodeID)
+		if err != nil {
+			if err != sql.ErrNoRows {
+				_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get episode ID for topic: " + err.Error()})
+				c.Abort()
+			}
+			// If no episode is found, we can just return the topic without it.
+			c.JSON(http.StatusOK, topic)
+			return
+		}
+
+		entity, err := Services.GetEntity(int64(episodeID), "episode", db)
+		if err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get episode entity: " + err.Error()})
+			c.Abort()
+			return
+		}
+
+		if episode, ok := entity.(*Entities.Episode); ok {
+			topic.Episode = episode
+		}
+	}
+
+	c.JSON(http.StatusOK, topic)
 }
