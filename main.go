@@ -90,6 +90,9 @@ func main() {
 	optionalAuthRouter.GET("/subforum/get/:id", "Get subforum details by ID", func(c *gin.Context) {
 		Controllers.GetSubforum(c, Services.DB)
 	})
+	optionalAuthRouter.GET("/topic-posts/:id/:page", "Get posts in a topic by page", func(c *gin.Context) {
+		Controllers.GetPostsByTopic(c, Services.DB)
+	})
 
 	// Protected routes
 	protectedGroup := r.Group("/")

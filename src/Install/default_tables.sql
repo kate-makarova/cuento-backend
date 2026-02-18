@@ -130,6 +130,7 @@ CREATE TABLE posts (
                        date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
                        content TEXT NOT NULL,
                        character_profile_id BIGINT UNSIGNED,
+                       use_character_profile BOOLEAN DEFAULT FALSE,
                        CONSTRAINT fk_posts_topic
                            FOREIGN KEY (topic_id) REFERENCES topics (id) ON DELETE CASCADE,
                        CONSTRAINT fk_posts_user

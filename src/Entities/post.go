@@ -3,10 +3,12 @@ package Entities
 import "time"
 
 type Post struct {
-	Id               int               `json:"id"`
-	TopicId          int               `json:"topic_id"`
-	AuthorUserId     int               `json:"author_user_id"`
-	DateCreated      time.Time         `json:"date_created"`
-	Content          string            `json:"content"`
-	CharacterProfile *CharacterProfile `json:"character_profile"`
+	Id                  int               `json:"id"`
+	TopicId             int               `json:"topic_id"`
+	AuthorUserId        int               `json:"author_user_id"`
+	DateCreated         time.Time         `json:"date_created"`
+	Content             string            `json:"content"`
+	CharacterProfile    *CharacterProfile `json:"character_profile"`
+	UserProfile         *UserProfile      `json:"user_profile"`
+	UseCharacterProfile bool              `json:"use_character_profile"`
 }
