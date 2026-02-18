@@ -2,6 +2,7 @@ package Middlewares
 
 import (
 	"cuento-backend/src/Router"
+	"cuento-backend/src/Services"
 	"database/sql"
 	"net/http"
 
@@ -11,10 +12,7 @@ import (
 func PermissionsMiddleware(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Get user ID from context, default to 0 (guest) if not present
-		userID := 0
-		if id, exists := c.Get("user_id"); exists {
-			userID = id.(int)
-		}
+		userID := Services.GetUserIdFromContext(c)
 
 		// Get the matched route pattern from gin context
 		endpointPath := c.FullPath()

@@ -4,20 +4,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// GetUserIdFromContext safely retrieves the user ID from the Gin context.
+// It returns the user ID if it exists and is a valid integer.
+// It returns 0 if the user ID does not exist or is not a valid type,
+// indicating a guest user or an unauthenticated session.
 func GetUserIdFromContext(c *gin.Context) int {
-	userIDVal, exists := c.Get("user_id")
-	if !exists {
-		return 0
-	}
-
-	var userID int
-	switch v := userIDVal.(type) {
-	case int:
-		userID = v
-	case float64:
-		userID = int(v)
-	default:
-		return 0
+	userID := 0
+	if id, exists := c.Get("user_id"); exists {
+		userID = id.(int)
 	}
 	return userID
 }
