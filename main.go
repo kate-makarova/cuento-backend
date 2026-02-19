@@ -132,6 +132,9 @@ func main() {
 	protectedRouter.GET("/ws", "WebSocket connection endpoint", func(c *gin.Context) {
 		Controllers.HandleWebSocket(c)
 	})
+	protectedRouter.GET("/permission-matrix/get", "Get permission matrix", func(c *gin.Context) {
+		Controllers.GetPermissionMatrix(c, Services.DB)
+	})
 
 	r.Run() // listen and serve on 0.0.0.0:8080
 }

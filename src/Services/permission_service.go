@@ -27,9 +27,9 @@ var SubforumPermissions = map[string]string{
 }
 
 type PermissionMatrixObject struct {
-	Roles       map[int]string
-	Permissions map[string]string
-	Matrix      map[string]map[string]bool
+	Roles       map[int]string          `json:"roles"`
+	Permissions map[string]string       `json:"permissions"`
+	Matrix      map[string]map[int]bool `json:"matrix"`
 }
 
 func GetEndpointPermissionMatrix(db *sql.DB) (PermissionMatrixObject, error) {
@@ -40,14 +40,12 @@ func GetEndpointPermissionMatrix(db *sql.DB) (PermissionMatrixObject, error) {
 	}
 	defer roleRows.Close()
 
-	roles := make([]Entities.Role, 0)
 	roleMap := make(map[int]string)
 	for roleRows.Next() {
 		var role Entities.Role
 		if err := roleRows.Scan(&role.Id, &role.Name); err != nil {
 			return PermissionMatrixObject{}, err
 		}
-		roles = append(roles, role)
 		roleMap[role.Id] = role.Name
 	}
 
@@ -58,35 +56,33 @@ func GetEndpointPermissionMatrix(db *sql.DB) (PermissionMatrixObject, error) {
 	}
 	defer permRows.Close()
 
-	existingPerms := make(map[string]map[string]bool) // permission -> roleName -> true
+	existingPerms := make(map[string]map[int]bool) // permission -> roleID -> true
 	for permRows.Next() {
 		var roleID int
 		var permission string
 		if err := permRows.Scan(&roleID, &permission); err != nil {
 			continue
 		}
-		roleName, ok := roleMap[roleID]
-		if !ok {
-			continue
+		if _, ok := roleMap[roleID]; ok { // Ensure role exists
+			if _, ok := existingPerms[permission]; !ok {
+				existingPerms[permission] = make(map[int]bool)
+			}
+			existingPerms[permission][roleID] = true
 		}
-		if _, ok := existingPerms[permission]; !ok {
-			existingPerms[permission] = make(map[string]bool)
-		}
-		existingPerms[permission][roleName] = true
 	}
 
 	// 3. Build the full matrix and permissions map
-	permissionMatrix := make(map[string]map[string]bool)
+	permissionMatrix := make(map[string]map[int]bool)
 	permissionsMap := make(map[string]string)
 	for _, route := range Router.AllRoutes {
 		permission := route.Path
-		permissionsMap[permission] = route.Definition // Use the route definition
-		permissionMatrix[permission] = make(map[string]bool)
-		for _, role := range roles {
+		permissionsMap[permission] = route.Definition
+		permissionMatrix[permission] = make(map[int]bool)
+		for roleID := range roleMap {
 			if rolesWithPerm, ok := existingPerms[permission]; ok {
-				permissionMatrix[permission][role.Name] = rolesWithPerm[role.Name]
+				permissionMatrix[permission][roleID] = rolesWithPerm[roleID]
 			} else {
-				permissionMatrix[permission][role.Name] = false
+				permissionMatrix[permission][roleID] = false
 			}
 		}
 	}
@@ -106,74 +102,74 @@ func GetSubforumPermissionMatrix(db *sql.DB) (PermissionMatrixObject, error) {
 	}
 	defer roleRows.Close()
 
-	roles := make([]Entities.Role, 0)
 	roleMap := make(map[int]string)
 	for roleRows.Next() {
 		var role Entities.Role
 		if err := roleRows.Scan(&role.Id, &role.Name); err != nil {
 			return PermissionMatrixObject{}, err
 		}
-		roles = append(roles, role)
 		roleMap[role.Id] = role.Name
 	}
 
 	// 2. Fetch all subforums
-	subforumRows, err := db.Query("SELECT id FROM subforums")
+	subforumRows, err := db.Query("SELECT id, name FROM subforums")
 	if err != nil {
 		return PermissionMatrixObject{}, err
 	}
 	defer subforumRows.Close()
 
-	var subforumIDs []int
+	type SubforumInfo struct {
+		ID   int
+		Name string
+	}
+	var subforums []SubforumInfo
 	for subforumRows.Next() {
-		var id int
-		if err := subforumRows.Scan(&id); err != nil {
+		var sub SubforumInfo
+		if err := subforumRows.Scan(&sub.ID, &sub.Name); err != nil {
 			return PermissionMatrixObject{}, err
 		}
-		subforumIDs = append(subforumIDs, id)
+		subforums = append(subforums, sub)
 	}
 
-	// 3. Generate all possible permission strings and their definitions
-	allPossiblePerms := make(map[string]string)
-	for _, subID := range subforumIDs {
-		for permKey, permDef := range SubforumPermissions {
-			allPossiblePerms[fmt.Sprintf("%s:%d", permKey, subID)] = permDef
-		}
-	}
-
-	// 4. Fetch all existing subforum role-permission relationships
+	// 3. Fetch all existing subforum role-permission relationships
 	permRows, err := db.Query("SELECT role_id, permission FROM role_permission WHERE type = 1")
 	if err != nil {
 		return PermissionMatrixObject{}, err
 	}
 	defer permRows.Close()
 
-	existingPerms := make(map[string]map[string]bool) // permission -> roleName -> true
+	existingPerms := make(map[string]map[int]bool) // permission -> roleID -> true
 	for permRows.Next() {
 		var roleID int
 		var permission string
 		if err := permRows.Scan(&roleID, &permission); err != nil {
 			continue
 		}
-		roleName, ok := roleMap[roleID]
-		if !ok {
-			continue
+		if _, ok := roleMap[roleID]; ok {
+			if _, ok := existingPerms[permission]; !ok {
+				existingPerms[permission] = make(map[int]bool)
+			}
+			existingPerms[permission][roleID] = true
 		}
-		if _, ok := existingPerms[permission]; !ok {
-			existingPerms[permission] = make(map[string]bool)
-		}
-		existingPerms[permission][roleName] = true
 	}
 
-	// 5. Build the full matrix
-	permissionMatrix := make(map[string]map[string]bool)
-	for permission := range allPossiblePerms {
-		permissionMatrix[permission] = make(map[string]bool)
-		for _, role := range roles {
-			if rolesWithPerm, ok := existingPerms[permission]; ok {
-				permissionMatrix[permission][role.Name] = rolesWithPerm[role.Name]
-			} else {
-				permissionMatrix[permission][role.Name] = false
+	// 4. Build the matrix and permissions map, grouped by subforum
+	permissionMatrix := make(map[string]map[int]bool)
+	allPossiblePerms := make(map[string]string)
+
+	for _, sub := range subforums {
+		for permKey, permDef := range SubforumPermissions {
+			permissionString := fmt.Sprintf("%s:%d", permKey, sub.ID)
+			humanReadableDef := fmt.Sprintf("Subforum '%s' (ID %d): %s", sub.Name, sub.ID, permDef)
+			allPossiblePerms[permissionString] = humanReadableDef
+
+			permissionMatrix[permissionString] = make(map[int]bool)
+			for roleID := range roleMap {
+				if rolesWithPerm, ok := existingPerms[permissionString]; ok {
+					permissionMatrix[permissionString][roleID] = rolesWithPerm[roleID]
+				} else {
+					permissionMatrix[permissionString][roleID] = false
+				}
 			}
 		}
 	}
