@@ -27,9 +27,10 @@ var SubforumPermissions = map[string]string{
 }
 
 type PermissionMatrixObject struct {
-	Roles       map[int]string          `json:"roles"`
-	Permissions map[string]string       `json:"permissions"`
-	Matrix      map[string]map[int]bool `json:"matrix"`
+	Roles           map[int]string          `json:"roles"`
+	Permissions     map[string]string       `json:"permissions"`
+	Matrix          map[string]map[int]bool `json:"matrix"`
+	PermissionOrder []string                `json:"permission_order"`
 }
 
 func GetEndpointPermissionMatrix(db *sql.DB) (PermissionMatrixObject, error) {
@@ -63,7 +64,7 @@ func GetEndpointPermissionMatrix(db *sql.DB) (PermissionMatrixObject, error) {
 		if err := permRows.Scan(&roleID, &permission); err != nil {
 			continue
 		}
-		if _, ok := roleMap[roleID]; ok { // Ensure role exists
+		if _, ok := roleMap[roleID]; ok {
 			if _, ok := existingPerms[permission]; !ok {
 				existingPerms[permission] = make(map[int]bool)
 			}
@@ -71,11 +72,14 @@ func GetEndpointPermissionMatrix(db *sql.DB) (PermissionMatrixObject, error) {
 		}
 	}
 
-	// 3. Build the full matrix and permissions map
+	// 3. Build the full matrix, permissions map, and ordered list of keys
 	permissionMatrix := make(map[string]map[int]bool)
 	permissionsMap := make(map[string]string)
-	for _, route := range Router.AllRoutes {
+	permissionOrder := make([]string, len(Router.AllRoutes))
+
+	for i, route := range Router.AllRoutes {
 		permission := route.Path
+		permissionOrder[i] = permission
 		permissionsMap[permission] = route.Definition
 		permissionMatrix[permission] = make(map[int]bool)
 		for roleID := range roleMap {
@@ -88,9 +92,10 @@ func GetEndpointPermissionMatrix(db *sql.DB) (PermissionMatrixObject, error) {
 	}
 
 	return PermissionMatrixObject{
-		Roles:       roleMap,
-		Permissions: permissionsMap,
-		Matrix:      permissionMatrix,
+		Roles:           roleMap,
+		Permissions:     permissionsMap,
+		Matrix:          permissionMatrix,
+		PermissionOrder: permissionOrder,
 	}, nil
 }
 
@@ -153,14 +158,17 @@ func GetSubforumPermissionMatrix(db *sql.DB) (PermissionMatrixObject, error) {
 		}
 	}
 
-	// 4. Build the matrix and permissions map, grouped by subforum
+	// 4. Build the matrix, permissions map, and ordered list of keys
 	permissionMatrix := make(map[string]map[int]bool)
 	allPossiblePerms := make(map[string]string)
+	permissionOrder := make([]string, 0)
 
 	for _, sub := range subforums {
 		for permKey, permDef := range SubforumPermissions {
 			permissionString := fmt.Sprintf("%s:%d", permKey, sub.ID)
 			humanReadableDef := fmt.Sprintf("Subforum '%s' (ID %d): %s", sub.Name, sub.ID, permDef)
+
+			permissionOrder = append(permissionOrder, permissionString)
 			allPossiblePerms[permissionString] = humanReadableDef
 
 			permissionMatrix[permissionString] = make(map[int]bool)
@@ -175,8 +183,9 @@ func GetSubforumPermissionMatrix(db *sql.DB) (PermissionMatrixObject, error) {
 	}
 
 	return PermissionMatrixObject{
-		Roles:       roleMap,
-		Permissions: allPossiblePerms,
-		Matrix:      permissionMatrix,
+		Roles:           roleMap,
+		Permissions:     allPossiblePerms,
+		Matrix:          permissionMatrix,
+		PermissionOrder: permissionOrder,
 	}, nil
 }
