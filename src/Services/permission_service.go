@@ -5,6 +5,8 @@ import (
 	"cuento-backend/src/Router"
 	"database/sql"
 	"fmt"
+	"strconv"
+	"strings"
 )
 
 type PermissionType int
@@ -188,4 +190,72 @@ func GetSubforumPermissionMatrix(db *sql.DB) (PermissionMatrixObject, error) {
 		Matrix:          permissionMatrix,
 		PermissionOrder: permissionOrder,
 	}, nil
+}
+
+func UpdatePermissionMatrix(permissions []string, db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback() // Rollback on error
+
+	// 1. Get all roles to map names to IDs
+	roleRows, err := tx.Query("SELECT id, name FROM roles")
+	if err != nil {
+		return fmt.Errorf("failed to fetch roles: %w", err)
+	}
+	defer roleRows.Close()
+
+	roleNameToID := make(map[string]int)
+	for roleRows.Next() {
+		var role Entities.Role
+		if err := roleRows.Scan(&role.Id, &role.Name); err != nil {
+			return fmt.Errorf("failed to scan role: %w", err)
+		}
+		roleNameToID[role.Name] = role.Id
+	}
+
+	// 2. Wipe all old permissions
+	if _, err := tx.Exec("DELETE FROM role_permission"); err != nil {
+		return fmt.Errorf("failed to delete old permissions: %w", err)
+	}
+
+	// 3. Prepare for bulk insert
+	stmt, err := tx.Prepare("INSERT INTO role_permission (type, role_id, permission) VALUES (?, ?, ?)")
+	if err != nil {
+		return fmt.Errorf("failed to prepare insert statement: %w", err)
+	}
+	defer stmt.Close()
+
+	// 4. Parse and insert new permissions
+	for _, p := range permissions {
+		parts := strings.SplitN(p, ".", 3)
+		if len(parts) != 3 {
+			continue // Skip malformed strings
+		}
+
+		permType, err := strconv.Atoi(parts[0])
+		if err != nil {
+			continue // Skip if type is not a number
+		}
+
+		roleName := parts[1]
+		roleID, ok := roleNameToID[roleName]
+		if !ok {
+			continue // Skip if role name is invalid
+		}
+
+		permission := parts[2]
+
+		if _, err := stmt.Exec(permType, roleID, permission); err != nil {
+			return fmt.Errorf("failed to insert permission '%s': %w", p, err)
+		}
+	}
+
+	// 5. Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
 }

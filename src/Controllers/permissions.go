@@ -9,6 +9,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Define a struct to match the incoming JSON object
+type UpdatePermissionsRequest struct {
+	Permissions []string `json:"permissions"`
+}
+
 func GetPermissionMatrix(c *gin.Context, db *sql.DB) {
 	endpointMatrix, err := Services.GetEndpointPermissionMatrix(db)
 	if err != nil {
@@ -24,10 +29,40 @@ func GetPermissionMatrix(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	response := map[Services.PermissionType]Services.PermissionMatrixObject{
+	// Use the numeric PermissionType as the key
+	response := map[Services.PermissionType]interface{}{
 		Services.EndpointPermission: endpointMatrix,
 		Services.SubforumPermission: subforumMatrix,
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+func UpdatePermissionMatrix(c *gin.Context, db *sql.DB) {
+	var req UpdatePermissionsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	// Safety check: do not allow wiping all permissions with an empty set
+	if req.Permissions == nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Permissions key is required."})
+		c.Abort()
+		return
+	}
+	if len(req.Permissions) == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Cannot update with an empty permission set."})
+		c.Abort()
+		return
+	}
+
+	if err := Services.UpdatePermissionMatrix(req.Permissions, db); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update permissions: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Permissions updated successfully"})
 }

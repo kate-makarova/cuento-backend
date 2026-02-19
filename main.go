@@ -135,6 +135,9 @@ func main() {
 	protectedRouter.GET("/permission-matrix/get", "Get permission matrix", func(c *gin.Context) {
 		Controllers.GetPermissionMatrix(c, Services.DB)
 	})
+	protectedRouter.POST("/permission-matrix/update", "Update permission matrix", func(c *gin.Context) {
+		Controllers.UpdatePermissionMatrix(c, Services.DB)
+	})
 
 	r.Run() // listen and serve on 0.0.0.0:8080
 }
