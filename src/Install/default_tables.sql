@@ -97,6 +97,8 @@ create table character_base
 		avatar  varchar(255) null,
         topic_id bigint unsigned null,
         character_status int default 2 not null,
+        total_posts int default 0 null,
+        date_last_post datetime null,
 		constraint character_base_users_id_fk
 		foreign key (user_id) references users (id),
         constraint character_base_topics_id_fk

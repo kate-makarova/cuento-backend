@@ -35,6 +35,13 @@ type CreateTopicRequest struct {
 	Content    string `json:"content" binding:"required"`
 }
 
+type CreatePostRequest struct {
+	TopicID             int    `json:"topic_id" binding:"required"`
+	Content             string `json:"content" binding:"required"`
+	UseCharacterProfile bool   `json:"use_character_profile"`
+	CharacterProfileID  *int   `json:"character_profile_id"`
+}
+
 type PostRow struct {
 	Id             int       `json:"id"`
 	AuthorUserId   int       `json:"author_user_id"`
@@ -369,4 +376,45 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, topic)
+}
+
+func CreatePost(c *gin.Context, db *sql.DB) {
+	var req CreatePostRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
+		return
+	}
+
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start transaction"})
+		return
+	}
+	defer tx.Rollback()
+
+	// Insert Post
+	res, err := tx.Exec("INSERT INTO posts (topic_id, author_user_id, content, date_created, use_character_profile, character_profile_id) VALUES (?, ?, ?, NOW(), ?, ?)",
+		req.TopicID, userID, req.Content, req.UseCharacterProfile, req.CharacterProfileID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert post: " + err.Error()})
+		return
+	}
+	postID, err := res.LastInsertId()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get post ID"})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{"message": "Post created successfully", "post_id": postID})
 }

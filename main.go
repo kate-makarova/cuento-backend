@@ -138,6 +138,9 @@ func main() {
 	protectedRouter.POST("/permission-matrix/update", "Update permission matrix", func(c *gin.Context) {
 		Controllers.UpdatePermissionMatrix(c, Services.DB)
 	})
+	protectedRouter.POST("/post/create", "Create a new post in a topic", func(c *gin.Context) {
+		Controllers.CreatePost(c, Services.DB)
+	})
 
 	r.Run() // listen and serve on 0.0.0.0:8080
 }
