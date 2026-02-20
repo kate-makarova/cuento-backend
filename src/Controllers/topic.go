@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -112,6 +113,10 @@ func CreateTopic(c *gin.Context, db *sql.DB) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details: " + err.Error()})
 		return
 	}
+
+	var authorUsername string
+	// Fetch username for notification purposes
+	_ = db.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&authorUsername)
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -414,6 +419,74 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
 		return
+	}
+
+	// Handle Mentions
+	// Regex to find @username (assuming alphanumeric + underscore)
+	re := regexp.MustCompile(`@([a-zA-Z0-9_]+)`)
+	matches := re.FindAllStringSubmatch(req.Content, -1)
+
+	if len(matches) > 0 {
+		seen := make(map[string]bool)
+		var usernames []string
+		for _, match := range matches {
+			if len(match) > 1 {
+				username := match[1]
+				if !seen[username] {
+					usernames = append(usernames, username)
+					seen[username] = true
+				}
+			}
+		}
+
+		if len(usernames) > 0 {
+			query := "SELECT id, username FROM users WHERE username IN (?" + strings.Repeat(",?", len(usernames)-1) + ")"
+			args := make([]interface{}, len(usernames))
+			for i, u := range usernames {
+				args[i] = u
+			}
+
+			rows, err := db.Query(query, args...)
+			if err == nil {
+				defer rows.Close()
+				for rows.Next() {
+					var mUserID int
+					var mUsername string
+					if err := rows.Scan(&mUserID, &mUsername); err == nil {
+						if mUserID != userID {
+							Events.Publish(db, Events.NotificationCreated, Events.NotificationEvent{
+								UserID:  mUserID,
+								Type:    "mention",
+								Message: fmt.Sprintf("You were mentioned in a post by %s", mUsername),
+								Data: gin.H{
+									"topic_id": req.TopicID,
+									"post_id":  postID,
+								},
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Fetch additional data for the event
+	var subforumID int
+	var topicName string
+	err = db.QueryRow("SELECT subforum_id, name FROM topics WHERE id = ?", req.TopicID).Scan(&subforumID, &topicName)
+	if err == nil {
+		// Fetch full post data
+		fullPost, postErr := Services.GetPostById(int(postID), db)
+		if postErr != nil {
+			fmt.Printf("Error getting post details for event publishing: %v\n", postErr)
+		} else {
+			// Publish event to broadcast to all users
+			Events.Publish(db, Events.PostCreated, Events.PostCreatedEvent{
+				TopicID:    int64(req.TopicID),
+				SubforumID: subforumID,
+				Post:       *fullPost,
+			})
+		}
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Post created successfully", "post_id": postID})

@@ -1,6 +1,7 @@
 package Events
 
 import (
+	"cuento-backend/src/Entities"
 	"database/sql"
 	"sync"
 )
@@ -9,6 +10,7 @@ type EventType string
 
 const (
 	TopicCreated        EventType = "TopicCreated"
+	PostCreated         EventType = "PostCreated"
 	NotificationCreated EventType = "NotificationCreated"
 )
 
@@ -21,6 +23,12 @@ type TopicCreatedEvent struct {
 	PostID     int64
 	UserID     int
 	Username   string
+}
+
+type PostCreatedEvent struct {
+	TopicID    int64         `json:"topic_id"`
+	SubforumID int           `json:"subforum_id"`
+	Post       Entities.Post `json:"post"`
 }
 
 type NotificationEvent struct {

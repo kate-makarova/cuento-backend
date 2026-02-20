@@ -9,6 +9,7 @@ type Post struct {
 	AuthorCharacterId   *int              `json:"author_character_id"`
 	DateCreated         time.Time         `json:"date_created"`
 	Content             string            `json:"content"`
+	ContentHtml         string            `json:"content_html"`
 	CharacterProfile    *CharacterProfile `json:"character_profile"`
 	UserProfile         *UserProfile      `json:"user_profile"`
 	UseCharacterProfile bool              `json:"use_character_profile"`

@@ -48,4 +48,13 @@ func RegisterEventHandlers(db *sql.DB) {
 		}
 		Websockets.MainHub.SendNotification(event.UserID, event)
 	})
+
+	// Subscriber 4: Broadcast Post Created
+	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.PostCreatedEvent)
+		if !ok {
+			return
+		}
+		Websockets.MainHub.Broadcast(event)
+	})
 }

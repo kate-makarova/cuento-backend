@@ -127,3 +127,25 @@ func (h *Hub) SendNotification(userID int, message interface{}) {
 		}
 	}
 }
+
+func (h *Hub) Broadcast(message interface{}) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, userClients := range h.clients {
+		for client := range userClients {
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						// The panic is recovered. The client is already being cleaned up.
+					}
+				}()
+				select {
+				case client.Send <- message:
+					// Message sent successfully.
+				default:
+					// Client's send buffer is full. Drop the message.
+				}
+			}()
+		}
+	}
+}
