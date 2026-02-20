@@ -2,6 +2,7 @@ package Websockets
 
 import (
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -15,16 +16,35 @@ type Client struct {
 
 func (c *Client) writePump() {
 	defer func() {
-		c.Conn.Close()
+		// When the write pump exits, it's crucial to unregister the client
+		// to signal that this client is gone. The readPump's defer will
+		// handle the actual connection closing.
+		c.Hub.unregister <- c
 	}()
+	ticker := time.NewTicker(54 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case message, ok := <-c.Send:
+			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
+				// The Hub closed the channel, which means the client is being disconnected.
+				// Send a close message to the client for a clean shutdown.
 				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-			c.Conn.WriteJSON(message)
+
+			// If writing to the connection fails, the client is considered disconnected.
+			// We return from the function, which will trigger the deferred cleanup.
+			if err := c.Conn.WriteJSON(message); err != nil {
+				return
+			}
+		case <-ticker.C:
+			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
 	}
 }
@@ -87,12 +107,23 @@ func (h *Hub) SendNotification(userID int, message interface{}) {
 	defer h.mu.RUnlock()
 	if userClients, ok := h.clients[userID]; ok {
 		for client := range userClients {
-			select {
-			case client.Send <- message:
-			default:
-				close(client.Send)
-				delete(userClients, client)
-			}
+			// Use a closure and a recover to prevent a panic from a "send on closed channel"
+			// race condition. This can happen if a client disconnects and is unregistered
+			// at the same time a message is being sent to them.
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						// The panic is recovered. The client is already being cleaned up,
+						// so we don't need to do anything else.
+					}
+				}()
+				select {
+				case client.Send <- message:
+					// Message sent successfully.
+				default:
+					// Client's send buffer is full. Drop the message.
+				}
+			}()
 		}
 	}
 }

@@ -129,9 +129,6 @@ func main() {
 	protectedRouter.POST("/episode/create", "Create a new episode", func(c *gin.Context) {
 		Controllers.CreateEpisode(c, Services.DB)
 	})
-	protectedRouter.GET("/ws", "WebSocket connection endpoint", func(c *gin.Context) {
-		Controllers.HandleWebSocket(c)
-	})
 	protectedRouter.GET("/permission-matrix/get", "Get permission matrix", func(c *gin.Context) {
 		Controllers.GetPermissionMatrix(c, Services.DB)
 	})
@@ -140,6 +137,14 @@ func main() {
 	})
 	protectedRouter.POST("/post/create", "Create a new post in a topic", func(c *gin.Context) {
 		Controllers.CreatePost(c, Services.DB)
+	})
+
+	// WebSocket route with special authentication
+	wsGroup := r.Group("/")
+	wsGroup.Use(Middlewares.WebSocketAuthMiddleware())
+	wsRouter := Router.NewCustomRouter(wsGroup)
+	wsRouter.GET("/ws", "WebSocket connection endpoint", func(c *gin.Context) {
+		Controllers.HandleWebSocket(c)
 	})
 
 	r.Run() // listen and serve on 0.0.0.0:8080
