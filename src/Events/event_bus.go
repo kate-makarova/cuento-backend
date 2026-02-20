@@ -17,6 +17,7 @@ const (
 type EventData interface{}
 
 type TopicCreatedEvent struct {
+	Type       string `json:"type"`
 	TopicID    int64
 	SubforumID int
 	Title      string
@@ -26,6 +27,7 @@ type TopicCreatedEvent struct {
 }
 
 type PostCreatedEvent struct {
+	Type       string        `json:"type"`
 	TopicID    int64         `json:"topic_id"`
 	SubforumID int           `json:"subforum_id"`
 	Post       Entities.Post `json:"post"`

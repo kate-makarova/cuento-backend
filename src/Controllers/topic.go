@@ -158,6 +158,7 @@ func CreateTopic(c *gin.Context, db *sql.DB) {
 
 	// Publish event to update stats asynchronously
 	Events.Publish(db, Events.TopicCreated, Events.TopicCreatedEvent{
+		Type:       "topic_created",
 		TopicID:    topicID,
 		SubforumID: req.SubforumId,
 		Title:      req.Title,
@@ -264,6 +265,7 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 		post.AuthorUserId, _ = strconv.Atoi(rowMap["author_user_id"].(string))
 		post.DateCreated, _ = time.Parse("2006-01-02 15:04:05", rowMap["date_created"].(string))
 		post.Content = rowMap["content"].(string)
+		post.ContentHtml = Entities.ParseBBCode(post.Content)
 		post.UseCharacterProfile, _ = strconv.ParseBool(rowMap["use_character_profile"].(string))
 
 		if post.UseCharacterProfile {
@@ -456,7 +458,7 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 						if mUserID != userID {
 							Events.Publish(db, Events.NotificationCreated, Events.NotificationEvent{
 								UserID:  mUserID,
-								Type:    "mention",
+								Type:    "notification",
 								Message: fmt.Sprintf("You were mentioned in a post by %s", mUsername),
 								Data: gin.H{
 									"topic_id": req.TopicID,
@@ -482,6 +484,7 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 		} else {
 			// Publish event to broadcast to all users
 			Events.Publish(db, Events.PostCreated, Events.PostCreatedEvent{
+				Type:       "post_created",
 				TopicID:    int64(req.TopicID),
 				SubforumID: subforumID,
 				Post:       *fullPost,
