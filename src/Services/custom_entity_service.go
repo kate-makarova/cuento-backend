@@ -10,6 +10,10 @@ import (
 	"strings"
 )
 
+type BaseEntity interface {
+	GetBaseFields() []string
+}
+
 func IdentifyBaseEntity(className string) (interface{}, error) {
 	var entity interface{}
 	switch className {
@@ -217,17 +221,30 @@ func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}
 	}
 	t := v.Type()
 
+	// Determine allowed fields from BaseEntity interface
+	var allowedFields map[string]bool
+	if baseEntity, ok := entity.(BaseEntity); ok {
+		allowedFields = make(map[string]bool)
+		for _, f := range baseEntity.GetBaseFields() {
+			allowedFields[strings.ToLower(f)] = true
+		}
+	}
+
 	// 1. Insert into the base table
 	var cols []string
 	var vals []interface{}
 	var placeholders []string
+
+	if allowedFields == nil {
+		return nil, 0, fmt.Errorf("entity does not implement BaseEntity interface")
+	}
 
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
 		fieldType := t.Field(i)
 		fieldName := fieldType.Name
 
-		if fieldName == "Id" || fieldName == "CustomFields" {
+		if !allowedFields[strings.ToLower(fieldName)] {
 			continue
 		}
 

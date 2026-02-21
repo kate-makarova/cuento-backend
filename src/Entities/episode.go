@@ -7,3 +7,7 @@ type Episode struct {
 	Characters   []*ShortCharacter `json:"characters" db:"-"`
 	CustomFields CustomFieldEntity `json:"custom_fields" db:"-"`
 }
+
+func (e *Episode) GetBaseFields() []string {
+	return []string{"topic_id", "name"}
+}

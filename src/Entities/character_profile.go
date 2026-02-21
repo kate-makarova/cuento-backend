@@ -7,3 +7,7 @@ type CharacterProfile struct {
 	Avatar        *string           `json:"avatar"`
 	CustomFields  CustomFieldEntity `json:"custom_fields"`
 }
+
+func (cp *CharacterProfile) GetBaseFields() []string {
+	return []string{"character_id", "avatar"}
+}

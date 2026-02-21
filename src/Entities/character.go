@@ -11,6 +11,10 @@ type Character struct {
 	Factions        []Faction         `json:"factions" db:"-"`
 }
 
+func (c *Character) GetBaseFields() []string {
+	return []string{"user_id", "name", "avatar", "character_status", "topic_id"}
+}
+
 type ShortCharacter struct {
 	Id   int    `json:"id"`
 	Name string `json:"name"`
