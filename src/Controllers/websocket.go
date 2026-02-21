@@ -4,6 +4,8 @@ import (
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
 	"cuento-backend/src/Websockets"
+	"database/sql"
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -19,10 +21,22 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func HandleWebSocket(c *gin.Context) {
+func HandleWebSocket(c *gin.Context, db *sql.DB) {
 	userID := Services.GetUserIdFromContext(c)
 	if userID == 0 {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
+		c.Abort()
+		return
+	}
+
+	// Fetch username for activity tracking
+	var username string
+	err := db.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&username)
+	if err != nil {
+		// If user not found or db error, maybe abort?
+		// For now, let's proceed but maybe log it?
+		// Or just return error.
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get user details"})
 		c.Abort()
 		return
 	}
@@ -40,10 +54,12 @@ func HandleWebSocket(c *gin.Context) {
 	}
 
 	Websockets.MainHub.Register(client)
+	Services.ActivityStorage.AddUser(userID, username)
 
 	// Read loop to keep connection alive and detect disconnects
 	go func() {
 		defer func() {
+			Services.ActivityStorage.RemoveUser(userID)
 			Websockets.MainHub.Unregister(client)
 			conn.Close()
 		}()
@@ -54,9 +70,20 @@ func HandleWebSocket(c *gin.Context) {
 		conn.SetPongHandler(func(string) error { conn.SetReadDeadline(time.Now().Add(60 * time.Second)); return nil })
 
 		for {
-			_, _, err := conn.ReadMessage()
+			_, p, err := conn.ReadMessage()
 			if err != nil {
 				break
+			}
+
+			var msg struct {
+				Type     string `json:"type"`
+				PageType string `json:"page_type"`
+				PageId   string `json:"page_id"`
+			}
+			if err := json.Unmarshal(p, &msg); err == nil {
+				if msg.Type == "page_change" {
+					Services.ActivityStorage.UpdateUserLocation(userID, msg.PageType, msg.PageId)
+				}
 			}
 		}
 	}()

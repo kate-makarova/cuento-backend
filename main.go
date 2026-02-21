@@ -93,6 +93,9 @@ func main() {
 	optionalAuthRouter.GET("/topic-posts/:id/:page", "Get posts in a topic by page", func(c *gin.Context) {
 		Controllers.GetPostsByTopic(c, Services.DB)
 	})
+	optionalAuthRouter.GET("/users/page/:page_type/:page_id", "Get users currently viewing a page", func(c *gin.Context) {
+		Controllers.GetUsersByPage(c, Services.DB)
+	})
 
 	// Protected routes
 	protectedGroup := r.Group("/")
@@ -144,7 +147,7 @@ func main() {
 	wsGroup.Use(Middlewares.WebSocketAuthMiddleware())
 	wsRouter := Router.NewCustomRouter(wsGroup)
 	wsRouter.GET("/ws", "WebSocket connection endpoint", func(c *gin.Context) {
-		Controllers.HandleWebSocket(c)
+		Controllers.HandleWebSocket(c, Services.DB)
 	})
 
 	r.Run() // listen and serve on 0.0.0.0:8080

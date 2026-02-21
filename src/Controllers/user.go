@@ -3,6 +3,7 @@ package Controllers
 import (
 	"cuento-backend/src/Entities"
 	"cuento-backend/src/Middlewares"
+	"cuento-backend/src/Services"
 	"database/sql"
 	"net/http"
 	"time"
@@ -157,4 +158,26 @@ func Login(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"token": tokenString, "user": user})
+}
+
+func GetUsersByPage(c *gin.Context, db *sql.DB) {
+	pageType := c.Param("page_type")
+	pageId := c.Param("page_id")
+
+	activeUsers := Services.ActivityStorage.GetUsersOnPage(pageType, pageId)
+
+	var shortUsers []Entities.ShortUser
+	for _, u := range activeUsers {
+		shortUsers = append(shortUsers, Entities.ShortUser{
+			Id:       u.UserID,
+			Username: u.Username,
+		})
+	}
+
+	// Return empty array instead of null
+	if shortUsers == nil {
+		shortUsers = []Entities.ShortUser{}
+	}
+
+	c.JSON(http.StatusOK, shortUsers)
 }
