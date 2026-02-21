@@ -382,6 +382,26 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 		}
 	}
 
+	if topic.Type == Entities.CharacterSheetTopic {
+		var characterID int
+		err := db.QueryRow("SELECT id FROM character_base WHERE topic_id = ?", topic.Id).Scan(&characterID)
+		if err != nil {
+			if err != sql.ErrNoRows {
+				_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get character sheet ID for topic: " + err.Error()})
+				c.Abort()
+			}
+		}
+		entity, err := Services.GetEntity(int64(characterID), "character", db)
+		if err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get character entity: " + err.Error()})
+			c.Abort()
+			return
+		}
+		if character, ok := entity.(*Entities.Character); ok {
+			topic.Character = character
+		}
+	}
+
 	c.JSON(http.StatusOK, topic)
 }
 
