@@ -76,16 +76,23 @@ func HandleWebSocket(c *gin.Context, db *sql.DB) {
 				break
 			}
 
-			fmt.Printf("Received message from user %d: %s\n", userID, string(p))
-
 			var msg struct {
-				Type     string `json:"type"`
-				PageType string `json:"page_type"`
-				PageId   string `json:"page_id"`
+				Type     string      `json:"type"`
+				PageType string      `json:"page_type"`
+				PageId   interface{} `json:"page_id"`
 			}
 			if err := json.Unmarshal(p, &msg); err == nil {
 				if msg.Type == "page_change" {
-					Services.ActivityStorage.UpdateUserLocation(db, userID, msg.PageType, msg.PageId)
+					var pageIdStr string
+					switch v := msg.PageId.(type) {
+					case string:
+						pageIdStr = v
+					case float64:
+						pageIdStr = fmt.Sprintf("%.0f", v)
+					case int:
+						pageIdStr = fmt.Sprintf("%d", v)
+					}
+					Services.ActivityStorage.UpdateUserLocation(db, userID, msg.PageType, pageIdStr)
 				}
 			}
 		}
