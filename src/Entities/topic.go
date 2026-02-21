@@ -31,4 +31,5 @@ type Topic struct {
 	LastPostAuthorName   *string     `json:"last_post_author_name"`
 	SubforumId           int         `json:"subforum_id"`
 	Episode              *Episode    `json:"episode"`
+	Character            *Character  `json:"character"`
 }
