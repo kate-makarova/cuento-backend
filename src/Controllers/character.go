@@ -12,11 +12,11 @@ import (
 )
 
 type CreateCharacterRequest struct {
-	SubforumID   int                    `json:"subforum_id" binding:"required"`
-	Name         string                 `json:"name" binding:"required"`
-	Avatar       *string                `json:"avatar"`
-	CustomFields map[string]interface{} `json:"custom_fields"`
-	FactionIDs   []Entities.Faction     `json:"factions"`
+	SubforumID   int                                  `json:"subforum_id" binding:"required"`
+	Name         string                               `json:"name" binding:"required"`
+	Avatar       *string                              `json:"avatar"`
+	CustomFields map[string]Entities.CustomFieldValue `json:"custom_fields"`
+	FactionIDs   []Entities.Faction                   `json:"factions"`
 }
 
 func GetCharacter(c *gin.Context, db *sql.DB) {

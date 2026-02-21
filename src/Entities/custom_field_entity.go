@@ -26,9 +26,14 @@ type CustomFieldData struct {
 	FormattedValue string `json:"formatted_value,omitempty"` // Optional: Only populated for text fields
 }
 
+type CustomFieldValue struct {
+	Content     interface{} `json:"content"`
+	ContentHtml string      `json:"content_html,omitempty"`
+}
+
 type CustomFieldEntity struct {
-	CustomFields map[string]interface{} `json:"custom_fields"`
-	FieldConfig  []CustomFieldConfig    `json:"field_config"`
+	CustomFields map[string]CustomFieldValue `json:"custom_fields"`
+	FieldConfig  []CustomFieldConfig         `json:"field_config"`
 }
 
 // Compile-time check or global compiler initialization

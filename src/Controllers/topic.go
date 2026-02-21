@@ -285,10 +285,16 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 			}
 
 			// Populate custom fields
-			customFields := make(map[string]interface{})
+			customFields := make(map[string]Entities.CustomFieldValue)
 			for _, field := range customConfig {
 				if val, ok := rowMap[field.MachineFieldName]; ok {
-					customFields[field.MachineFieldName] = val
+					cfValue := Entities.CustomFieldValue{Content: val}
+					if field.FieldType == "text" {
+						if s, ok := val.(string); ok {
+							cfValue.ContentHtml = Entities.ParseBBCode(s)
+						}
+					}
+					customFields[field.MachineFieldName] = cfValue
 				}
 			}
 			charProfile.CustomFields.CustomFields = customFields
@@ -387,18 +393,21 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 		err := db.QueryRow("SELECT id FROM character_base WHERE topic_id = ?", topic.Id).Scan(&characterID)
 		if err != nil {
 			if err != sql.ErrNoRows {
-				_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get character sheet ID for topic: " + err.Error()})
-				c.Abort()
+				// This is not an error, it just means the topic is not linked to a character sheet yet
+				// _ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get character sheet ID for topic: " + err.Error()})
+				// c.Abort()
 			}
-		}
-		entity, err := Services.GetEntity(int64(characterID), "character", db)
-		if err != nil {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get character entity: " + err.Error()})
-			c.Abort()
-			return
-		}
-		if character, ok := entity.(*Entities.Character); ok {
-			topic.Character = character
+		} else {
+			entity, err := Services.GetEntity(int64(characterID), "character", db)
+			if err != nil {
+				_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get character entity: " + err.Error()})
+				c.Abort()
+				return
+			}
+			if character, ok := entity.(*Entities.Character); ok {
+				character.Factions, _ = Services.GetFactionTreeByCharacter(characterID, db)
+				topic.Character = character
+			}
 		}
 	}
 

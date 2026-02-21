@@ -165,3 +165,61 @@ func RemoveFactionCharacter(factionID int, characterID int, db *sql.DB) error {
 	_, err := db.Exec(query, factionID, characterID)
 	return err
 }
+
+func GetFactionTreeByCharacter(characterID int, db *sql.DB) ([]Entities.Faction, error) {
+	query := `
+		SELECT f.id, f.name, f.parent_id, f.level, f.description, f.icon, f.show_on_profile
+		FROM factions f
+		JOIN character_faction cf ON f.id = cf.faction_id
+		WHERE cf.character_id = ? ORDER BY f.level, f.name
+	`
+	rows, err := db.Query(query, characterID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var factions []Entities.Faction
+	for rows.Next() {
+		var f Entities.Faction
+		if err := rows.Scan(&f.Id, &f.Name, &f.ParentId, &f.Level, &f.Description, &f.Icon, &f.ShowOnProfile); err != nil {
+			return nil, err
+		}
+		factions = append(factions, f)
+	}
+
+	if len(factions) == 0 {
+		return []Entities.Faction{}, nil
+	}
+
+	sort.Slice(factions, func(i, j int) bool {
+		if factions[i].Level != factions[j].Level {
+			return factions[i].Level < factions[j].Level
+		}
+		return factions[i].Name < factions[j].Name
+	})
+
+	var trees [][]Entities.Faction
+	factionToTreeIndex := make(map[int]int)
+
+	for _, f := range factions {
+		if f.Level == 1 {
+			trees = append(trees, []Entities.Faction{f})
+			factionToTreeIndex[f.Id] = len(trees) - 1
+		} else {
+			if f.ParentId != nil {
+				if treeIdx, ok := factionToTreeIndex[*f.ParentId]; ok {
+					trees[treeIdx] = append(trees[treeIdx], f)
+					factionToTreeIndex[f.Id] = treeIdx
+				}
+			}
+		}
+	}
+
+	var result []Entities.Faction
+	for _, tree := range trees {
+		result = append(result, tree...)
+	}
+
+	return result, nil
+}

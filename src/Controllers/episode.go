@@ -12,10 +12,10 @@ import (
 )
 
 type CreateEpisodeRequest struct {
-	SubforumID   int                    `json:"subforum_id" binding:"required"`
-	Name         string                 `json:"name" binding:"required"`
-	CharacterIDs []int                  `json:"character_ids"`
-	CustomFields map[string]interface{} `json:"custom_fields"`
+	SubforumID   int                                  `json:"subforum_id" binding:"required"`
+	Name         string                               `json:"name" binding:"required"`
+	CharacterIDs []int                                `json:"character_ids"`
+	CustomFields map[string]Entities.CustomFieldValue `json:"custom_fields"`
 }
 
 type GetEpisodesRequest struct {

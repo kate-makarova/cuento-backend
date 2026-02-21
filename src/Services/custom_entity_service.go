@@ -141,10 +141,24 @@ func fillEntity(entity interface{}, data map[string]interface{}, config []Entiti
 	// Look for a field of type CustomFieldEntity
 	cfField := v.FieldByName("CustomFields")
 	if cfField.IsValid() && cfField.Type() == reflect.TypeOf(Entities.CustomFieldEntity{}) {
-		cfMap := make(map[string]interface{})
+		cfMap := make(map[string]Entities.CustomFieldValue)
+
+		configMap := make(map[string]Entities.CustomFieldConfig)
+		for _, c := range config {
+			configMap[c.MachineFieldName] = c
+		}
+
 		for key, val := range data {
 			if !usedKeys[key] && key != "entity_id" { // Ignore entity_id as it's duplicate of id
-				cfMap[key] = val
+				cfValue := Entities.CustomFieldValue{Content: val}
+				if conf, ok := configMap[key]; ok {
+					if conf.FieldType == "text" {
+						if s, ok := val.(string); ok {
+							cfValue.ContentHtml = Entities.ParseBBCode(s)
+						}
+					}
+				}
+				cfMap[key] = cfValue
 			}
 		}
 
@@ -305,7 +319,14 @@ func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}
 			iter := cfMapField.MapRange()
 			for iter.Next() {
 				fieldName := iter.Key().String()
-				fieldValue := iter.Value().Interface()
+				fieldValueRaw := iter.Value().Interface()
+
+				var fieldValue interface{}
+				if cfVal, ok := fieldValueRaw.(Entities.CustomFieldValue); ok {
+					fieldValue = cfVal.Content
+				} else {
+					fieldValue = fieldValueRaw
+				}
 
 				dbType, ok := colTypeMap[fieldName]
 				if !ok {
@@ -459,9 +480,16 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 			}
 			defer updateStmt.Close()
 
-			for fieldName, fieldValue := range fieldsMap {
+			for fieldName, fieldValueRaw := range fieldsMap {
 				if fieldName == "" {
 					continue
+				}
+
+				var fieldValue interface{} = fieldValueRaw
+				if m, ok := fieldValueRaw.(map[string]interface{}); ok {
+					if c, ok := m["content"]; ok {
+						fieldValue = c
+					}
 				}
 
 				dbType, ok := colTypeMap[fieldName]
