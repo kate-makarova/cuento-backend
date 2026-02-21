@@ -40,6 +40,9 @@ func main() {
 	publicRouter.POST("/login", "Login with user credentials", func(c *gin.Context) {
 		Controllers.Login(c, Services.DB)
 	})
+	publicRouter.POST("/refresh", "Refresh access token", func(c *gin.Context) {
+		Controllers.RefreshToken(c, Services.DB)
+	})
 	publicRouter.GET("/board/info", "Get board information", func(c *gin.Context) {
 		Controllers.GetBoard(c, Services.DB)
 	})

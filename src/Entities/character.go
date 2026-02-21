@@ -5,10 +5,10 @@ type Character struct {
 	UserId          int               `json:"user_id"`
 	Name            string            `json:"name"`
 	Avatar          *string           `json:"avatar"`
-	CustomFields    CustomFieldEntity `json:"custom_fields"`
+	CustomFields    CustomFieldEntity `json:"custom_fields" db:"-"`
 	CharacterStatus CharacterStatus   `json:"character_status"`
 	TopicId         int               `json:"topic_id"`
-	Factions        []Faction         `json:"factions"`
+	Factions        []Faction         `json:"factions" db:"-"`
 }
 
 type ShortCharacter struct {

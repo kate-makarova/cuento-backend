@@ -25,6 +25,10 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
 func Register(c *gin.Context, db *sql.DB) {
 	var user Entities.User
 	if err := c.ShouldBindJSON(&user); err != nil {
@@ -137,6 +141,7 @@ func Login(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	// Generate Access Token
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &Claims{
 		Username: user.Username,
@@ -147,8 +152,6 @@ func Login(c *gin.Context, db *sql.DB) {
 		},
 	}
 
-	user.Password = "" // Don't return password
-
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {
@@ -157,7 +160,74 @@ func Login(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"token": tokenString, "user": user})
+	// Generate Refresh Token
+	refreshExpirationTime := time.Now().Add(7 * 24 * time.Hour)
+	refreshClaims := &Claims{
+		Username: user.Username,
+		UserID:   user.Id,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(refreshExpirationTime),
+			Issuer:    "cuento-backend",
+		},
+	}
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
+	refreshTokenString, err := refreshToken.SignedString(jwtKey)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to generate refresh token"})
+		c.Abort()
+		return
+	}
+
+	user.Password = "" // Don't return password
+
+	c.JSON(http.StatusOK, gin.H{
+		"access_token":  tokenString,
+		"refresh_token": refreshTokenString,
+		"user":          user,
+	})
+}
+
+func RefreshToken(c *gin.Context, db *sql.DB) {
+	var req RefreshTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(req.RefreshToken, claims, func(token *jwt.Token) (interface{}, error) {
+		return jwtKey, nil
+	})
+
+	if err != nil || !token.Valid {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Invalid refresh token"})
+		c.Abort()
+		return
+	}
+
+	// Generate new Access Token
+	expirationTime := time.Now().Add(24 * time.Hour)
+	newClaims := &Claims{
+		Username: claims.Username,
+		UserID:   claims.UserID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			Issuer:    "cuento-backend",
+		},
+	}
+
+	newToken := jwt.NewWithClaims(jwt.SigningMethodHS256, newClaims)
+	newTokenString, err := newToken.SignedString(jwtKey)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to generate new access token"})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"access_token": newTokenString,
+	})
 }
 
 func GetUsersByPage(c *gin.Context, db *sql.DB) {
