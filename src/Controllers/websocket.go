@@ -6,6 +6,7 @@ import (
 	"cuento-backend/src/Websockets"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -75,6 +76,8 @@ func HandleWebSocket(c *gin.Context, db *sql.DB) {
 				break
 			}
 
+			fmt.Printf("Received message from user %d: %s\n", userID, string(p))
+
 			var msg struct {
 				Type     string `json:"type"`
 				PageType string `json:"page_type"`
@@ -82,7 +85,7 @@ func HandleWebSocket(c *gin.Context, db *sql.DB) {
 			}
 			if err := json.Unmarshal(p, &msg); err == nil {
 				if msg.Type == "page_change" {
-					Services.ActivityStorage.UpdateUserLocation(userID, msg.PageType, msg.PageId)
+					Services.ActivityStorage.UpdateUserLocation(db, userID, msg.PageType, msg.PageId)
 				}
 			}
 		}

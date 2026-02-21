@@ -1,6 +1,8 @@
 package Services
 
 import (
+	"cuento-backend/src/Events"
+	"database/sql"
 	"sync"
 	"time"
 )
@@ -44,14 +46,27 @@ func (s *UserActivityStorage) RemoveUser(userID int) {
 	delete(s.users, userID)
 }
 
-func (s *UserActivityStorage) UpdateUserLocation(userID int, pageType string, pageId string) {
+func (s *UserActivityStorage) UpdateUserLocation(db *sql.DB, userID int, pageType string, pageId string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if user, exists := s.users[userID]; exists {
+		oldPageType := user.CurrentPageType
+		oldPageId := user.CurrentPageId
+
 		user.CurrentPageType = pageType
 		user.CurrentPageId = pageId
 		user.LastActive = time.Now()
+
+		// Notify if entering a topic
+		if pageType == "topic" {
+			Events.Publish(db, Events.UserReadingTopic, Events.UserReadingTopicEvent{TopicID: pageId})
+		}
+
+		// Notify if leaving a topic (and not just refreshing/re-entering same topic)
+		if oldPageType == "topic" && (pageType != "topic" || pageId != oldPageId) {
+			Events.Publish(db, Events.UserReadingTopic, Events.UserReadingTopicEvent{TopicID: oldPageId})
+		}
 	}
 }
 
