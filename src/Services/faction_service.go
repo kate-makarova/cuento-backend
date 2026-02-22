@@ -203,7 +203,7 @@ func GetFactionTreeByCharacter(characterID int, db *sql.DB) ([]Entities.Faction,
 	factionToTreeIndex := make(map[int]int)
 
 	for _, f := range factions {
-		if f.Level == 1 {
+		if f.Level == 0 {
 			trees = append(trees, []Entities.Faction{f})
 			factionToTreeIndex[f.Id] = len(trees) - 1
 		} else {
