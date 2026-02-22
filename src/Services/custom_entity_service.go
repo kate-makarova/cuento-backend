@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 type BaseEntity interface {
@@ -34,6 +35,19 @@ func IdentifyBaseEntity(className string) (interface{}, error) {
 		return nil, fmt.Errorf("unknown entity class: %s", className)
 	}
 	return entity, nil
+}
+
+func ToSnakeCase(str string) string {
+	var res strings.Builder
+	for i, r := range str {
+		if i > 0 && unicode.IsUpper(r) {
+			if str[i-1] != '_' {
+				res.WriteByte('_')
+			}
+		}
+		res.WriteRune(unicode.ToLower(r))
+	}
+	return res.String()
 }
 
 func GetEntity(id int64, className string, db DBExecutor) (interface{}, error) {
@@ -127,8 +141,8 @@ func fillEntity(entity interface{}, data map[string]interface{}, config []Entiti
 		fieldType := t.Field(i)
 		fieldName := fieldType.Name
 
-		// Simple mapping: struct field "Name" -> db column "name"
-		dbKey := strings.ToLower(fieldName)
+		// Use ToSnakeCase for mapping: struct field "TopicId" -> db column "topic_id"
+		dbKey := ToSnakeCase(fieldName)
 
 		if val, ok := data[dbKey]; ok {
 			usedKeys[dbKey] = true
@@ -278,11 +292,12 @@ func CreateEntity(className string, entity interface{}, db DBExecutor) (interfac
 		fieldType := t.Field(i)
 		fieldName := fieldType.Name
 
-		if !allowedFields[strings.ToLower(fieldName)] {
+		snakeName := ToSnakeCase(fieldName)
+		if !allowedFields[snakeName] {
 			continue
 		}
 
-		cols = append(cols, strings.ToLower(fieldName))
+		cols = append(cols, snakeName)
 		vals = append(vals, field.Interface())
 		placeholders = append(placeholders, "?")
 	}
@@ -413,7 +428,7 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 	for i := 0; i < v.NumField(); i++ {
 		fieldName := t.Field(i).Name
 		if fieldName != "Id" && fieldName != "CustomFields" {
-			baseFieldNames[strings.ToLower(fieldName)] = true
+			baseFieldNames[ToSnakeCase(fieldName)] = true
 		}
 	}
 

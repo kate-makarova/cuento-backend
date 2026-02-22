@@ -65,8 +65,8 @@ func CreateCharacter(c *gin.Context, db *sql.DB) {
 	defer tx.Rollback()
 
 	// Insert Topic (without first post)
-	res, err := tx.Exec("INSERT INTO topics (subforum_id, name, author_user_id, date_created, date_last_post, status, type, post_number, last_post_author_user_id) VALUES (?, ?, ?, NOW(), NOW(), 2, 0, 0, ?)",
-		req.SubforumID, req.Name, userID, userID)
+	res, err := tx.Exec("INSERT INTO topics (subforum_id, name, author_user_id, date_created, date_last_post, status, type, post_number, last_post_author_user_id) VALUES (?, ?, ?, NOW(), NOW(), 0, ?, 0, ?)",
+		req.SubforumID, req.Name, userID, Entities.CharacterSheetTopic, userID)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to insert topic: " + err.Error()})
 		c.Abort()
