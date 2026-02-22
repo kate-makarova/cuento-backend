@@ -74,12 +74,6 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	if err := tx.Commit(); err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
-		c.Abort()
-		return
-	}
-
 	// 2. Create Episode Entity using Service
 	episode := Entities.Episode{
 		Topic_Id: int(topicID),
@@ -89,7 +83,7 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 		},
 	}
 
-	createdEntity, _, err := Services.CreateEntity("episode", &episode, db)
+	createdEntity, _, err := Services.CreateEntity("episode", &episode, tx)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create episode entity: " + err.Error()})
 		c.Abort()
@@ -105,17 +99,8 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 
 	// 3. Insert Episode-Character Relations
 	if len(req.CharacterIDs) > 0 {
-		// Start a new transaction for relations
-		txRel, err := db.Begin()
+		stmt, err := tx.Prepare("INSERT INTO episode_character (episode_id, character_id) VALUES (?, ?)")
 		if err != nil {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start transaction for relations"})
-			c.Abort()
-			return
-		}
-
-		stmt, err := txRel.Prepare("INSERT INTO episode_character (episode_id, character_id) VALUES (?, ?)")
-		if err != nil {
-			txRel.Rollback()
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to prepare character relation statement"})
 			c.Abort()
 			return
@@ -125,18 +110,17 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 		for _, charID := range req.CharacterIDs {
 			_, err := stmt.Exec(createdEpisode.Id, charID)
 			if err != nil {
-				txRel.Rollback()
 				_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to insert character relation: " + err.Error()})
 				c.Abort()
 				return
 			}
 		}
+	}
 
-		if err := txRel.Commit(); err != nil {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit relation transaction"})
-			c.Abort()
-			return
-		}
+	if err := tx.Commit(); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
+		c.Abort()
+		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Episode created successfully", "episode_id": createdEpisode.Id, "topic_id": topicID})

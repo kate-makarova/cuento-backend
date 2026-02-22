@@ -14,6 +14,13 @@ type BaseEntity interface {
 	GetBaseFields() []string
 }
 
+type DBExecutor interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+	Prepare(query string) (*sql.Stmt, error)
+}
+
 func IdentifyBaseEntity(className string) (interface{}, error) {
 	var entity interface{}
 	switch className {
@@ -29,7 +36,7 @@ func IdentifyBaseEntity(className string) (interface{}, error) {
 	return entity, nil
 }
 
-func GetEntity(id int64, className string, db *sql.DB) (interface{}, error) {
+func GetEntity(id int64, className string, db DBExecutor) (interface{}, error) {
 	// Basic validation
 	for _, r := range className {
 		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' {
@@ -38,26 +45,20 @@ func GetEntity(id int64, className string, db *sql.DB) (interface{}, error) {
 	}
 
 	// Fetch Config
-	queryConfig := fmt.Sprintf("SELECT config FROM custom_field_config WHERE entity_type = '%s'", className)
-	rowsConfig, err := db.Query(queryConfig)
+	var configBytes []byte
+	err := db.QueryRow(fmt.Sprintf("SELECT config FROM custom_field_config WHERE entity_type = '%s'", className)).Scan(&configBytes)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("no configuration found for entity type %s", className)
+		}
 		return nil, err
 	}
-	defer rowsConfig.Close()
 
 	config := make([]Entities.CustomFieldConfig, 0)
-	if rowsConfig.Next() {
-		var configBytes []byte
-		if err := rowsConfig.Scan(&configBytes); err != nil {
+	if len(configBytes) > 0 {
+		if err := json.Unmarshal(configBytes, &config); err != nil {
 			return nil, err
 		}
-		if len(configBytes) > 0 {
-			if err := json.Unmarshal(configBytes, &config); err != nil {
-				return nil, err
-			}
-		}
-	} else {
-		return nil, fmt.Errorf("no configuration found for entity type %s", className)
 	}
 
 	// 1. Fetch data as map
@@ -221,7 +222,26 @@ func setField(field reflect.Value, val interface{}) error {
 	return nil
 }
 
-func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}, int64, error) {
+func getColumnTypes(className string, db DBExecutor) (map[string]string, error) {
+	rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s_flattened WHERE 1=0", className))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query custom fields metadata: %w", err)
+	}
+	defer rows.Close()
+
+	colTypes, err := rows.ColumnTypes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get column types: %w", err)
+	}
+
+	colTypeMap := make(map[string]string)
+	for _, ct := range colTypes {
+		colTypeMap[ct.Name()] = ct.DatabaseTypeName()
+	}
+	return colTypeMap, nil
+}
+
+func CreateEntity(className string, entity interface{}, db DBExecutor) (interface{}, int64, error) {
 	// Basic validation
 	for _, r := range className {
 		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' {
@@ -293,28 +313,12 @@ func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}
 	if cfField.IsValid() {
 		cfMapField := cfField.FieldByName("CustomFields")
 		if cfMapField.IsValid() && cfMapField.Kind() == reflect.Map && cfMapField.Len() > 0 {
-			// Get column types from the flattened table
-			rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s_flattened WHERE 1=0", className))
+			colTypeMap, err := getColumnTypes(className, db)
 			if err != nil {
-				return nil, 0, fmt.Errorf("failed to query custom fields metadata: %w", err)
-			}
-			defer rows.Close()
-
-			colTypes, err := rows.ColumnTypes()
-			if err != nil {
-				return nil, 0, fmt.Errorf("failed to get column types: %w", err)
+				return nil, 0, err
 			}
 
-			colTypeMap := make(map[string]string)
-			for _, ct := range colTypes {
-				colTypeMap[ct.Name()] = ct.DatabaseTypeName()
-			}
-
-			stmt, err := db.Prepare(fmt.Sprintf("INSERT INTO %s_main (entity_id, field_machine_name, field_type, value_int, value_decimal, value_string, value_text, value_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", className))
-			if err != nil {
-				return nil, 0, fmt.Errorf("failed to prepare custom field insert: %w", err)
-			}
-			defer stmt.Close()
+			insertQuery := fmt.Sprintf("INSERT INTO %s_main (entity_id, field_machine_name, field_type, value_int, value_decimal, value_string, value_text, value_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", className)
 
 			iter := cfMapField.MapRange()
 			for iter.Next() {
@@ -376,7 +380,7 @@ func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}
 					}
 				}
 
-				_, err := stmt.Exec(id, fieldName, fieldType, valInt, valDecimal, valString, valText, valDate)
+				_, err := db.Exec(insertQuery, id, fieldName, fieldType, valInt, valDecimal, valString, valText, valDate)
 				if err != nil {
 					return nil, 0, fmt.Errorf("failed to insert custom field %s: %w", fieldName, err)
 				}
@@ -384,10 +388,11 @@ func CreateEntity(className string, entity interface{}, db *sql.DB) (interface{}
 		}
 	}
 
-	return entity, id, nil
+	createdEntity, err := GetEntity(id, className, db)
+	return createdEntity, id, err
 }
 
-func PatchEntity(id int64, className string, updates map[string]interface{}, db *sql.DB) (interface{}, error) {
+func PatchEntity(id int64, className string, updates map[string]interface{}, db DBExecutor) (interface{}, error) {
 	// Basic validation
 	for _, r := range className {
 		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' {
@@ -445,40 +450,10 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 		}
 
 		if len(fieldsMap) > 0 {
-			// Get column types from the flattened table
-			rows, err := db.Query(fmt.Sprintf("SELECT * FROM %s_flattened WHERE 1=0", className))
+			colTypeMap, err := getColumnTypes(className, db)
 			if err != nil {
-				return nil, fmt.Errorf("failed to query custom fields metadata: %w", err)
+				return nil, err
 			}
-			defer rows.Close()
-
-			colTypes, err := rows.ColumnTypes()
-			if err != nil {
-				return nil, fmt.Errorf("failed to get column types: %w", err)
-			}
-
-			colTypeMap := make(map[string]string)
-			for _, ct := range colTypes {
-				colTypeMap[ct.Name()] = ct.DatabaseTypeName()
-			}
-
-			checkStmt, err := db.Prepare(fmt.Sprintf("SELECT 1 FROM %s_main WHERE entity_id = ? AND field_machine_name = ?", className))
-			if err != nil {
-				return nil, fmt.Errorf("failed to prepare check statement: %w", err)
-			}
-			defer checkStmt.Close()
-
-			insertStmt, err := db.Prepare(fmt.Sprintf("INSERT INTO %s_main (entity_id, field_machine_name, field_type, value_int, value_decimal, value_string, value_text, value_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", className))
-			if err != nil {
-				return nil, fmt.Errorf("failed to prepare insert statement: %w", err)
-			}
-			defer insertStmt.Close()
-
-			updateStmt, err := db.Prepare(fmt.Sprintf("UPDATE %s_main SET field_type = ?, value_int = ?, value_decimal = ?, value_string = ?, value_text = ?, value_date = ? WHERE entity_id = ? AND field_machine_name = ?", className))
-			if err != nil {
-				return nil, fmt.Errorf("failed to prepare update statement: %w", err)
-			}
-			defer updateStmt.Close()
 
 			for fieldName, fieldValueRaw := range fieldsMap {
 				if fieldName == "" {
@@ -539,15 +514,17 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 				}
 
 				var exists int
-				err := checkStmt.QueryRow(id, fieldName).Scan(&exists)
+				err := db.QueryRow(fmt.Sprintf("SELECT 1 FROM %s_main WHERE entity_id = ? AND field_machine_name = ?", className), id, fieldName).Scan(&exists)
 				if err != nil && err != sql.ErrNoRows {
 					return nil, fmt.Errorf("failed to check custom field existence: %w", err)
 				}
 
 				if err == sql.ErrNoRows {
-					_, err = insertStmt.Exec(id, fieldName, fieldType, valInt, valDecimal, valString, valText, valDate)
+					insertQuery := fmt.Sprintf("INSERT INTO %s_main (entity_id, field_machine_name, field_type, value_int, value_decimal, value_string, value_text, value_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", className)
+					_, err = db.Exec(insertQuery, id, fieldName, fieldType, valInt, valDecimal, valString, valText, valDate)
 				} else {
-					_, err = updateStmt.Exec(fieldType, valInt, valDecimal, valString, valText, valDate, id, fieldName)
+					updateQuery := fmt.Sprintf("UPDATE %s_main SET field_type = ?, value_int = ?, value_decimal = ?, value_string = ?, value_text = ?, value_date = ? WHERE entity_id = ? AND field_machine_name = ?", className)
+					_, err = db.Exec(updateQuery, fieldType, valInt, valDecimal, valString, valText, valDate, id, fieldName)
 				}
 
 				if err != nil {

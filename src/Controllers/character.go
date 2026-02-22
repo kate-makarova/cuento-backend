@@ -79,12 +79,6 @@ func CreateCharacter(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	if err := tx.Commit(); err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
-		c.Abort()
-		return
-	}
-
 	character := Entities.Character{
 		UserId:  userID,
 		TopicId: int(topicID),
@@ -95,7 +89,7 @@ func CreateCharacter(c *gin.Context, db *sql.DB) {
 		},
 	}
 
-	createdEntity, characterID, err := Services.CreateEntity("character", &character, db)
+	createdEntity, characterID, err := Services.CreateEntity("character", &character, tx)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create character: " + err.Error()})
 		c.Abort()
@@ -108,7 +102,7 @@ func CreateCharacter(c *gin.Context, db *sql.DB) {
 
 		// If faction ID is negative, create a new faction
 		if faction.Id < 0 {
-			newFactionID, err := Services.CreateFaction(faction, db)
+			newFactionID, err := Services.CreateFaction(faction, tx)
 			if err != nil {
 				_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create faction: " + err.Error()})
 				c.Abort()
@@ -120,11 +114,17 @@ func CreateCharacter(c *gin.Context, db *sql.DB) {
 		}
 
 		// Add faction to character
-		if err := Services.AddFactionCharacter(factionID, int(characterID), db); err != nil {
+		if err := Services.AddFactionCharacter(factionID, int(characterID), tx); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to add faction to character: " + err.Error()})
 			c.Abort()
 			return
 		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
+		c.Abort()
+		return
 	}
 
 	c.JSON(http.StatusCreated, createdEntity)

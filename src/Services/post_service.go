@@ -113,10 +113,16 @@ func GetPostById(id int, db *sql.DB) (*Entities.Post, error) {
 			charProfile.Avatar = &avatarStr
 		}
 
-		customFields := make(map[string]interface{})
+		customFields := make(map[string]Entities.CustomFieldValue)
 		for _, field := range customConfig {
 			if val, ok := rowMap[field.MachineFieldName]; ok {
-				customFields[field.MachineFieldName] = val
+				cfValue := Entities.CustomFieldValue{Content: val}
+				if field.FieldType == "text" {
+					if s, ok := val.(string); ok {
+						cfValue.ContentHtml = Entities.ParseBBCode(s)
+					}
+				}
+				customFields[field.MachineFieldName] = cfValue
 			}
 		}
 		charProfile.CustomFields.CustomFields = customFields
