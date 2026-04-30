@@ -573,6 +573,7 @@ create table widget_panels
 );
 
 INSERT INTO widget_panels (`key`, content, is_hidden) VALUES ('header', NULL, false);
+INSERT INTO widget_panels (`key`, content, is_hidden) VALUES ('footer', NULL, false);
 
 CREATE TABLE static_files
 (
