@@ -257,7 +257,7 @@ create table episode_mask
 
 create table global_stats
 (
-    stat_name   varchar(255) null
+    stat_name varchar(255) null
         primary key,
     stat_value decimal      null,
     stat_secondary varchar(255) null
