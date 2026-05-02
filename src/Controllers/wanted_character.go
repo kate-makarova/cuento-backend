@@ -45,9 +45,9 @@ func GetWantedCharacterList(c *gin.Context, db *sql.DB) {
 	}
 
 	baseWhere := `
-		FROM wanted_character_base
-		JOIN topics t_wc ON t_wc.id = wanted_character_base.topic_id AND t_wc.status != ?
-		WHERE is_claimed = false AND (is_deleted IS NULL OR is_deleted = false) AND wanted_character_status = 0`
+		FROM wanted_character_base wcb
+		JOIN topics t_wc ON t_wc.id = wcb.topic_id AND t_wc.status != ?
+		WHERE wcb.is_claimed = false AND (wcb.is_deleted IS NULL OR wcb.is_deleted = false) AND wcb.wanted_character_status = 0`
 
 	args := []interface{}{Entities.DeletedTopic}
 	if len(req.FactionIDs) > 0 {
@@ -56,7 +56,7 @@ func GetWantedCharacterList(c *gin.Context, db *sql.DB) {
 			placeholders[i] = "?"
 			args = append(args, id)
 		}
-		baseWhere += " AND character_claim_id IN (SELECT character_claim_id FROM character_claim_faction WHERE faction_id IN (" + strings.Join(placeholders, ",") + "))"
+		baseWhere += " AND wcb.character_claim_id IN (SELECT character_claim_id FROM character_claim_faction WHERE faction_id IN (" + strings.Join(placeholders, ",") + "))"
 	}
 
 	var totalCount int
@@ -74,8 +74,8 @@ func GetWantedCharacterList(c *gin.Context, db *sql.DB) {
 	offset := (page - 1) * limit
 	totalPages := (totalCount + limit - 1) / limit
 
-	query := "SELECT id, name, is_claimed, author_user_id, date_created, character_claim_id, is_deleted, topic_id" +
-		baseWhere + " ORDER BY date_created DESC LIMIT ? OFFSET ?"
+	query := "SELECT wcb.id, wcb.name, wcb.is_claimed, wcb.author_user_id, wcb.date_created, wcb.character_claim_id, wcb.is_deleted, wcb.topic_id" +
+		baseWhere + " ORDER BY wcb.date_created DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
 
 	rows, err := db.Query(query, args...)
