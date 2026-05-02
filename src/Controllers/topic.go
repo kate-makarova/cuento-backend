@@ -114,7 +114,7 @@ func GetTopicsBySubforum(c *gin.Context, db *sql.DB) {
 		ORDER BY COALESCE(topics.is_sticky, false) DESC, date_last_post DESC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := db.Query(query, userID, userID, subforum, limit, page*limit, Entities.DeletedTopic)
+	rows, err := db.Query(query, userID, userID, subforum, Entities.DeletedTopic, limit, page*limit)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get topics: " + err.Error()})
