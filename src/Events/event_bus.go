@@ -23,6 +23,8 @@ const (
 	StaticFileUploaded     EventType = "StaticFileUploaded"
 	ReactionCreated        EventType = "ReactionCreated"
 	TopicsMoved            EventType = "TopicsMoved"
+	TopicsDeleted          EventType = "TopicsDeleted"
+	EpisodeTopicsDeleted   EventType = "EpisodeTopicsDeleted"
 	CharacterActivated     EventType = "CharacterActivated"
 	CharacterDeactivated   EventType = "CharacterDeactivated"
 )
@@ -116,6 +118,14 @@ type CharacterDeactivatedEvent struct {
 
 type TopicsMovedEvent struct {
 	SubforumIDs []int // all affected subforum IDs (sources + target)
+}
+
+type TopicsDeletedEvent struct {
+	SubforumIDs []int // subforums that had topics deleted
+}
+
+type EpisodeTopicsDeletedEvent struct {
+	EpisodeIDs []int // episode IDs whose topics were deleted
 }
 
 type ReactionCreatedEvent struct {

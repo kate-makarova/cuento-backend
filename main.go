@@ -369,6 +369,9 @@ func main() {
 	protectedRouter.POST("/topics/bulk-update", "Bulk update topics", func(c *gin.Context) {
 		Controllers.BulkUpdateTopics(c, Services.DB)
 	})
+	protectedRouter.POST("/admin/topics/delete", "Batch delete topics (sets status to deleted)", func(c *gin.Context) {
+		Controllers.BatchDeleteTopics(c, Services.DB)
+	})
 	publicRouter.GET("/notifications/types", "Get list of notification types", func(c *gin.Context) {
 		Controllers.GetNotificationTypes(c)
 	})
