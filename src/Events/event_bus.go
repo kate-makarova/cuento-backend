@@ -18,6 +18,7 @@ const (
 	EpisodeCreated         EventType = "EpisodeCreated"
 	CharacterAccepted      EventType = "CharacterAccepted"
 	UserRegistered         EventType = "UserRegistered"
+	UserActivityChanged    EventType = "UserActivityChanged"
 	DirectMessageCreated   EventType = "DirectMessageCreated"
 	WantedCharacterCreated EventType = "WantedCharacterCreated"
 	StaticFileUploaded     EventType = "StaticFileUploaded"
@@ -83,6 +84,10 @@ type CharacterAcceptedEvent struct {
 type UserRegisteredEvent struct {
 	UserID   int
 	Username string
+}
+
+type UserActivityChangedEvent struct {
+	UserID int
 }
 
 type WantedCharacterCreatedEvent struct {

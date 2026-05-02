@@ -3,6 +3,7 @@ package main
 import (
 	"cuento-backend/src/Controllers"
 	"cuento-backend/src/EventHandlers"
+	"cuento-backend/src/Events"
 	"cuento-backend/src/Features"
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Router"
@@ -32,6 +33,9 @@ func main() {
 		for range ticker.C {
 			evicted := Services.ActivityStorage.EvictInactiveUsers(10 * time.Minute)
 			if len(evicted) > 0 {
+				for _, userID := range evicted {
+					Events.Publish(Services.DB, Events.UserActivityChanged, Events.UserActivityChangedEvent{UserID: userID})
+				}
 				Controllers.BroadcastActiveUserActivity(Services.DB)
 				Controllers.BroadcastActiveUsersToHome()
 			}

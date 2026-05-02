@@ -705,6 +705,7 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 					character.ClaimRecord = &cr
 				}
 
+				character.UserInfo = fetchUserInfo(character.UserId, db)
 				topic.Character = character
 			}
 		}
@@ -725,6 +726,7 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 					wc.Factions, _ = Services.GetFactionTreeByCharacterClaim(*wc.CharacterClaimId, db)
 					wc.ClaimRecord = fetchActiveClaimRecord(*wc.CharacterClaimId, db)
 				}
+				wc.UserInfo = fetchUserInfo(wc.AuthorUserId, db)
 				topic.WantedCharacter = wc
 			}
 		}
