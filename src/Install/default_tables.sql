@@ -100,6 +100,12 @@ VALUES ('allow_guests_create_claims', 'y');
 INSERT INTO global_settings (setting_name, setting_value)
 VALUES ('visual_navlinks_after_header_panel', 'n');
 
+INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('ai_api_key', '');
+
+INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('ai_name', '');
+
 CREATE TABLE categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NULL,
@@ -715,4 +721,14 @@ create table post_reaction
     constraint fk_post_reaction_post     foreign key (post_id)     references posts (id)     on delete cascade,
     constraint fk_post_reaction_reaction foreign key (reaction_id) references reactions (id) on delete cascade,
     constraint fk_post_reaction_user     foreign key (user_id)     references users (id)     on delete cascade
+);
+
+create table ai_chat_messages
+(
+    id           int                      not null auto_increment primary key,
+    user_id      int                      not null,
+    role         enum('user', 'assistant') not null,
+    content      text                     not null,
+    date_created datetime                 not null default current_timestamp,
+    constraint fk_ai_chat_messages_user foreign key (user_id) references users (id) on delete cascade
 );

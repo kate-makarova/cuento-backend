@@ -5,10 +5,12 @@ import (
 	"cuento-backend/src/EventHandlers"
 	"cuento-backend/src/Events"
 	"cuento-backend/src/Features"
+	"cuento-backend/src/MCP"
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Router"
 	"cuento-backend/src/Services"
 	"cuento-backend/src/Websockets"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -25,6 +27,13 @@ func main() {
 
 	// Start WebSocket Hub
 	go Websockets.MainHub.Run()
+
+	// Start MCP Server
+	go func() {
+		if err := MCP.StartMCPServer(Services.DB, ":8081"); err != nil {
+			fmt.Printf("MCP server error: %v\n", err)
+		}
+	}()
 
 	// Evict users inactive for more than 10 minutes from the activity list
 	go func() {
@@ -619,6 +628,14 @@ func main() {
 	})
 	protectedRouter.POST("/admin/user/roles/update", "Update user roles", func(c *gin.Context) {
 		Controllers.UpdateUserRoles(c, Services.DB)
+	})
+
+	// AI Chat routes
+	protectedRouter.POST("/ai-chat/message", "Send a message to the AI", func(c *gin.Context) {
+		MCP.SendMessage(c, Services.DB)
+	})
+	protectedRouter.GET("/ai-chat/history", "Get AI chat history for the current user", func(c *gin.Context) {
+		MCP.GetAIChatHistory(c, Services.DB)
 	})
 
 	// WebSocket route with special authentication
