@@ -337,6 +337,9 @@ func main() {
 	protectedRouter.POST("/post/update/:id", "Update post by ID", func(c *gin.Context) {
 		Controllers.UpdatePost(c, Services.DB)
 	})
+	protectedRouter.POST("/post/delete/:id", "Soft-delete a post by ID", func(c *gin.Context) {
+		Controllers.DeletePost(c, Services.DB)
+	})
 	protectedRouter.POST("/character-profile/update/:id", "Update character profile by ID", func(c *gin.Context) {
 		Controllers.CharacterProfileUpdate(c, Services.DB)
 	})
