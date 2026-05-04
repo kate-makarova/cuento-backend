@@ -428,6 +428,23 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 		}
 		post.CanEdit = &canEdit
 
+		// Check CanDelete
+		canDelete := false
+		if currentUserID != 0 {
+			if currentUserID == post.AuthorUserId {
+				permission := fmt.Sprintf("subforum_delete_own_post:%d", subforumID)
+				if hasPerm, err := Services.HasPermission(currentUserID, permission, db); err == nil && hasPerm {
+					canDelete = true
+				}
+			} else {
+				permission := fmt.Sprintf("subforum_delete_others_post:%d", subforumID)
+				if hasPerm, err := Services.HasPermission(currentUserID, permission, db); err == nil && hasPerm {
+					canDelete = true
+				}
+			}
+		}
+		post.CanDelete = &canDelete
+
 		if post.UseCharacterProfile {
 			var charProfile Entities.CharacterProfile
 			if id, ok := rowMap["character_profile_id"]; ok {

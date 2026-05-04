@@ -436,6 +436,9 @@ func main() {
 	protectedRouter.POST("/admin/user/create", "Create a new user account (admin)", func(c *gin.Context) {
 		Controllers.CreateUser(c, Services.DB)
 	})
+	protectedRouter.POST("/admin/user/update/:id", "Update user account (username, avatar) by ID", func(c *gin.Context) {
+		Controllers.AdminUpdateUser(c, Services.DB)
+	})
 	protectedRouter.POST("/mask/create", "Create a new mask", func(c *gin.Context) {
 		Controllers.CreateMask(c, Services.DB)
 	})
