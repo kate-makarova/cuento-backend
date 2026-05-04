@@ -57,6 +57,9 @@ func main() {
 	publicRouter := Router.NewCustomRouter(r.Group("/"))
 
 	// User routes (Public)
+	publicRouter.GET("/search/buckets", "Get list of available search buckets", func(c *gin.Context) {
+		Controllers.GetSonicBuckets(c)
+	})
 	publicRouter.POST("/register", "Register a new user account", func(c *gin.Context) {
 		Controllers.Register(c, Services.DB)
 	})
@@ -140,6 +143,12 @@ func main() {
 	})
 	optionalAuthRouter.GET("/active-users/activity", "Get full activity info for active users", func(c *gin.Context) {
 		Controllers.GetActiveUserActivity(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/search", "Search across buckets", func(c *gin.Context) {
+		Controllers.Search(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/search/count", "Get result count for a search query", func(c *gin.Context) {
+		Controllers.SearchCount(c, Services.DB)
 	})
 	optionalAuthRouter.GET("/ping", "Health check endpoint", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
