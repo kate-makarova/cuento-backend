@@ -13,7 +13,7 @@ func LoadSonicConfig() *SonicConfig {
 		port = p
 	}
 	return &SonicConfig{
-		Host:     getEnv("SONIC_HOST", "localhost"),
+		Host:     getEnv("SONIC_HOST", "127.0.0.1"),
 		Port:     port,
 		Password: getEnv("SONIC_PASSWORD", "SecretPassword"),
 	}
