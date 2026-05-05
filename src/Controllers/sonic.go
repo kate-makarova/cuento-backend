@@ -152,10 +152,11 @@ func ingestFlattenedBucket(bucket, entityName string, fromId int64, db *sql.DB) 
 	query := fmt.Sprintf(
 		`SELECT b.*, f.* FROM %s_base b
 		 LEFT JOIN %s_flattened f ON b.id = f.entity_id
-		 WHERE b.id > ? ORDER BY b.id ASC`,
+		 JOIN topics t ON b.topic_id = t.id
+		 WHERE b.id > ? AND t.status != ? ORDER BY b.id ASC`,
 		entityName, entityName,
 	)
-	rows, err := db.Query(query, fromId)
+	rows, err := db.Query(query, fromId, Entities.DeletedTopic)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to fetch %s entities: %w", entityName, err)
 	}
@@ -248,9 +249,9 @@ func fetchPostRows(bucket string, fromId int64, db *sql.DB) (*sql.Rows, error) {
 	return db.Query(
 		`SELECT p.id, p.content FROM posts p
 		 JOIN topics t ON p.topic_id = t.id
-		 WHERE t.type = ? AND COALESCE(p.is_deleted, 0) != 1 AND p.id > ?
+		 WHERE t.type = ? AND COALESCE(p.is_deleted, 0) != 1 AND t.status != ? AND p.id > ?
 		 ORDER BY p.id ASC`,
-		topicType, fromId,
+		topicType, Entities.DeletedTopic, fromId,
 	)
 }
 

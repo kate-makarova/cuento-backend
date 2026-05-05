@@ -63,6 +63,24 @@ func SonicDelete(collection, bucket, objectID string) error {
 	return c.FlushObject(collection, bucket, objectID)
 }
 
+// SonicDeleteBatch removes multiple objects from the same collection/bucket over a single connection.
+func SonicDeleteBatch(collection, bucket string, objectIDs []string) error {
+	if len(objectIDs) == 0 {
+		return nil
+	}
+	c, err := sonic.NewIngester(sonicCfg.Host, sonicCfg.Port, sonicCfg.Password)
+	if err != nil {
+		return err
+	}
+	defer c.Quit()
+	for _, id := range objectIDs {
+		if err := c.FlushObject(collection, bucket, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // SonicQuery searches for a term in the given collection and bucket.
 // Returns a slice of object IDs.
 func SonicQuery(collection, bucket, term string, limit, offset int, lang sonic.Lang) ([]string, error) {
