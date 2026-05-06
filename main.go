@@ -24,6 +24,10 @@ func main() {
 	}
 	EventHandlers.RegisterEventHandlers(Services.DB)
 
+	// Start health monitor (RAM stats every 30s, one log file per day, 30-day retention)
+	Controllers.InitHealthBroadcaster()
+	Services.InitHealthMonitor()
+
 	// Start WebSocket Hub
 	go Websockets.MainHub.Run()
 
@@ -635,6 +639,9 @@ func main() {
 	})
 	protectedRouter.GET("/admin/home", "Get admin home categories (all, including empty)", func(c *gin.Context) {
 		Controllers.GetAdminHomeCategories(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/health", "Get RAM and CPU health data", func(c *gin.Context) {
+		Controllers.GetHealthData(c)
 	})
 	protectedRouter.GET("/admin/sonic/cursors", "Get Sonic ingest cursors for all buckets", func(c *gin.Context) {
 		Controllers.GetSonicCursors(c, Services.DB)
