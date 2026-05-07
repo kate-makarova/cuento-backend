@@ -274,3 +274,61 @@ func AdminCreateAbsence(c *gin.Context, db *sql.DB) {
 	grantPostAbsenceImmunity(targetUserID, end, db)
 	c.JSON(http.StatusOK, gin.H{"absence_start_date": start, "absence_end_date": end})
 }
+
+type AddImmunityRequest struct {
+	CharacterID int    `json:"character_id" binding:"required"`
+	StartDate   string `json:"start_date" binding:"required"`
+	EndDate     string `json:"end_date" binding:"required"`
+	Reason      string `json:"reason" binding:"required"`
+}
+
+func AdminAddImmunity(c *gin.Context, db *sql.DB) {
+	var req AddImmunityRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	const dateLayout = "2006-01-02"
+	startDay, err := time.ParseInLocation(dateLayout, req.StartDate, time.Local)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid start_date format, expected: YYYY-MM-DD"})
+		c.Abort()
+		return
+	}
+	endDay, err := time.ParseInLocation(dateLayout, req.EndDate, time.Local)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid end_date format, expected: YYYY-MM-DD"})
+		c.Abort()
+		return
+	}
+
+	start := time.Date(startDay.Year(), startDay.Month(), startDay.Day(), 0, 0, 0, 0, time.Local)
+	end := time.Date(endDay.Year(), endDay.Month(), endDay.Day(), 23, 59, 59, 0, time.Local)
+
+	if !end.After(start) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "end_date must be after start_date"})
+		c.Abort()
+		return
+	}
+
+	var exists int
+	if err := db.QueryRow("SELECT COUNT(*) FROM character_base WHERE id = ?", req.CharacterID).Scan(&exists); err != nil || exists == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Character not found"})
+		c.Abort()
+		return
+	}
+
+	_, err = db.Exec(
+		"INSERT INTO auto_archiving_immunity (character_id, start_date, end_date, reason) VALUES (?, ?, ?, ?)",
+		req.CharacterID, start, end, req.Reason,
+	)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to add immunity: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"character_id": req.CharacterID, "start_date": start, "end_date": end, "reason": req.Reason})
+}

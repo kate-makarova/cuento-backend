@@ -150,6 +150,7 @@ role_id,type,permission
 2,0,/search/count
 3,0,/admin/health
 3,0,/admin/user/:user_id/absence
+3,0,/admin/character/immunity
 2,0,/characters/archiving-warnings
 3,0,/admin/sonic/cursors
 3,0,/admin/sonic/catchup/:bucket

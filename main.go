@@ -458,6 +458,9 @@ func main() {
 	protectedRouter.POST("/admin/user/:user_id/absence", "Create an absence record for any user (admin)", func(c *gin.Context) {
 		Controllers.AdminCreateAbsence(c, Services.DB)
 	})
+	protectedRouter.POST("/admin/character/immunity", "Add auto-archiving immunity for a character (admin)", func(c *gin.Context) {
+		Controllers.AdminAddImmunity(c, Services.DB)
+	})
 	protectedRouter.POST("/user/archive", "Archive the current user's account and deactivate all their characters", func(c *gin.Context) {
 		Controllers.ArchiveAccount(c, Services.DB)
 	})

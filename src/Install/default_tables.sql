@@ -107,7 +107,7 @@ INSERT INTO global_settings (setting_name, setting_value)
 VALUES ('auto_archiving_show_page_link', 'n');
 
 INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('auto_archiving_days', '365');
+VALUES ('auto_archiving_days', '20');
 
 INSERT INTO global_settings (setting_name, setting_value)
 VALUES ('absence_max_days', '30');
