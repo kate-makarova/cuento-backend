@@ -103,6 +103,7 @@ func main() {
 	publicRouter.GET("/absent-users", "Get currently absent users with their return date", func(c *gin.Context) {
 		Controllers.GetAbsentUsers(c, Services.DB)
 	})
+
 	publicRouter.GET("/user/recent", "Get users active in the past 24 hours", func(c *gin.Context) {
 		Controllers.GetRecentActiveUsers(c, Services.DB)
 	})
@@ -446,6 +447,12 @@ func main() {
 	})
 	protectedRouter.POST("/user/settings/update", "Update user settings", func(c *gin.Context) {
 		Controllers.UpdateSettings(c, Services.DB)
+	})
+	protectedRouter.POST("/user/absence", "Create an absence record for the current user", func(c *gin.Context) {
+		Controllers.CreateAbsence(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/user/:user_id/absence", "Create an absence record for any user (admin)", func(c *gin.Context) {
+		Controllers.AdminCreateAbsence(c, Services.DB)
 	})
 	protectedRouter.POST("/user/archive", "Archive the current user's account and deactivate all their characters", func(c *gin.Context) {
 		Controllers.ArchiveAccount(c, Services.DB)

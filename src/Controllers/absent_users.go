@@ -3,8 +3,11 @@ package Controllers
 import (
 	"cuento-backend/src/Entities"
 	"cuento-backend/src/Middlewares"
+	"cuento-backend/src/Services"
 	"database/sql"
+	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -61,4 +64,182 @@ func GetAbsentUsers(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, users)
+}
+
+type CreateAbsenceRequest struct {
+	StartDate string `json:"start_date" binding:"required"`
+	EndDate   string `json:"end_date" binding:"required"`
+}
+
+func CreateAbsence(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+
+	var req CreateAbsenceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	const dateLayout = "2006-01-02"
+	startDay, err := time.ParseInLocation(dateLayout, req.StartDate, time.Local)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid start_date format, expected: YYYY-MM-DD"})
+		c.Abort()
+		return
+	}
+	endDay, err := time.ParseInLocation(dateLayout, req.EndDate, time.Local)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid end_date format, expected: YYYY-MM-DD"})
+		c.Abort()
+		return
+	}
+
+	// Force time boundaries
+	start := time.Date(startDay.Year(), startDay.Month(), startDay.Day(), 0, 0, 0, 0, time.Local)
+	end := time.Date(endDay.Year(), endDay.Month(), endDay.Day(), 23, 59, 59, 0, time.Local)
+
+	if !end.After(start) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "end_date must be after start_date"})
+		c.Abort()
+		return
+	}
+
+	userLoc := time.Local
+	if tzName := Services.GetUserTimezone(userID, db); tzName != nil {
+		if loc, err := time.LoadLocation(*tzName); err == nil {
+			userLoc = loc
+		}
+	}
+	now := time.Now().In(userLoc)
+	todayEnd := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, userLoc)
+	if end.Before(todayEnd) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "end_date cannot be in the past"})
+		c.Abort()
+		return
+	}
+
+	// Validate duration against max days setting
+	maxDays := Services.GetAbsenceMaxDays(db)
+	durationDays := int(end.Sub(start).Hours()/24) + 1
+	if durationDays > maxDays {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: fmt.Sprintf("Absence duration cannot exceed %d days", maxDays)})
+		c.Abort()
+		return
+	}
+
+	// Check for overlapping absence periods
+	var overlapCount int
+	err = db.QueryRow(
+		"SELECT COUNT(*) FROM absent_users WHERE user_id = ? AND absence_start_date <= ? AND absence_end_date >= ?",
+		userID, end, start,
+	).Scan(&overlapCount)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to check overlapping absences: " + err.Error()})
+		c.Abort()
+		return
+	}
+	if overlapCount > 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "This period overlaps with an existing absence"})
+		c.Abort()
+		return
+	}
+
+	// Validate cooldown against last absence
+	cooldownDays := Services.GetAbsenceCooldownDays(db)
+	var lastEndDate time.Time
+	err = db.QueryRow(
+		"SELECT absence_end_date FROM absent_users WHERE user_id = ? ORDER BY absence_end_date DESC LIMIT 1",
+		userID,
+	).Scan(&lastEndDate)
+	if err != nil && err != sql.ErrNoRows {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to check cooldown: " + err.Error()})
+		c.Abort()
+		return
+	}
+	if err == nil {
+		daysSinceLast := int(start.Sub(lastEndDate).Hours() / 24)
+		if daysSinceLast < cooldownDays {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: fmt.Sprintf("You must wait %d more day(s) before claiming a new absence", cooldownDays-daysSinceLast)})
+			c.Abort()
+			return
+		}
+	}
+
+	_, err = db.Exec(
+		"INSERT INTO absent_users (user_id, absence_start_date, absence_end_date) VALUES (?, ?, ?)",
+		userID, start, end,
+	)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create absence: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"absence_start_date": start, "absence_end_date": end})
+}
+
+func AdminCreateAbsence(c *gin.Context, db *sql.DB) {
+	targetUserID, err := strconv.Atoi(c.Param("user_id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid user_id"})
+		c.Abort()
+		return
+	}
+
+	var req CreateAbsenceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	const dateLayout = "2006-01-02"
+	startDay, err := time.ParseInLocation(dateLayout, req.StartDate, time.Local)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid start_date format, expected: YYYY-MM-DD"})
+		c.Abort()
+		return
+	}
+	endDay, err := time.ParseInLocation(dateLayout, req.EndDate, time.Local)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid end_date format, expected: YYYY-MM-DD"})
+		c.Abort()
+		return
+	}
+
+	start := time.Date(startDay.Year(), startDay.Month(), startDay.Day(), 0, 0, 0, 0, time.Local)
+	end := time.Date(endDay.Year(), endDay.Month(), endDay.Day(), 23, 59, 59, 0, time.Local)
+
+	if !end.After(start) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "end_date must be after start_date"})
+		c.Abort()
+		return
+	}
+
+	var overlapCount int
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM absent_users WHERE user_id = ? AND absence_start_date <= ? AND absence_end_date >= ?",
+		targetUserID, end, start,
+	).Scan(&overlapCount); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to check overlapping absences: " + err.Error()})
+		c.Abort()
+		return
+	}
+	if overlapCount > 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "This period overlaps with an existing absence"})
+		c.Abort()
+		return
+	}
+
+	if _, err := db.Exec(
+		"INSERT INTO absent_users (user_id, absence_start_date, absence_end_date) VALUES (?, ?, ?)",
+		targetUserID, start, end,
+	); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create absence: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"absence_start_date": start, "absence_end_date": end})
 }

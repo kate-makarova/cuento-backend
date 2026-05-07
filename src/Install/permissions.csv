@@ -60,6 +60,7 @@ role_id,type,permission
 2,0,/user/private-key
 2,0,/user/public-key/:userID
 2,0,/user/save-keys
+2,0,/user/absence
 2,0,/user/archive
 2,0,/user/settings/update
 2,0,/users/page/:page_type/:page_id
@@ -148,6 +149,7 @@ role_id,type,permission
 2,0,/search
 2,0,/search/count
 3,0,/admin/health
+3,0,/admin/user/:user_id/absence
 2,0,/characters/archiving-warnings
 3,0,/admin/sonic/cursors
 3,0,/admin/sonic/catchup/:bucket
