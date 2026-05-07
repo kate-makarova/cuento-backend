@@ -254,6 +254,7 @@ func Login(c *gin.Context, db *sql.DB) {
 			c.Abort()
 			return
 		}
+		role.Permissions = Services.GetRoleFrontendPermissions(role.Id, db)
 		user.Roles = append(user.Roles, role)
 	}
 
@@ -373,6 +374,7 @@ func RefreshToken(c *gin.Context, db *sql.DB) {
 		for rows.Next() {
 			var role Entities.Role
 			if err := rows.Scan(&role.Id, &role.Name); err == nil {
+				role.Permissions = Services.GetRoleFrontendPermissions(role.Id, db)
 				user.Roles = append(user.Roles, role)
 			}
 		}
@@ -606,6 +608,7 @@ func UpdateSettings(c *gin.Context, db *sql.DB) {
 		for rows.Next() {
 			var role Entities.Role
 			if err := rows.Scan(&role.Id, &role.Name); err == nil {
+				role.Permissions = Services.GetRoleFrontendPermissions(role.Id, db)
 				user.Roles = append(user.Roles, role)
 			}
 		}
@@ -1252,6 +1255,7 @@ func UpdateUserRoles(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	Services.NotifyUserRefresh(req.UserID, db)
 	c.JSON(http.StatusOK, gin.H{"message": "User roles updated"})
 }
 
@@ -1501,6 +1505,7 @@ func BanUser(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	Services.NotifyUserRefresh(userID, db)
 	c.JSON(http.StatusOK, gin.H{"user_status": Entities.ArchivedUser})
 }
 
@@ -1557,6 +1562,7 @@ func AdminUpdateUser(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	Services.NotifyUserRefresh(userID, db)
 	c.JSON(http.StatusOK, gin.H{"message": "User updated successfully"})
 }
 

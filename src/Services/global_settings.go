@@ -47,6 +47,14 @@ func GetAbsenceCooldownDays(db *sql.DB) int {
 	return i
 }
 
+func GetAutoArchivingShowTable(db *sql.DB) bool {
+	val, err := GetGlobalSetting("auto_archiving_show_table", db)
+	if err != nil {
+		return false
+	}
+	return val == "y"
+}
+
 func GetAutoArchivingEnabled(db *sql.DB) bool {
 	val, err := GetGlobalSetting("auto_archiving_enabled", db)
 	if err != nil {

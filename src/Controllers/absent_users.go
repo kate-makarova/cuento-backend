@@ -13,6 +13,33 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// grantPostAbsenceImmunity inserts a 3-day auto_archiving_immunity record for every
+// active character of the given user, starting from the absence end date.
+func grantPostAbsenceImmunity(userID int, absenceEnd time.Time, db *sql.DB) {
+	immunityStart := absenceEnd
+	immunityEnd := absenceEnd.Add(3 * 24 * time.Hour)
+
+	rows, err := db.Query(
+		"SELECT id FROM character_base WHERE user_id = ? AND character_status = ?",
+		userID, Entities.ActiveCharacter,
+	)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var charID int
+		if rows.Scan(&charID) != nil {
+			continue
+		}
+		_, _ = db.Exec(
+			"INSERT INTO auto_archiving_immunity (character_id, start_date, end_date, reason) VALUES (?, ?, ?, ?)",
+			charID, immunityStart, immunityEnd, "Post-absence",
+		)
+	}
+}
+
 type AbsentUserItem struct {
 	UserId           int                       `json:"user_id"`
 	Username         string                    `json:"username"`
@@ -44,6 +71,8 @@ func GetAbsentUsers(c *gin.Context, db *sql.DB) {
 			c.Abort()
 			return
 		}
+		u.AbsenceStartDate = u.AbsenceStartDate.In(time.Local)
+		u.AbsenceEndDate = u.AbsenceEndDate.In(time.Local)
 
 		u.Characters = []Entities.ShortCharacter{}
 		charRows, err := db.Query(
@@ -176,6 +205,7 @@ func CreateAbsence(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	grantPostAbsenceImmunity(userID, end, db)
 	c.JSON(http.StatusOK, gin.H{"absence_start_date": start, "absence_end_date": end})
 }
 
@@ -241,5 +271,6 @@ func AdminCreateAbsence(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	grantPostAbsenceImmunity(targetUserID, end, db)
 	c.JSON(http.StatusOK, gin.H{"absence_start_date": start, "absence_end_date": end})
 }

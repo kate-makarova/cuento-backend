@@ -26,7 +26,11 @@ func main() {
 
 	// Start health monitor (RAM stats every 30s, one log file per day, 30-day retention)
 	Controllers.InitHealthBroadcaster()
+	Controllers.InitUserRefreshCallbacks()
 	Services.InitHealthMonitor()
+
+	// Start archiving warning notifier (checks daily, sends notifications at 10/5/3/2/1 days before archiving)
+	Services.StartArchivingNotifier(Services.DB)
 
 	// Start WebSocket Hub
 	go Websockets.MainHub.Run()

@@ -1850,21 +1850,56 @@ func GetArchivingWarnings(c *gin.Context, db *sql.DB) {
 	warningThreshold := autoArchivingDays - 10
 
 	rows, err := db.Query(`
-		SELECT
-			cb.id,
-			cb.name,
-			cb.user_id,
-			u.username,
-			cb.date_last_post,
-			? - DATEDIFF(NOW(), COALESCE(cb.date_last_post, t.date_created)) AS days_left
-		FROM character_base cb
-		JOIN users u ON u.id = cb.user_id
-		JOIN topics t ON t.id = cb.topic_id
-		WHERE cb.character_status = ?
-		AND u.user_status = ?
-		AND DATEDIFF(NOW(), COALESCE(cb.date_last_post, t.date_created)) >= ?
-		ORDER BY COALESCE(cb.date_last_post, t.date_created) ASC
-	`, autoArchivingDays, Entities.ActiveCharacter, Entities.ActiveUser, warningThreshold)
+		(
+			SELECT
+				cb.id,
+				cb.name,
+				cb.user_id,
+				u.username,
+				cb.date_last_post,
+				? - DATEDIFF(NOW(), COALESCE(cb.date_last_post, t.date_created)) AS days_left
+			FROM character_base cb
+			JOIN users u ON u.id = cb.user_id
+			JOIN topics t ON t.id = cb.topic_id
+			LEFT JOIN absent_users au ON au.user_id = cb.user_id
+				AND au.absence_start_date <= NOW() AND au.absence_end_date >= NOW()
+			LEFT JOIN auto_archiving_immunity aai ON aai.character_id = cb.id
+				AND aai.start_date <= NOW() AND aai.end_date >= NOW()
+			WHERE cb.character_status = ?
+			AND u.user_status = ?
+			AND DATEDIFF(NOW(), COALESCE(cb.date_last_post, t.date_created)) >= ?
+			AND au.id IS NULL
+			AND aai.id IS NULL
+		)
+		UNION
+		(
+			SELECT
+				cb.id,
+				cb.name,
+				cb.user_id,
+				u.username,
+				cb.date_last_post,
+				DATEDIFF(aai_exp.end_date, NOW()) AS days_left
+			FROM character_base cb
+			JOIN users u ON u.id = cb.user_id
+			JOIN topics t ON t.id = cb.topic_id
+			JOIN (
+				SELECT character_id, MAX(end_date) AS end_date
+				FROM auto_archiving_immunity
+				WHERE start_date <= NOW() AND end_date >= NOW()
+				GROUP BY character_id
+			) aai_exp ON aai_exp.character_id = cb.id
+			LEFT JOIN absent_users au ON au.user_id = cb.user_id
+				AND au.absence_start_date <= NOW() AND au.absence_end_date >= NOW()
+			WHERE cb.character_status = ?
+			AND u.user_status = ?
+			AND DATEDIFF(aai_exp.end_date, NOW()) <= 10
+			AND ? - DATEDIFF(aai_exp.end_date, COALESCE(cb.date_last_post, t.date_created)) <= 0
+			AND au.id IS NULL
+		)
+		ORDER BY days_left ASC
+	`, autoArchivingDays, Entities.ActiveCharacter, Entities.ActiveUser, warningThreshold,
+		Entities.ActiveCharacter, Entities.ActiveUser, autoArchivingDays)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get archiving warnings: " + err.Error()})
 		c.Abort()
