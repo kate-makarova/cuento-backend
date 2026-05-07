@@ -13,6 +13,9 @@ import (
 const healthTimeLayout = "2006-01-02 15:04:05"
 
 func InitHealthBroadcaster() {
+	Services.SetWSConnectionCounter(func() int {
+		return Websockets.MainHub.ConnectionCount()
+	})
 	Services.SetHealthBroadcaster(func(update Services.HealthUpdate) {
 		subscribers := Services.GetHealthSubscribers()
 		if len(subscribers) == 0 {

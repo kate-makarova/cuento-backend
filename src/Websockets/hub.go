@@ -185,6 +185,16 @@ func (h *Hub) Unregister(client *Client) {
 	h.unregister <- client
 }
 
+func (h *Hub) ConnectionCount() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	count := 0
+	for _, clients := range h.clients {
+		count += len(clients)
+	}
+	return count
+}
+
 func (h *Hub) Broadcast(message interface{}) {
 	msgID := atomic.AddInt64(&globalMsgID, 1)
 	payload := enrichMessage(message, msgID)
