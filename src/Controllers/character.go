@@ -1835,3 +1835,53 @@ func CustomFieldList(c *gin.Context, db *sql.DB) {
 
 	c.JSON(http.StatusOK, gin.H{"human_field_name": matched.HumanFieldName, "values": values})
 }
+
+type ArchivingWarningItem struct {
+	Id           int        `json:"id"`
+	Name         string     `json:"name"`
+	UserId       int        `json:"user_id"`
+	Username     string     `json:"username"`
+	DateLastPost *time.Time `json:"date_last_post"`
+	DaysLeft     int        `json:"days_left"`
+}
+
+func GetArchivingWarnings(c *gin.Context, db *sql.DB) {
+	autoArchivingDays := Services.GetAutoArchivingDays(db)
+	warningThreshold := autoArchivingDays - 10
+
+	rows, err := db.Query(`
+		SELECT
+			cb.id,
+			cb.name,
+			cb.user_id,
+			u.username,
+			cb.date_last_post,
+			? - DATEDIFF(NOW(), COALESCE(cb.date_last_post, t.date_created)) AS days_left
+		FROM character_base cb
+		JOIN users u ON u.id = cb.user_id
+		JOIN topics t ON t.id = cb.topic_id
+		WHERE cb.character_status = ?
+		AND u.user_status = ?
+		AND DATEDIFF(NOW(), COALESCE(cb.date_last_post, t.date_created)) >= ?
+		ORDER BY COALESCE(cb.date_last_post, t.date_created) ASC
+	`, autoArchivingDays, Entities.ActiveCharacter, Entities.ActiveUser, warningThreshold)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get archiving warnings: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	characters := []ArchivingWarningItem{}
+	for rows.Next() {
+		var ch ArchivingWarningItem
+		if err := rows.Scan(&ch.Id, &ch.Name, &ch.UserId, &ch.Username, &ch.DateLastPost, &ch.DaysLeft); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan character: " + err.Error()})
+			c.Abort()
+			return
+		}
+		characters = append(characters, ch)
+	}
+
+	c.JSON(http.StatusOK, characters)
+}

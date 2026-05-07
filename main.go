@@ -100,6 +100,9 @@ func main() {
 	publicRouter.GET("/user/list", "Get list of active users and their characters", func(c *gin.Context) {
 		Controllers.GetUserList(c, Services.DB)
 	})
+	publicRouter.GET("/absent-users", "Get currently absent users with their return date", func(c *gin.Context) {
+		Controllers.GetAbsentUsers(c, Services.DB)
+	})
 	publicRouter.GET("/user/recent", "Get users active in the past 24 hours", func(c *gin.Context) {
 		Controllers.GetRecentActiveUsers(c, Services.DB)
 	})
@@ -452,6 +455,9 @@ func main() {
 	})
 	protectedRouter.POST("/admin/user/reactivate/:id", "Reactivate an archived user by ID", func(c *gin.Context) {
 		Controllers.ReactivateUser(c, Services.DB)
+	})
+	protectedRouter.GET("/characters/archiving-warnings", "Get active characters approaching auto-archiving threshold", func(c *gin.Context) {
+		Controllers.GetArchivingWarnings(c, Services.DB)
 	})
 	protectedRouter.GET("/admin/user-list", "Get full user list for admin panel", func(c *gin.Context) {
 		Controllers.GetAdminUserList(c, Services.DB)
