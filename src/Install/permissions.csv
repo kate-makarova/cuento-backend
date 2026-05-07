@@ -155,3 +155,6 @@ role_id,type,permission
 3,0,/admin/sonic/cursors
 3,0,/admin/sonic/catchup/:bucket
 3,0,/admin/smile/upload
+3,2,show_admin_page
+3,2,show_add_immunity_button
+3,2,show_character_sheet_admin_block
