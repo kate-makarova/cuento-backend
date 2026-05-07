@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -331,4 +332,82 @@ func AdminAddImmunity(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"character_id": req.CharacterID, "start_date": start, "end_date": end, "reason": req.Reason})
+}
+
+type CharacterProtectionItem struct {
+	Type      string    `json:"type"`
+	StartDate time.Time `json:"start_date"`
+	EndDate   time.Time `json:"end_date"`
+	Reason    *string   `json:"reason"`
+}
+
+func GetCharacterProtectionHistory(c *gin.Context, db *sql.DB) {
+	characterID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid character ID"})
+		c.Abort()
+		return
+	}
+
+	// Resolve the user_id for this character to fetch absences
+	var userID int
+	if err := db.QueryRow("SELECT user_id FROM character_base WHERE id = ?", characterID).Scan(&userID); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Character not found"})
+		c.Abort()
+		return
+	}
+
+	items := []CharacterProtectionItem{}
+
+	// Absences (belong to the user, no reason field)
+	absenceRows, err := db.Query(
+		"SELECT absence_start_date, absence_end_date FROM absent_users WHERE user_id = ? ORDER BY absence_start_date DESC",
+		userID,
+	)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch absences: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer absenceRows.Close()
+	for absenceRows.Next() {
+		var item CharacterProtectionItem
+		item.Type = "absence"
+		if err := absenceRows.Scan(&item.StartDate, &item.EndDate); err != nil {
+			continue
+		}
+		item.StartDate = item.StartDate.In(time.Local)
+		item.EndDate = item.EndDate.In(time.Local)
+		items = append(items, item)
+	}
+
+	// Immunities (belong to the character, have a reason)
+	immunityRows, err := db.Query(
+		"SELECT start_date, end_date, reason FROM auto_archiving_immunity WHERE character_id = ? ORDER BY start_date DESC",
+		characterID,
+	)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch immunities: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer immunityRows.Close()
+	for immunityRows.Next() {
+		var item CharacterProtectionItem
+		item.Type = "immunity"
+		var reason string
+		if err := immunityRows.Scan(&item.StartDate, &item.EndDate, &reason); err != nil {
+			continue
+		}
+		item.StartDate = item.StartDate.In(time.Local)
+		item.EndDate = item.EndDate.In(time.Local)
+		item.Reason = &reason
+		items = append(items, item)
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].EndDate.After(items[j].EndDate)
+	})
+
+	c.JSON(http.StatusOK, items)
 }

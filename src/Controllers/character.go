@@ -1546,6 +1546,82 @@ func CreateCharacterClaim(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, req.Claim)
 }
 
+func DeleteCharacterClaim(c *gin.Context, db *sql.DB) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid claim ID"})
+		c.Abort()
+		return
+	}
+
+	// Reject if any claim record is still active (not yet expired)
+	var activeCount int
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM claim_record WHERE claim_id = ? AND claim_expiration_date >= NOW()",
+		id,
+	).Scan(&activeCount); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to check active claim records: " + err.Error()})
+		c.Abort()
+		return
+	}
+	if activeCount > 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusConflict, Message: "Cannot delete claim: there are active claim records"})
+		c.Abort()
+		return
+	}
+
+	// Reject if a character was ever created from this claim
+	var characterCount int
+	if err := db.QueryRow(
+		"SELECT COUNT(*) FROM claim_record WHERE claim_id = ? AND character_id IS NOT NULL",
+		id,
+	).Scan(&characterCount); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to check linked characters: " + err.Error()})
+		c.Abort()
+		return
+	}
+	if characterCount > 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusConflict, Message: "Cannot delete claim: a character has been created from this claim"})
+		c.Abort()
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start transaction"})
+		c.Abort()
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM character_claim_faction WHERE character_claim_id = ?", id); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to delete claim factions: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	result, err := tx.Exec("DELETE FROM character_claim WHERE id = ?", id)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to delete claim: " + err.Error()})
+		c.Abort()
+		return
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Claim not found"})
+		c.Abort()
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Claim deleted"})
+}
+
 func DeactivateCharacter(c *gin.Context, db *sql.DB) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -1834,6 +1910,93 @@ func CustomFieldList(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"human_field_name": matched.HumanFieldName, "values": values})
+}
+
+type AdminCharacterListItem struct {
+	Id              int                      `json:"id"`
+	Name            string                   `json:"name"`
+	CharacterStatus Entities.CharacterStatus `json:"character_status"`
+	UserId          int                      `json:"user_id"`
+	Username        string                   `json:"username"`
+	DateLastPost    *time.Time               `json:"date_last_post"`
+	DateCreated     time.Time                `json:"date_created"`
+}
+
+func GetAdminCharacterList(c *gin.Context, db *sql.DB) {
+	const perPage = 20
+
+	page := 1
+	if p, err := strconv.Atoi(c.Query("page")); err == nil && p > 0 {
+		page = p
+	}
+	offset := (page - 1) * perPage
+
+	where := " WHERE 1=1"
+	var args []interface{}
+
+	if userIDStr := c.Query("user_id"); userIDStr != "" {
+		if userID, err := strconv.Atoi(userIDStr); err == nil {
+			where += " AND cb.user_id = ?"
+			args = append(args, userID)
+		}
+	}
+
+	if statusStr := c.Query("character_status"); statusStr != "" {
+		if status, err := strconv.Atoi(statusStr); err == nil {
+			where += " AND cb.character_status = ?"
+			args = append(args, status)
+		}
+	}
+
+	var total int
+	countArgs := make([]interface{}, len(args))
+	copy(countArgs, args)
+	if err := db.QueryRow(`SELECT COUNT(*) FROM character_base cb JOIN users u ON u.id = cb.user_id`+where, countArgs...).Scan(&total); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to count characters: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	query := `
+		SELECT
+			cb.id,
+			cb.name,
+			cb.character_status,
+			u.id,
+			u.username,
+			cb.date_last_post,
+			t.date_created
+		FROM character_base cb
+		JOIN users u ON u.id = cb.user_id
+		JOIN topics t ON t.id = cb.topic_id
+	` + where + " ORDER BY cb.name ASC LIMIT ? OFFSET ?"
+	args = append(args, perPage, offset)
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get character list: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	characters := []AdminCharacterListItem{}
+	for rows.Next() {
+		var ch AdminCharacterListItem
+		if err := rows.Scan(&ch.Id, &ch.Name, &ch.CharacterStatus, &ch.UserId, &ch.Username, &ch.DateLastPost, &ch.DateCreated); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan character: " + err.Error()})
+			c.Abort()
+			return
+		}
+		characters = append(characters, ch)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":     characters,
+		"total":    total,
+		"page":     page,
+		"per_page": perPage,
+	})
 }
 
 type ArchivingWarningItem struct {

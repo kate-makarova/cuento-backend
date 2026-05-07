@@ -333,6 +333,9 @@ func main() {
 	protectedRouter.POST("/character-claim/create", "Create a new character claim", func(c *gin.Context) {
 		Controllers.CreateCharacterClaim(c, Services.DB)
 	})
+	protectedRouter.POST("/character-claim/delete/:id", "Delete a character claim", func(c *gin.Context) {
+		Controllers.DeleteCharacterClaim(c, Services.DB)
+	})
 
 	// Character Template routes
 	protectedRouter.GET("/template/:type/get", "Get character template by type", func(c *gin.Context) {
@@ -475,6 +478,12 @@ func main() {
 	})
 	protectedRouter.GET("/admin/user-list", "Get full user list for admin panel", func(c *gin.Context) {
 		Controllers.GetAdminUserList(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/character-list", "Get full character list for admin panel", func(c *gin.Context) {
+		Controllers.GetAdminCharacterList(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/character/:id/protection-history", "Get absences and immunities for a character", func(c *gin.Context) {
+		Controllers.GetCharacterProtectionHistory(c, Services.DB)
 	})
 	protectedRouter.POST("/admin/user/create", "Create a new user account (admin)", func(c *gin.Context) {
 		Controllers.CreateUser(c, Services.DB)
