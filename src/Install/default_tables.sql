@@ -16,6 +16,7 @@ create table users
     archive_reason     varchar(512) null,
     total_posts        int default 0 not null,
     total_general_posts int default 0 not null,
+    signature          text         null,
     constraint users_pk_2
         unique (username)
 );
@@ -198,6 +199,7 @@ create table character_profile_base
         is_mask boolean null,
         mask_name varchar(255) null,
         user_id int null,
+        signature text null,
 		constraint character_profile_base_character_id_fk
 		foreign key (character_id) references character_base (id)  ON DELETE CASCADE
 		);
