@@ -251,7 +251,7 @@ func GetEpisodes(c *gin.Context, db *sql.DB) {
 	fieldConfig, _ := Services.GetFieldConfig("episode", db)
 	var allowedFields []Entities.CustomFieldConfig
 	for _, f := range fieldConfig {
-		if f.ContentFieldType != "image" && f.ContentFieldType != "long_text" {
+		if f.ContentFieldType != "image" && f.ContentFieldType != "long_text" && f.ContentFieldType != "cropped_image" {
 			allowedFields = append(allowedFields, f)
 		}
 	}
