@@ -654,7 +654,7 @@ func main() {
 	protectedRouter.POST("/admin/design-draft/create", "Create a new design draft from current CSS files", func(c *gin.Context) {
 		Controllers.CreateDesignDraft(c, Services.DB)
 	})
-	protectedRouter.POST("3", "Update a design draft by ID", func(c *gin.Context) {
+	protectedRouter.POST("/admin/design-draft/update/:id", "Update a design draft by ID", func(c *gin.Context) {
 		Controllers.UpdateDesignDraft(c, Services.DB)
 	})
 	protectedRouter.POST("/admin/additional-navlink/create", "Create a new additional navlink", func(c *gin.Context) {
