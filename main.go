@@ -215,6 +215,12 @@ func main() {
 	publicRouter.GET("/faction-children/:parent_id/get", "Get child factions by parent ID", func(c *gin.Context) {
 		Controllers.GetFactionChildren(c, Services.DB)
 	})
+	publicRouter.GET("/draft/:session_key/main_style.css", "Get main CSS content for a design draft by session key", func(c *gin.Context) {
+		Controllers.GetDesignDraftMainCss(c, Services.DB)
+	})
+	publicRouter.GET("/draft/:session_key/custom_style.css", "Get custom style CSS content for a design draft by session key", func(c *gin.Context) {
+		Controllers.GetDesignDraftCustomStyleCss(c, Services.DB)
+	})
 	optionalAuthRouter.POST("/episodes/get", "Get episode list", func(c *gin.Context) {
 		Controllers.GetEpisodes(c, Services.DB)
 	})
@@ -639,9 +645,6 @@ func main() {
 	protectedRouter.POST("/design-variation/update/:id", "Update design variation by ID", func(c *gin.Context) {
 		Controllers.UpdateDesignVariation(c, Services.DB)
 	})
-	protectedRouter.GET("/draft/:session_key/main_style.css", "Get main CSS content for a design draft by session key", func(c *gin.Context) {
-		Controllers.GetDesignDraftMainCss(c, Services.DB)
-	})
 	protectedRouter.GET("/admin/design-draft/list", "Get list of all design drafts without CSS content", func(c *gin.Context) {
 		Controllers.GetDesignDraftList(c, Services.DB)
 	})
@@ -651,7 +654,7 @@ func main() {
 	protectedRouter.POST("/admin/design-draft/create", "Create a new design draft from current CSS files", func(c *gin.Context) {
 		Controllers.CreateDesignDraft(c, Services.DB)
 	})
-	protectedRouter.POST("/admin/design-draft/update/:id", "Update a design draft by ID", func(c *gin.Context) {
+	protectedRouter.POST("3", "Update a design draft by ID", func(c *gin.Context) {
 		Controllers.UpdateDesignDraft(c, Services.DB)
 	})
 	protectedRouter.POST("/admin/additional-navlink/create", "Create a new additional navlink", func(c *gin.Context) {

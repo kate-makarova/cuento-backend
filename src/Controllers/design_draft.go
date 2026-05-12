@@ -158,6 +158,25 @@ func GetDesignDraftMainCss(c *gin.Context, db *sql.DB) {
 	c.Data(http.StatusOK, "text/css; charset=utf-8", []byte(mainCss))
 }
 
+func GetDesignDraftCustomStyleCss(c *gin.Context, db *sql.DB) {
+	sessionKey := c.Param("session_key")
+
+	var customStyleCss string
+	err := db.QueryRow("SELECT custom_style_css FROM design_drafts WHERE session_key = ?", sessionKey).Scan(&customStyleCss)
+	if err == sql.ErrNoRows {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Design draft not found"})
+		c.Abort()
+		return
+	}
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch design draft: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.Data(http.StatusOK, "text/css; charset=utf-8", []byte(customStyleCss))
+}
+
 func UpdateDesignDraft(c *gin.Context, db *sql.DB) {
 	id := c.Param("id")
 
