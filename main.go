@@ -631,9 +631,6 @@ func main() {
 		Controllers.GetStaticFileList(c, Services.DB)
 	})
 	protectedRouter.POST("/static-file/revert", "Revert to a specific static file version", func(c *gin.Context) {
-		Controllers.RevertToFile(c, Services.DB)
-	})
-	protectedRouter.POST("/admin/static-file/revert", "Revert a static file version, preserving original creation date", func(c *gin.Context) {
 		Controllers.AdminRevertStaticFile(c, Services.DB)
 	})
 	protectedRouter.POST("/design-variation/create", "Create a new design variation", func(c *gin.Context) {
