@@ -275,6 +275,124 @@ func RevertToFile(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, gin.H{"files": files})
 }
 
+// publishCssFile versions the current active file and writes new content in its place.
+// fileName is both the file name on disk and the file_type in static_files (e.g. "main_style.css").
+func publishCssFile(db *sql.DB, publicDir, fileName, content string) error {
+	var existingCreatedDate time.Time
+	err := db.QueryRow("SELECT file_created_date FROM static_files WHERE file_name = ?", fileName).Scan(&existingCreatedDate)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+
+	if err == nil {
+		ext := filepath.Ext(fileName)
+		nameWithoutExt := strings.TrimSuffix(fileName, ext)
+		renamedFileName := fmt.Sprintf("%s_%s%s", nameWithoutExt, existingCreatedDate.Format("2006-01-02_15-04-05"), ext)
+
+		oldPath := filepath.Join(publicDir, fileName)
+		newPath := filepath.Join(publicDir, renamedFileName)
+		if renameErr := os.Rename(oldPath, newPath); renameErr != nil && !os.IsNotExist(renameErr) {
+			return renameErr
+		}
+
+		if _, err = db.Exec("UPDATE static_files SET file_name = ? WHERE file_name = ?", renamedFileName, fileName); err != nil {
+			return err
+		}
+	}
+
+	if err := os.MkdirAll(publicDir, os.ModePerm); err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(filepath.Join(publicDir, fileName), []byte(content), 0664); err != nil {
+		return err
+	}
+
+	if err := changeToWwwData(filepath.Join(publicDir, fileName)); err != nil {
+		return err
+	}
+
+	_, err = db.Exec(
+		"INSERT INTO static_files (file_name, file_created_date, file_type) VALUES (?, ?, ?)",
+		fileName, time.Now(), fileName,
+	)
+	return err
+}
+
+func AdminRevertStaticFile(c *gin.Context, db *sql.DB) {
+	var req RevertFileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	publicDir := "./../frontend"
+
+	var target StaticFile
+	err := db.QueryRow("SELECT file_name, file_created_date, file_type FROM static_files WHERE file_name = ?", req.FileName).
+		Scan(&target.FileName, &target.FileCreatedDate, &target.FileType)
+	if err == sql.ErrNoRows {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "File not found"})
+		c.Abort()
+		return
+	}
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "DB error: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	activeFileName := target.FileType
+
+	if target.FileName == activeFileName {
+		c.JSON(http.StatusOK, gin.H{"message": "File is already active"})
+		return
+	}
+
+	// Archive the current active file
+	var activeCreatedDate time.Time
+	err = db.QueryRow("SELECT file_created_date FROM static_files WHERE file_name = ?", activeFileName).Scan(&activeCreatedDate)
+	if err != nil && err != sql.ErrNoRows {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "DB error: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	if err == nil {
+		ext := filepath.Ext(activeFileName)
+		nameWithoutExt := strings.TrimSuffix(activeFileName, ext)
+		archivedName := fmt.Sprintf("%s_%s%s", nameWithoutExt, activeCreatedDate.Format("2006-01-02_15-04-05"), ext)
+
+		if renameErr := os.Rename(filepath.Join(publicDir, activeFileName), filepath.Join(publicDir, archivedName)); renameErr != nil && !os.IsNotExist(renameErr) {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to archive active file: " + renameErr.Error()})
+			c.Abort()
+			return
+		}
+
+		if _, err = db.Exec("UPDATE static_files SET file_name = ? WHERE file_name = ?", archivedName, activeFileName); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update active file record: " + err.Error()})
+			c.Abort()
+			return
+		}
+	}
+
+	// Promote the target: rename on disk, update only file_name in DB (preserve original date)
+	if renameErr := os.Rename(filepath.Join(publicDir, req.FileName), filepath.Join(publicDir, activeFileName)); renameErr != nil && !os.IsNotExist(renameErr) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to promote target file: " + renameErr.Error()})
+		c.Abort()
+		return
+	}
+
+	if _, err = db.Exec("UPDATE static_files SET file_name = ? WHERE file_name = ?", activeFileName, req.FileName); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update target file record: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "File reverted"})
+}
+
 func changeToWwwData(filePath string) error {
 	// Look up the group by name
 	grp, err := user.LookupGroup("www-data")

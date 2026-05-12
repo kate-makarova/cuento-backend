@@ -633,6 +633,9 @@ func main() {
 	protectedRouter.POST("/static-file/revert", "Revert to a specific static file version", func(c *gin.Context) {
 		Controllers.RevertToFile(c, Services.DB)
 	})
+	protectedRouter.POST("/admin/static-file/revert", "Revert a static file version, preserving original creation date", func(c *gin.Context) {
+		Controllers.AdminRevertStaticFile(c, Services.DB)
+	})
 	protectedRouter.POST("/design-variation/create", "Create a new design variation", func(c *gin.Context) {
 		Controllers.CreateDesignVariation(c, Services.DB)
 	})
@@ -656,6 +659,9 @@ func main() {
 	})
 	protectedRouter.POST("/admin/design-draft/update/:id", "Update a design draft by ID", func(c *gin.Context) {
 		Controllers.UpdateDesignDraft(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/design-draft/publish/:id", "Publish a design draft to the live CSS files", func(c *gin.Context) {
+		Controllers.PublishDesignDraft(c, Services.DB)
 	})
 	protectedRouter.POST("/admin/additional-navlink/create", "Create a new additional navlink", func(c *gin.Context) {
 		Controllers.CreateAdditionalNavlink(c, Services.DB)

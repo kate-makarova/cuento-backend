@@ -169,3 +169,5 @@ role_id,type,permission
 3,0,/admin/design-draft/get/:id
 3,0,/admin/design-draft/create
 3,0,/admin/design-draft/update/:id
+3,0,/admin/design-draft/publish/:id
+3,0,/admin/static-file/revert
