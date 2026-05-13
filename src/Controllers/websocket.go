@@ -25,6 +25,17 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+func InitUserRefreshCallbacks() {
+	Services.SetUserRefreshSender(func(userID int) {
+		Websockets.MainHub.SendNotification(userID, map[string]interface{}{
+			"type": "user_refresh_required",
+		})
+	})
+	Services.SetUserConnectedChecker(func(userID int) bool {
+		return Websockets.MainHub.IsUserConnected(userID)
+	})
+}
+
 func HandleWebSocket(c *gin.Context, db *sql.DB) {
 	userID := Services.GetUserIdFromContext(c)
 	if userID == 0 {
@@ -60,6 +71,7 @@ func HandleWebSocket(c *gin.Context, db *sql.DB) {
 	Websockets.MainHub.Register(client)
 	Services.ActivityStorage.AddUser(userID, username)
 	Events.Publish(db, Events.UserActivityChanged, Events.UserActivityChangedEvent{UserID: userID})
+	Services.DrainUserRefreshQueue(userID, db)
 
 	// Replay missed messages if the client provides last_message_id as a query param.
 	if lastMsgIDStr := c.Query("last_message_id"); lastMsgIDStr != "" {
@@ -82,6 +94,8 @@ func HandleWebSocket(c *gin.Context, db *sql.DB) {
 				BroadcastActiveUsersToHome()
 				go BroadcastActiveUserActivity(db)
 			}
+			Services.UnsubscribeHealth(userID)
+			Services.UnsubscribeClientFromAllDrafts(client)
 			Websockets.MainHub.Unregister(client)
 			conn.Close()
 		}()
@@ -107,6 +121,7 @@ func HandleWebSocket(c *gin.Context, db *sql.DB) {
 				LastViewedMessageId *int        `json:"last_viewed_message_id"`
 				LastMessageId       *int64      `json:"last_message_id"`
 				PanelName           string      `json:"panel_name"`
+				DraftId             string      `json:"draft_id"`
 			}
 			if err := json.Unmarshal(p, &msg); err == nil {
 				if msg.Type == "page_change" {
@@ -149,6 +164,12 @@ func HandleWebSocket(c *gin.Context, db *sql.DB) {
 						"UPDATE direct_chat_users SET last_read_message_id = ? WHERE direct_chat_id = ? AND user_id = ?",
 						msg.LastViewedMessageId, msg.ChatId, userID,
 					)
+				} else if msg.Type == "health_subscribe" {
+					Services.SubscribeHealth(userID)
+				} else if msg.Type == "health_unsubscribe" {
+					Services.UnsubscribeHealth(userID)
+				} else if msg.Type == "draft_mode" && msg.DraftId != "" {
+					Services.SubscribeDraft(msg.DraftId, client)
 				} else if msg.Type == "replay" && msg.LastMessageId != nil {
 					for _, m := range Websockets.MainHub.GetMissedMessages(userID, *msg.LastMessageId) {
 						select {

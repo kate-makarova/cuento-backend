@@ -472,6 +472,13 @@ func GetSubforum(c *gin.Context, db *sql.DB) {
 	// Determine User Roles
 	var roleIDs []int
 	userID := Services.GetUserIdFromContext(c)
+
+	if hasPerm, err := Services.HasPermission(userID, fmt.Sprintf("subforum_read:%d", id), db); err != nil || !hasPerm {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Subforum not found"})
+		c.Abort()
+		return
+	}
+
 	if dateLastPost != nil {
 		localized := Services.LocalizeTime(*dateLastPost, Services.GetUserTimezone(userID, db))
 		subforum.DateLastPostLocalized = &localized
@@ -513,6 +520,8 @@ func GetSubforum(c *gin.Context, db *sql.DB) {
 			fmt.Sprintf("subforum_delete_others_topic:%d", id):           &permissions.SubforumDeleteOthersTopic,
 			fmt.Sprintf("subforum_edit_others_post:%d", id):              &permissions.SubforumEditOthersPost,
 			fmt.Sprintf("subforum_edit_own_post:%d", id):                 &permissions.SubforumEditOwnPost,
+			fmt.Sprintf("subforum_delete_own_post:%d", id):               &permissions.SubforumDeleteOwnPost,
+			fmt.Sprintf("subforum_delete_others_post:%d", id):            &permissions.SubforumDeleteOthersPost,
 		}
 
 		var permStrings []string

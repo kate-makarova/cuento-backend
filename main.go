@@ -20,10 +20,19 @@ import (
 
 func main() {
 	Services.InitDB()
+	Services.InitSonic()
 	if err := Services.InitI18n("locales"); err != nil {
 		panic("failed to load i18n bundles: " + err.Error())
 	}
 	EventHandlers.RegisterEventHandlers(Services.DB)
+
+	// Start health monitor (RAM stats every 30s, one log file per day, 30-day retention)
+	Controllers.InitHealthBroadcaster()
+	Controllers.InitUserRefreshCallbacks()
+	Services.InitHealthMonitor()
+
+	// Start archiving warning notifier (checks daily, sends notifications at 10/5/3/2/1 days before archiving)
+	Services.StartArchivingNotifier(Services.DB)
 
 	// Start WebSocket Hub
 	go Websockets.MainHub.Run()
@@ -65,6 +74,9 @@ func main() {
 	publicRouter := Router.NewCustomRouter(r.Group("/"))
 
 	// User routes (Public)
+	publicRouter.GET("/search/buckets", "Get list of available search buckets", func(c *gin.Context) {
+		Controllers.GetSonicBuckets(c)
+	})
 	publicRouter.POST("/register", "Register a new user account", func(c *gin.Context) {
 		Controllers.Register(c, Services.DB)
 	})
@@ -100,6 +112,16 @@ func main() {
 	})
 	publicRouter.GET("/user/list", "Get list of active users and their characters", func(c *gin.Context) {
 		Controllers.GetUserList(c, Services.DB)
+	})
+	publicRouter.GET("/absent-users", "Get currently absent users with their return date", func(c *gin.Context) {
+		Controllers.GetAbsentUsers(c, Services.DB)
+	})
+
+	publicRouter.GET("/user/recent", "Get users active in the past 24 hours", func(c *gin.Context) {
+		Controllers.GetRecentActiveUsers(c, Services.DB)
+	})
+	publicRouter.GET("/character/recent", "Get characters of users active in the past 24 hours", func(c *gin.Context) {
+		Controllers.GetRecentActiveCharacters(c, Services.DB)
 	})
 	publicRouter.GET("/user/autocomplete/:term", "Get users matching search term", func(c *gin.Context) {
 		Controllers.UserAutocomplete(c, Services.DB)
@@ -149,6 +171,12 @@ func main() {
 	optionalAuthRouter.GET("/active-users/activity", "Get full activity info for active users", func(c *gin.Context) {
 		Controllers.GetActiveUserActivity(c, Services.DB)
 	})
+	optionalAuthRouter.GET("/search", "Search across buckets", func(c *gin.Context) {
+		Controllers.Search(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/search/count", "Get result count for a search query", func(c *gin.Context) {
+		Controllers.SearchCount(c, Services.DB)
+	})
 	optionalAuthRouter.GET("/ping", "Health check endpoint", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "pong",
@@ -195,6 +223,12 @@ func main() {
 	})
 	publicRouter.GET("/faction-children/:parent_id/get", "Get child factions by parent ID", func(c *gin.Context) {
 		Controllers.GetFactionChildren(c, Services.DB)
+	})
+	publicRouter.GET("/draft/:session_key/main_style.css", "Get main CSS content for a design draft by session key", func(c *gin.Context) {
+		Controllers.GetDesignDraftMainCss(c, Services.DB)
+	})
+	publicRouter.GET("/draft/:session_key/custom_style.css", "Get custom style CSS content for a design draft by session key", func(c *gin.Context) {
+		Controllers.GetDesignDraftCustomStyleCss(c, Services.DB)
 	})
 	optionalAuthRouter.POST("/episodes/get", "Get episode list", func(c *gin.Context) {
 		Controllers.GetEpisodes(c, Services.DB)
@@ -251,11 +285,23 @@ func main() {
 	protectedRouter.GET("/currency/income-types", "Get list of currency income types", func(c *gin.Context) {
 		Features.GetCurrencyIncomeTypesHandler(c, Services.DB)
 	})
+	protectedRouter.GET("/currency/active-income-types", "Get list of active currency income types", func(c *gin.Context) {
+		Features.GetActiveCurrencyIncomeTypesHandler(c, Services.DB)
+	})
 	protectedRouter.POST("/currency/settings/update", "Update currency settings", func(c *gin.Context) {
 		Features.UpdateCurrencySettingsHandler(c, Services.DB)
 	})
 	protectedRouter.POST("/currency/income-types/update", "Update currency income types", func(c *gin.Context) {
 		Features.UpdateCurrencyIncomeTypesHandler(c, Services.DB)
+	})
+	protectedRouter.GET("/currency/spend-types", "Get list of currency spend types", func(c *gin.Context) {
+		Features.GetCurrencySpendTypesHandler(c, Services.DB)
+	})
+	protectedRouter.GET("/currency/active-spend-types", "Get list of active currency spend types", func(c *gin.Context) {
+		Features.GetActiveCurrencySpendTypesHandler(c, Services.DB)
+	})
+	protectedRouter.POST("/currency/spend-types/update", "Update currency spend types", func(c *gin.Context) {
+		Features.UpdateCurrencySpendTypesHandler(c, Services.DB)
 	})
 	protectedRouter.POST("/post-top/create", "Create a post top", func(c *gin.Context) {
 		Features.CreatePostTopHandler(c, Services.DB)
@@ -314,6 +360,9 @@ func main() {
 	protectedRouter.POST("/character-claim/create", "Create a new character claim", func(c *gin.Context) {
 		Controllers.CreateCharacterClaim(c, Services.DB)
 	})
+	protectedRouter.POST("/character-claim/delete/:id", "Delete a character claim", func(c *gin.Context) {
+		Controllers.DeleteCharacterClaim(c, Services.DB)
+	})
 
 	// Character Template routes
 	protectedRouter.GET("/template/:type/get", "Get character template by type", func(c *gin.Context) {
@@ -345,6 +394,9 @@ func main() {
 	})
 	protectedRouter.POST("/post/update/:id", "Update post by ID", func(c *gin.Context) {
 		Controllers.UpdatePost(c, Services.DB)
+	})
+	protectedRouter.POST("/post/delete/:id", "Soft-delete a post by ID", func(c *gin.Context) {
+		Controllers.DeletePost(c, Services.DB)
 	})
 	protectedRouter.POST("/character-profile/update/:id", "Update character profile by ID", func(c *gin.Context) {
 		Controllers.CharacterProfileUpdate(c, Services.DB)
@@ -430,6 +482,15 @@ func main() {
 	protectedRouter.POST("/user/settings/update", "Update user settings", func(c *gin.Context) {
 		Controllers.UpdateSettings(c, Services.DB)
 	})
+	protectedRouter.POST("/user/absence", "Create an absence record for the current user", func(c *gin.Context) {
+		Controllers.CreateAbsence(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/user/:user_id/absence", "Create an absence record for any user (admin)", func(c *gin.Context) {
+		Controllers.AdminCreateAbsence(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/character/immunity", "Add auto-archiving immunity for a character (admin)", func(c *gin.Context) {
+		Controllers.AdminAddImmunity(c, Services.DB)
+	})
 	protectedRouter.POST("/user/archive", "Archive the current user's account and deactivate all their characters", func(c *gin.Context) {
 		Controllers.ArchiveAccount(c, Services.DB)
 	})
@@ -439,11 +500,23 @@ func main() {
 	protectedRouter.POST("/admin/user/reactivate/:id", "Reactivate an archived user by ID", func(c *gin.Context) {
 		Controllers.ReactivateUser(c, Services.DB)
 	})
+	protectedRouter.GET("/characters/archiving-warnings", "Get active characters approaching auto-archiving threshold", func(c *gin.Context) {
+		Controllers.GetArchivingWarnings(c, Services.DB)
+	})
 	protectedRouter.GET("/admin/user-list", "Get full user list for admin panel", func(c *gin.Context) {
 		Controllers.GetAdminUserList(c, Services.DB)
 	})
+	protectedRouter.GET("/admin/character-list", "Get full character list for admin panel", func(c *gin.Context) {
+		Controllers.GetAdminCharacterList(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/character/:id/protection-history", "Get absences and immunities for a character", func(c *gin.Context) {
+		Controllers.GetCharacterProtectionHistory(c, Services.DB)
+	})
 	protectedRouter.POST("/admin/user/create", "Create a new user account (admin)", func(c *gin.Context) {
 		Controllers.CreateUser(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/user/update/:id", "Update user account (username, avatar) by ID", func(c *gin.Context) {
+		Controllers.AdminUpdateUser(c, Services.DB)
 	})
 	protectedRouter.POST("/mask/create", "Create a new mask", func(c *gin.Context) {
 		Controllers.CreateMask(c, Services.DB)
@@ -567,7 +640,7 @@ func main() {
 		Controllers.GetStaticFileList(c, Services.DB)
 	})
 	protectedRouter.POST("/static-file/revert", "Revert to a specific static file version", func(c *gin.Context) {
-		Controllers.RevertToFile(c, Services.DB)
+		Controllers.AdminRevertStaticFile(c, Services.DB)
 	})
 	protectedRouter.POST("/design-variation/create", "Create a new design variation", func(c *gin.Context) {
 		Controllers.CreateDesignVariation(c, Services.DB)
@@ -580,6 +653,21 @@ func main() {
 	})
 	protectedRouter.POST("/design-variation/update/:id", "Update design variation by ID", func(c *gin.Context) {
 		Controllers.UpdateDesignVariation(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/design-draft/list", "Get list of all design drafts without CSS content", func(c *gin.Context) {
+		Controllers.GetDesignDraftList(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/design-draft/get/:id", "Get a design draft by ID with full CSS content", func(c *gin.Context) {
+		Controllers.GetDesignDraft(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/design-draft/create", "Create a new design draft from current CSS files", func(c *gin.Context) {
+		Controllers.CreateDesignDraft(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/design-draft/update/:id", "Update a design draft by ID", func(c *gin.Context) {
+		Controllers.UpdateDesignDraft(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/design-draft/publish/:id", "Publish a design draft to the live CSS files", func(c *gin.Context) {
+		Controllers.PublishDesignDraft(c, Services.DB)
 	})
 	protectedRouter.POST("/admin/additional-navlink/create", "Create a new additional navlink", func(c *gin.Context) {
 		Controllers.CreateAdditionalNavlink(c, Services.DB)
@@ -622,6 +710,15 @@ func main() {
 	})
 	protectedRouter.GET("/admin/home", "Get admin home categories (all, including empty)", func(c *gin.Context) {
 		Controllers.GetAdminHomeCategories(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/health", "Get RAM and CPU health data", func(c *gin.Context) {
+		Controllers.GetHealthData(c)
+	})
+	protectedRouter.GET("/admin/sonic/cursors", "Get Sonic ingest cursors for all buckets", func(c *gin.Context) {
+		Controllers.GetSonicCursors(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/sonic/catchup/:bucket", "Catch up Sonic ingestion for a specific bucket", func(c *gin.Context) {
+		Controllers.CatchUpSonicBucket(c, Services.DB)
 	})
 	protectedRouter.GET("/admin/user/roles/:id", "Get user roles", func(c *gin.Context) {
 		Controllers.GetUserRoles(c, Services.DB)

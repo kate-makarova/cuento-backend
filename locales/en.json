@@ -18,6 +18,9 @@
   "currency_income_1000_game_posts.name": "1000 game posts",
   "currency_income_1000_game_posts.description": "Currency for reaching 1000 game posts",
 
+  "currency_spend_auto_archiving_immunity.name": "Auto-archiving immunity",
+  "currency_spend_auto_archiving_immunity.description": "Spend currency to grant a character immunity from auto-archiving",
+
   "permission.subforum_read": "View subforum",
   "permission.subforum_create_general_topic": "Create general topic",
   "permission.subforum_create_episode_topic": "Create episode topic",
@@ -30,5 +33,7 @@
   "permission.subforum_edit_others_post": "Edit others' post",
   "permission.subforum_edit_own_post": "Edit own post",
   "permission.subforum_edit_others_topic": "Edit others' topic",
-  "permission.subforum_edit_own_topic": "Edit own topic"
+  "permission.subforum_edit_own_topic": "Edit own topic",
+  "permission.subforum_delete_own_post": "Delete own post",
+  "permission.subforum_delete_others_post": "Delete others' post"
 }

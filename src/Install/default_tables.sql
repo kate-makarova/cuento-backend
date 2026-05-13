@@ -16,6 +16,7 @@ create table users
     archive_reason     varchar(512) null,
     total_posts        int default 0 not null,
     total_general_posts int default 0 not null,
+    signature          text         null,
     constraint users_pk_2
         unique (username)
 );
@@ -101,6 +102,21 @@ INSERT INTO global_settings (setting_name, setting_value)
 VALUES ('visual_navlinks_after_header_panel', 'n');
 
 INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('auto_archiving_enabled', 'n');
+
+INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('auto_archiving_show_page_link', 'n');
+
+INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('auto_archiving_days', '20');
+
+INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('absence_max_days', '30');
+
+INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('absence_cooldown_days', '7');
+
+INSERT INTO global_settings (setting_name, setting_value)
 VALUES ('ai_api_key', '');
 
 INSERT INTO global_settings (setting_name, setting_value)
@@ -141,7 +157,7 @@ CREATE TABLE topics (
     last_post_author_user_id INT NULL,
     post_number INT,
     author_user_id INT NOT NULL,
-    subforum_id BIGINT UNSIGNED NOT NULL,
+    subforum_id BIGINT UNSIGNED NULL,
     is_sticky BOOLEAN DEFAULT FALSE NULL,
     is_sticky_first_post BOOLEAN DEFAULT FALSE NULL,
     CONSTRAINT fk_topics_subforum
@@ -189,6 +205,7 @@ create table character_profile_base
         is_mask boolean null,
         mask_name varchar(255) null,
         user_id int null,
+        signature text null,
 		constraint character_profile_base_character_id_fk
 		foreign key (character_id) references character_base (id)  ON DELETE CASCADE
 		);
@@ -271,7 +288,6 @@ create table global_stats
 
 INSERT INTO global_stats (stat_name, stat_value) VALUES ('total_user_number', 0);
 INSERT INTO global_stats (stat_name, stat_value) VALUES ('total_character_number', 0);
-INSERT INTO global_stats (stat_name, stat_value) VALUES ('total_active_character_number', 0);
 INSERT INTO global_stats (stat_name, stat_value) VALUES ('total_episode_number', 0);
 INSERT INTO global_stats (stat_name, stat_value) VALUES ('total_topic_number', 0);
 INSERT INTO global_stats (stat_name, stat_value) VALUES ('total_post_number', 0);
@@ -640,6 +656,15 @@ INSERT INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_i
 INSERT INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_500_game_posts', 1, false);
 INSERT INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_1000_game_posts', 1, false);
 
+CREATE TABLE currency_spend_types
+(
+    `key`     varchar(255) not null primary key,
+    amount    int          not null default 0,
+    is_active boolean      not null default false
+);
+
+INSERT INTO currency_spend_types (`key`, amount, is_active) VALUES ('currency_spend_auto_archiving_immunity', 1, false);
+
 CREATE TABLE currency_settings
 (
     currency_name varchar(255) null,
@@ -722,6 +747,63 @@ create table post_reaction
     constraint fk_post_reaction_reaction foreign key (reaction_id) references reactions (id) on delete cascade,
     constraint fk_post_reaction_user     foreign key (user_id)     references users (id)     on delete cascade
 );
+
+create table sonic_ingest_cursor
+(
+    bucket        varchar(64) not null,
+    last_id       bigint      not null,
+    date_ingested datetime    not null default current_timestamp,
+    primary key (bucket)
+);
+
+CREATE TABLE auto_archiving_immunity
+(
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    character_id BIGINT UNSIGNED NOT NULL,
+    start_date   DATETIME        NOT NULL,
+    end_date     DATETIME        NOT NULL,
+    reason       VARCHAR(255)    NOT NULL,
+    CONSTRAINT fk_auto_archiving_immunity_character FOREIGN KEY (character_id) REFERENCES character_base (id) ON DELETE CASCADE
+);
+
+CREATE TABLE archiving_warning_log
+(
+    character_id BIGINT UNSIGNED NOT NULL,
+    days_warning INT             NOT NULL,
+    base_date    DATE            NOT NULL,
+    sent_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (character_id, days_warning, base_date),
+    CONSTRAINT fk_archiving_warning_log_character FOREIGN KEY (character_id) REFERENCES character_base (id) ON DELETE CASCADE
+);
+
+CREATE TABLE pending_user_refresh
+(
+    user_id    INT      NOT NULL PRIMARY KEY,
+    queued_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_pending_user_refresh_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE design_drafts
+(
+    id               INT AUTO_INCREMENT PRIMARY KEY,
+    name             VARCHAR(32)  NOT NULL,
+    session_key      VARCHAR(12)  NOT NULL,
+    date_created     DATETIME     NOT NULL,
+    date_last_changed DATETIME    NOT NULL,
+    main_css         TEXT         NULL,
+    custom_style_css TEXT         NULL,
+    CONSTRAINT design_drafts_session_key_unique UNIQUE (session_key)
+);
+
+CREATE TABLE absent_users
+(
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    user_id             INT      NOT NULL,
+    absence_start_date  DATETIME NOT NULL,
+    absence_end_date    DATETIME NOT NULL,
+    CONSTRAINT fk_absent_users_user FOREIGN KEY (user_id) REFERENCES users (id)
+);
+
 
 create table ai_chat_messages
 (

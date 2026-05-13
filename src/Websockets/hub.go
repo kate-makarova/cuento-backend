@@ -185,6 +185,16 @@ func (h *Hub) Unregister(client *Client) {
 	h.unregister <- client
 }
 
+func (h *Hub) ConnectionCount() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	count := 0
+	for _, clients := range h.clients {
+		count += len(clients)
+	}
+	return count
+}
+
 func (h *Hub) Broadcast(message interface{}) {
 	msgID := atomic.AddInt64(&globalMsgID, 1)
 	payload := enrichMessage(message, msgID)
@@ -217,6 +227,71 @@ func (h *Hub) Broadcast(message interface{}) {
 			}
 		}()
 	}
+}
+
+// BroadcastToUsers sends a message to a specific set of users using a single msg_id.
+func (h *Hub) BroadcastToUsers(userIDs []int, message interface{}) {
+	if len(userIDs) == 0 {
+		return
+	}
+	msgID := atomic.AddInt64(&globalMsgID, 1)
+	payload := enrichMessage(message, msgID)
+
+	h.mu.RLock()
+	type clientEntry struct {
+		userID int
+		client *Client
+	}
+	entries := make([]clientEntry, 0)
+	for _, userID := range userIDs {
+		for client := range h.clients[userID] {
+			entries = append(entries, clientEntry{userID, client})
+		}
+	}
+	h.mu.RUnlock()
+
+	seen := make(map[int]bool)
+	for _, e := range entries {
+		if !seen[e.userID] {
+			seen[e.userID] = true
+			h.addToBuffer(e.userID, msgID, payload)
+		}
+		func() {
+			defer func() { recover() }()
+			select {
+			case e.client.Send <- payload:
+			default:
+			}
+		}()
+	}
+}
+
+// SendToClients sends a message to a specific set of clients (individual connections).
+func (h *Hub) SendToClients(clients []any, message interface{}) {
+	if len(clients) == 0 {
+		return
+	}
+	msgID := atomic.AddInt64(&globalMsgID, 1)
+	payload := enrichMessage(message, msgID)
+
+	for _, c := range clients {
+		if client, ok := c.(*Client); ok {
+			func() {
+				defer func() { recover() }()
+				select {
+				case client.Send <- payload:
+				default:
+				}
+			}()
+		}
+	}
+}
+
+// IsUserConnected returns true if the user has at least one active WebSocket connection.
+func (h *Hub) IsUserConnected(userID int) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.clients[userID]) > 0
 }
 
 // CloseUserConnections forcefully closes all WebSocket connections for a user.

@@ -91,6 +91,12 @@ func GetTopicsBySubforum(c *gin.Context, db *sql.DB) {
 	page := int(page64) - 1
 
 	userID := Services.GetUserIdFromContext(c)
+
+	if hasPerm, err := Services.HasPermission(userID, fmt.Sprintf("subforum_read:%d", subforum), db); err != nil || !hasPerm {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Subforum not found"})
+		return
+	}
+
 	userTimezone := Services.GetUserTimezone(userID, db)
 
 	var topics []ViewforumRow
@@ -170,6 +176,11 @@ func CreateTopic(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	if hasPerm, err := Services.HasPermission(userID, fmt.Sprintf("subforum_create_general_topic:%d", req.SubforumId), db); err != nil || !hasPerm {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to create topics in this subforum"})
+		return
+	}
+
 	var username string
 	err := db.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&username)
 	if err != nil {
@@ -245,6 +256,24 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	currentUserID := Services.GetUserIdFromContext(c)
+
+	var subforumIDCheck int
+	if err := db.QueryRow("SELECT subforum_id FROM topics WHERE id = ? AND status != ?", topicID, Entities.DeletedTopic).Scan(&subforumIDCheck); err != nil {
+		if err == sql.ErrNoRows {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Topic not found"})
+		} else {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get topic: " + err.Error()})
+		}
+		c.Abort()
+		return
+	}
+	if hasPerm, err := Services.HasPermission(currentUserID, fmt.Sprintf("subforum_read:%d", subforumIDCheck), db); err != nil || !hasPerm {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Topic not found"})
+		c.Abort()
+		return
+	}
+
 	postsPerPage := Services.GetPostsPerPage(db)
 	page := 1
 
@@ -312,7 +341,8 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 		SELECT
 			p.id, p.author_user_id, p.date_created, p.content, p.use_character_profile,
 			u.username, u.avatar, u.total_posts, u.total_general_posts, p.guest_name,
-			cp.id as character_profile_id, cp.character_id, cb.name as character_name, cp.avatar as character_avatar, cp.mask_name, cp.is_mask,
+			cp.id as character_profile_id, cp.character_id, cb.name as character_name, cp.avatar as character_avatar, cp.mask_name, cp.is_mask, cp.signature as character_signature,
+			u.signature as user_signature,
 			t.subforum_id, t.type as topic_type
 			%s
 		FROM posts p
@@ -350,7 +380,6 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 	cols, _ := rows.Columns()
 	posts := make([]Entities.Post, 0) // Initialize slice
 
-	currentUserID := Services.GetUserIdFromContext(c)
 	userTimezone := Services.GetUserTimezone(currentUserID, db)
 	var subforumID int
 
@@ -428,6 +457,23 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 		}
 		post.CanEdit = &canEdit
 
+		// Check CanDelete
+		canDelete := false
+		if currentUserID != 0 {
+			if currentUserID == post.AuthorUserId {
+				permission := fmt.Sprintf("subforum_delete_own_post:%d", subforumID)
+				if hasPerm, err := Services.HasPermission(currentUserID, permission, db); err == nil && hasPerm {
+					canDelete = true
+				}
+			} else {
+				permission := fmt.Sprintf("subforum_delete_others_post:%d", subforumID)
+				if hasPerm, err := Services.HasPermission(currentUserID, permission, db); err == nil && hasPerm {
+					canDelete = true
+				}
+			}
+		}
+		post.CanDelete = &canDelete
+
 		if post.UseCharacterProfile {
 			var charProfile Entities.CharacterProfile
 			if id, ok := rowMap["character_profile_id"]; ok {
@@ -452,6 +498,12 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 				isMaskBool, _ := strconv.ParseBool(isMask.(string))
 				charProfile.IsMask = &isMaskBool
 			}
+			if sig, ok := rowMap["character_signature"]; ok {
+				sigStr := sig.(string)
+				sigHtml := Services.ParseBBCode(sigStr)
+				charProfile.Signature = &sigStr
+				charProfile.SignatureHtml = &sigHtml
+			}
 
 			// Populate custom fields
 			customFields := make(map[string]Entities.CustomFieldValue)
@@ -468,6 +520,7 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 			}
 			charProfile.CustomFields.CustomFields = customFields
 			charProfile.CustomFields.FieldConfig = customConfig // Add this line
+			charProfile.Factions = []Entities.Faction{}
 			post.CharacterProfile = &charProfile
 		} else {
 			var userProfile Entities.UserProfile
@@ -490,9 +543,54 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 				amount, _ := strconv.Atoi(v.(string))
 				userProfile.CurrencyAmount = &amount
 			}
+			if sig, ok := rowMap["user_signature"]; ok {
+				sigStr := sig.(string)
+				sigHtml := Services.ParseBBCode(sigStr)
+				userProfile.Signature = &sigStr
+				userProfile.SignatureHtml = &sigHtml
+			}
 			post.UserProfile = &userProfile
 		}
 		posts = append(posts, post)
+	}
+
+	// Batch-fetch factions for character profiles
+	var charIDs []interface{}
+	charIDToPostIdxs := make(map[int][]int)
+	for i, p := range posts {
+		if p.CharacterProfile != nil && p.CharacterProfile.CharacterId != nil {
+			cid := *p.CharacterProfile.CharacterId
+			if _, seen := charIDToPostIdxs[cid]; !seen {
+				charIDs = append(charIDs, cid)
+			}
+			charIDToPostIdxs[cid] = append(charIDToPostIdxs[cid], i)
+		}
+	}
+	if len(charIDs) > 0 {
+		factionPlaceholders := make([]string, len(charIDs))
+		for i := range charIDs {
+			factionPlaceholders[i] = "?"
+		}
+		factionRows, err := db.Query(fmt.Sprintf(`
+			SELECT cf.character_id, f.id, f.name, f.parent_id, f.level, f.description, f.icon, f.faction_status
+			FROM character_faction cf
+			JOIN factions f ON f.id = cf.faction_id
+			WHERE f.show_on_profile = true AND cf.character_id IN (%s)
+			ORDER BY f.level ASC
+		`, strings.Join(factionPlaceholders, ",")), charIDs...)
+		if err == nil {
+			defer factionRows.Close()
+			for factionRows.Next() {
+				var cid int
+				var f Entities.Faction
+				if err := factionRows.Scan(&cid, &f.Id, &f.Name, &f.ParentId, &f.Level, &f.Description, &f.Icon, &f.FactionStatus); err != nil {
+					continue
+				}
+				for _, idx := range charIDToPostIdxs[cid] {
+					posts[idx].CharacterProfile.Factions = append(posts[idx].CharacterProfile.Factions, f)
+				}
+			}
+		}
 	}
 
 	if len(posts) > 0 {
@@ -563,8 +661,8 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 	}
 
 	var topic Entities.Topic
-	query := "SELECT t.id, t.status, t.name, t.type, t.date_created, t.date_last_post, t.post_number, t.author_user_id, u.username, t.last_post_author_user_id, u2.username, t.subforum_id, COALESCE(t.is_sticky_first_post, false) FROM topics t JOIN users u ON t.author_user_id = u.id LEFT JOIN users u2 ON t.last_post_author_user_id = u2.id WHERE t.id = ?"
-	err = db.QueryRow(query, id).Scan(
+	query := "SELECT t.id, t.status, t.name, t.type, t.date_created, t.date_last_post, t.post_number, t.author_user_id, u.username, t.last_post_author_user_id, u2.username, t.subforum_id, COALESCE(t.is_sticky_first_post, false) FROM topics t JOIN users u ON t.author_user_id = u.id LEFT JOIN users u2 ON t.last_post_author_user_id = u2.id WHERE t.id = ? AND t.status != ?"
+	err = db.QueryRow(query, id, Entities.DeletedTopic).Scan(
 		&topic.Id,
 		&topic.Status,
 		&topic.Name,
@@ -589,14 +687,14 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	if topic.Status == Entities.DeletedTopic {
+	// Check CanEdit
+	currentUserID := Services.GetUserIdFromContext(c)
+
+	if hasPerm, err := Services.HasPermission(currentUserID, fmt.Sprintf("subforum_read:%d", topic.SubforumId), db); err != nil || !hasPerm {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Topic not found"})
 		c.Abort()
 		return
 	}
-
-	// Check CanEdit
-	currentUserID := Services.GetUserIdFromContext(c)
 	topic.DateLastPostLocalized = Services.LocalizeTime(topic.DateLastPost, Services.GetUserTimezone(currentUserID, db))
 
 	// Get all permissions for this user in this subforum context
@@ -753,7 +851,8 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 
 	// Check topic status — reject if full or inactive
 	var topicStatus Entities.TopicStatus
-	if err := tx.QueryRow("SELECT status FROM topics WHERE id = ?", req.TopicID).Scan(&topicStatus); err != nil {
+	var subforumID int
+	if err := tx.QueryRow("SELECT status, COALESCE(subforum_id, 0) FROM topics WHERE id = ?", req.TopicID).Scan(&topicStatus, &subforumID); err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Topic not found"})
 		} else {
@@ -763,6 +862,10 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 	}
 	if topicStatus == Entities.FullTopic {
 		c.JSON(http.StatusForbidden, gin.H{"error": "This topic has reached its post limit and is no longer accepting posts"})
+		return
+	}
+	if hasPerm, err := Services.HasPermission(userID, fmt.Sprintf("subforum_post:%d", subforumID), db); err != nil || !hasPerm {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to post in this subforum"})
 		return
 	}
 
@@ -925,9 +1028,8 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 	}
 
 	// Fetch additional data for the event
-	var subforumID int
 	var topicName string
-	err = db.QueryRow("SELECT subforum_id, name FROM topics WHERE id = ?", req.TopicID).Scan(&subforumID, &topicName)
+	err = db.QueryRow("SELECT name FROM topics WHERE id = ?", req.TopicID).Scan(&topicName)
 	if err == nil {
 		// Fetch full post data
 		fullPost, postErr := Services.GetPostById(int(postID), db, Services.IsFeatureEnabled("currency", c))
@@ -966,8 +1068,14 @@ func PreviewPost(c *gin.Context, db *sql.DB) {
 	post.GuestName = req.GuestName
 
 	var topicType int
-	if err := db.QueryRow("SELECT type FROM topics WHERE id = ?", req.TopicID).Scan(&topicType); err != nil {
+	var previewSubforumID int
+	if err := db.QueryRow("SELECT type, COALESCE(subforum_id, 0) FROM topics WHERE id = ?", req.TopicID).Scan(&topicType, &previewSubforumID); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Topic not found"})
+		c.Abort()
+		return
+	}
+	if hasPerm, err := Services.HasPermission(userID, fmt.Sprintf("subforum_read:%d", previewSubforumID), db); err != nil || !hasPerm {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Topic not found"})
 		c.Abort()
 		return
 	}
@@ -1129,6 +1237,80 @@ func UpdatePost(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, updatedPost)
+}
+
+func DeletePost(c *gin.Context, db *sql.DB) {
+	postID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid post ID"})
+		c.Abort()
+		return
+	}
+
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
+		c.Abort()
+		return
+	}
+
+	// 1. Fetch post details to check ownership and subforum
+	var authorUserID int
+	var subforumID int
+	var topicID int64
+	err = db.QueryRow(`
+		SELECT p.author_user_id, t.subforum_id, p.topic_id
+		FROM posts p
+		JOIN topics t ON p.topic_id = t.id
+		WHERE p.id = ? AND (p.is_deleted IS NULL OR p.is_deleted <> 1)
+	`, postID).Scan(&authorUserID, &subforumID, &topicID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Post not found"})
+		} else {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch post details: " + err.Error()})
+		}
+		c.Abort()
+		return
+	}
+
+	// 2. Check permissions
+	canDelete := false
+	if userID == authorUserID {
+		permission := fmt.Sprintf("subforum_delete_own_post:%d", subforumID)
+		if hasPerm, err := Services.HasPermission(userID, permission, db); err == nil && hasPerm {
+			canDelete = true
+		}
+	} else {
+		permission := fmt.Sprintf("subforum_delete_others_post:%d", subforumID)
+		if hasPerm, err := Services.HasPermission(userID, permission, db); err == nil && hasPerm {
+			canDelete = true
+		}
+	}
+
+	if !canDelete {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You do not have permission to delete this post"})
+		c.Abort()
+		return
+	}
+
+	// 3. Soft-delete the post
+	_, err = db.Exec("UPDATE posts SET is_deleted = 1 WHERE id = ?", postID)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to delete post: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	// 4. Broadcast deletion event
+	Events.Publish(db, Events.PostCreated, Events.PostCreatedEvent{
+		Type:       "post_deleted",
+		TopicID:    topicID,
+		SubforumID: subforumID,
+		Post:       Entities.Post{Id: postID},
+	})
+
+	c.JSON(http.StatusOK, gin.H{"message": "Post deleted successfully"})
 }
 
 func UpdateTopic(c *gin.Context, db *sql.DB) {
@@ -1711,7 +1893,7 @@ func BatchDeleteTopics(c *gin.Context, db *sql.DB) {
 
 	deleteArgs := append([]interface{}{Entities.DeletedTopic}, idArgs...)
 	result, err := db.Exec(
-		fmt.Sprintf("UPDATE topics SET status = ? WHERE id IN (%s)", placeholders),
+		fmt.Sprintf("UPDATE topics SET status = ?, subforum_id = NULL WHERE id IN (%s)", placeholders),
 		deleteArgs...,
 	)
 	if err != nil {
@@ -1724,7 +1906,7 @@ func BatchDeleteTopics(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, gin.H{"deleted": deleted})
 
 	if len(subforumIDs) > 0 {
-		Events.Publish(db, Events.TopicsDeleted, Events.TopicsDeletedEvent{SubforumIDs: subforumIDs})
+		Events.Publish(db, Events.TopicsDeleted, Events.TopicsDeletedEvent{TopicIDs: req.TopicIDs, SubforumIDs: subforumIDs})
 	}
 	if len(episodeIDs) > 0 {
 		Events.Publish(db, Events.EpisodeTopicsDeleted, Events.EpisodeTopicsDeletedEvent{EpisodeIDs: episodeIDs})

@@ -22,6 +22,10 @@ type BoardInfo struct {
 	TotalEpisodePostNumber         int                 `json:"total_episode_post_number"`
 	LastRegisteredUser             *Entities.ShortUser `json:"last_registered_user"`
 	VisualNavlinksAfterHeaderPanel string              `json:"visual_navlinks_after_header_panel"`
+	AutoArchivingShowPageLink      string              `json:"auto_archiving_show_page_link"`
+	AutoArchivingEnabled           string              `json:"auto_archiving_enabled"`
+	AutoArchivingDays              int                 `json:"auto_archiving_days"`
+	Features                       map[string]int      `json:"features"`
 }
 
 func GetBoard(c *gin.Context, db *sql.DB) {
@@ -35,7 +39,7 @@ func GetBoard(c *gin.Context, db *sql.DB) {
 		LastRegisteredUser:     nil,
 	}
 
-	rows, err := db.Query("SELECT setting_name, setting_value FROM global_settings WHERE setting_name IN ('site_name', 'domain', 'posts_per_page', 'visual_navlinks_after_header_panel')")
+	rows, err := db.Query("SELECT setting_name, setting_value FROM global_settings WHERE setting_name IN ('site_name', 'domain', 'posts_per_page', 'visual_navlinks_after_header_panel', 'auto_archiving_show_page_link', 'auto_archiving_enabled', 'auto_archiving_days')")
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get global settings: " + err.Error()})
 		c.Abort()
@@ -59,6 +63,12 @@ func GetBoard(c *gin.Context, db *sql.DB) {
 			boardInfo.PostsPerPage, _ = strconv.Atoi(value)
 		case "visual_navlinks_after_header_panel":
 			boardInfo.VisualNavlinksAfterHeaderPanel = value
+		case "auto_archiving_show_page_link":
+			boardInfo.AutoArchivingShowPageLink = value
+		case "auto_archiving_enabled":
+			boardInfo.AutoArchivingEnabled = value
+		case "auto_archiving_days":
+			boardInfo.AutoArchivingDays, _ = strconv.Atoi(value)
 		}
 	}
 
@@ -97,6 +107,23 @@ func GetBoard(c *gin.Context, db *sql.DB) {
 				boardInfo.LastRegisteredUser = &Entities.ShortUser{
 					Id:       int(value.Int64),
 					Username: secondary.String,
+				}
+			}
+		}
+	}
+
+	boardInfo.Features = map[string]int{}
+	featureRows, err := db.Query("SELECT `key`, is_active FROM features")
+	if err == nil {
+		defer featureRows.Close()
+		for featureRows.Next() {
+			var key string
+			var isActive bool
+			if featureRows.Scan(&key, &isActive) == nil {
+				if isActive {
+					boardInfo.Features[key] = 1
+				} else {
+					boardInfo.Features[key] = 0
 				}
 			}
 		}

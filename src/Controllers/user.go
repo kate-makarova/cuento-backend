@@ -63,6 +63,7 @@ type UpdateSettingsRequest struct {
 	FontSize        *float64       `json:"interface_font_size"`
 	Password        *string        `json:"password"`
 	InterfaceDesign NullableString `json:"interface_design"`
+	Signature       NullableString `json:"signature"`
 }
 
 type CreateUserRequest struct {
@@ -208,8 +209,8 @@ func Login(c *gin.Context, db *sql.DB) {
 	}
 
 	var user Entities.User
-	query := "SELECT id, username, avatar, password, interface_language, interface_timezone, interface_font_size, user_status, interface_design, archive_reason FROM users WHERE username = ?"
-	err := db.QueryRow(query, creds.Username).Scan(&user.Id, &user.Username, &user.Avatar, &user.Password, &user.InterfaceLanguage, &user.InterfaceTimezone, &user.InterfaceFontSize, &user.UserStatus, &user.InterfaceDesign, &user.ArchiveReason)
+	query := "SELECT id, username, avatar, password, interface_language, interface_timezone, interface_font_size, user_status, interface_design, archive_reason, signature FROM users WHERE username = ?"
+	err := db.QueryRow(query, creds.Username).Scan(&user.Id, &user.Username, &user.Avatar, &user.Password, &user.InterfaceLanguage, &user.InterfaceTimezone, &user.InterfaceFontSize, &user.UserStatus, &user.InterfaceDesign, &user.ArchiveReason, &user.Signature)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Invalid credentials"})
@@ -254,6 +255,7 @@ func Login(c *gin.Context, db *sql.DB) {
 			c.Abort()
 			return
 		}
+		role.Permissions = Services.GetRoleFrontendPermissions(role.Id, db)
 		user.Roles = append(user.Roles, role)
 	}
 
@@ -346,8 +348,8 @@ func RefreshToken(c *gin.Context, db *sql.DB) {
 
 	// Fetch user details
 	var user Entities.User
-	query := "SELECT id, username, avatar, interface_language, interface_timezone, interface_font_size, user_status, total_posts, total_general_posts, interface_design FROM users WHERE id = ?"
-	err = db.QueryRow(query, claims.UserID).Scan(&user.Id, &user.Username, &user.Avatar, &user.InterfaceLanguage, &user.InterfaceTimezone, &user.InterfaceFontSize, &user.UserStatus, &user.TotalPosts, &user.TotalGeneralPosts, &user.InterfaceDesign)
+	query := "SELECT id, username, avatar, interface_language, interface_timezone, interface_font_size, user_status, total_posts, total_general_posts, interface_design, signature FROM users WHERE id = ?"
+	err = db.QueryRow(query, claims.UserID).Scan(&user.Id, &user.Username, &user.Avatar, &user.InterfaceLanguage, &user.InterfaceTimezone, &user.InterfaceFontSize, &user.UserStatus, &user.TotalPosts, &user.TotalGeneralPosts, &user.InterfaceDesign, &user.Signature)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch user details"})
 		c.Abort()
@@ -373,6 +375,7 @@ func RefreshToken(c *gin.Context, db *sql.DB) {
 		for rows.Next() {
 			var role Entities.Role
 			if err := rows.Scan(&role.Id, &role.Name); err == nil {
+				role.Permissions = Services.GetRoleFrontendPermissions(role.Id, db)
 				user.Roles = append(user.Roles, role)
 			}
 		}
@@ -557,6 +560,10 @@ func UpdateSettings(c *gin.Context, db *sql.DB) {
 		updates = append(updates, "interface_design = ?")
 		args = append(args, req.InterfaceDesign.Value)
 	}
+	if req.Signature.IsSet {
+		updates = append(updates, "signature = ?")
+		args = append(args, req.Signature.Value)
+	}
 	if req.Password != nil {
 		// Hash the password before updating
 		dummyUser := Entities.User{}
@@ -586,7 +593,7 @@ func UpdateSettings(c *gin.Context, db *sql.DB) {
 
 	// Fetch updated user details
 	var user Entities.User
-	err = db.QueryRow("SELECT id, username, avatar, interface_language, interface_timezone, interface_font_size, user_status, total_posts, total_general_posts, interface_design FROM users WHERE id = ?", userID).Scan(&user.Id, &user.Username, &user.Avatar, &user.InterfaceLanguage, &user.InterfaceTimezone, &user.InterfaceFontSize, &user.UserStatus, &user.TotalPosts, &user.TotalGeneralPosts, &user.InterfaceDesign)
+	err = db.QueryRow("SELECT id, username, avatar, interface_language, interface_timezone, interface_font_size, user_status, total_posts, total_general_posts, interface_design, signature FROM users WHERE id = ?", userID).Scan(&user.Id, &user.Username, &user.Avatar, &user.InterfaceLanguage, &user.InterfaceTimezone, &user.InterfaceFontSize, &user.UserStatus, &user.TotalPosts, &user.TotalGeneralPosts, &user.InterfaceDesign, &user.Signature)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch updated user details"})
 		c.Abort()
@@ -606,6 +613,7 @@ func UpdateSettings(c *gin.Context, db *sql.DB) {
 		for rows.Next() {
 			var role Entities.Role
 			if err := rows.Scan(&role.Id, &role.Name); err == nil {
+				role.Permissions = Services.GetRoleFrontendPermissions(role.Id, db)
 				user.Roles = append(user.Roles, role)
 			}
 		}
@@ -708,6 +716,59 @@ func GetUserList(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, users)
+}
+
+func GetRecentActiveUsers(c *gin.Context, db *sql.DB) {
+	rows, err := db.Query(`
+		SELECT id, username FROM users
+		WHERE user_status = 0 AND id > 1
+		AND date_last_visit >= NOW() - INTERVAL 24 HOUR
+		ORDER BY username ASC
+	`)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch recent users: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	users := []Entities.ShortUser{}
+	for rows.Next() {
+		var u Entities.ShortUser
+		if err := rows.Scan(&u.Id, &u.Username); err != nil {
+			continue
+		}
+		users = append(users, u)
+	}
+
+	c.JSON(http.StatusOK, users)
+}
+
+func GetRecentActiveCharacters(c *gin.Context, db *sql.DB) {
+	rows, err := db.Query(`
+		SELECT c.id, c.name FROM character_base c
+		JOIN users u ON u.id = c.user_id
+		WHERE c.character_status = 0 AND u.user_status = 0 AND u.id > 1
+		AND u.date_last_visit >= NOW() - INTERVAL 24 HOUR
+		ORDER BY c.name ASC
+	`)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch recent characters: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	characters := []Entities.ShortCharacter{}
+	for rows.Next() {
+		var ch Entities.ShortCharacter
+		if err := rows.Scan(&ch.Id, &ch.Name); err != nil {
+			continue
+		}
+		characters = append(characters, ch)
+	}
+
+	c.JSON(http.StatusOK, characters)
 }
 
 type SaveKeysPrivateKeyItem struct {
@@ -1199,6 +1260,7 @@ func UpdateUserRoles(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	Services.NotifyUserRefresh(req.UserID, db)
 	c.JSON(http.StatusOK, gin.H{"message": "User roles updated"})
 }
 
@@ -1238,6 +1300,22 @@ func WipeOutMyUser(c *gin.Context, db *sql.DB) {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to delete direct messages: " + err.Error()})
 		c.Abort()
 		return
+	}
+
+	// Collect general post IDs before deleting so we can remove them from Sonic after commit.
+	var deletedGeneralPostIDs []int
+	gpRows, err := db.Query(
+		"SELECT id FROM posts WHERE author_user_id = ? AND topic_id IN (SELECT id FROM topics WHERE type = ?)",
+		userID, Entities.GeneralTopic,
+	)
+	if err == nil {
+		for gpRows.Next() {
+			var pid int
+			if gpRows.Scan(&pid) == nil {
+				deletedGeneralPostIDs = append(deletedGeneralPostIDs, pid)
+			}
+		}
+		gpRows.Close()
 	}
 
 	// Delete posts in general topics
@@ -1306,6 +1384,10 @@ func WipeOutMyUser(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "User account wiped"})
+
+	if len(deletedGeneralPostIDs) > 0 {
+		Events.Publish(db, Events.UserWiped, Events.UserWipedEvent{DeletedGeneralPostIDs: deletedGeneralPostIDs})
+	}
 }
 
 func ArchiveAccount(c *gin.Context, db *sql.DB) {
@@ -1428,7 +1510,65 @@ func BanUser(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	Services.NotifyUserRefresh(userID, db)
 	c.JSON(http.StatusOK, gin.H{"user_status": Entities.ArchivedUser})
+}
+
+type AdminUpdateUserRequest struct {
+	Username *string `json:"username"`
+	Avatar   *string `json:"avatar"`
+}
+
+func AdminUpdateUser(c *gin.Context, db *sql.DB) {
+	userID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid user ID"})
+		c.Abort()
+		return
+	}
+
+	var req AdminUpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	var updates []string
+	var args []interface{}
+
+	if req.Username != nil {
+		updates = append(updates, "username = ?")
+		args = append(args, *req.Username)
+	}
+	if req.Avatar != nil {
+		updates = append(updates, "avatar = ?")
+		args = append(args, *req.Avatar)
+	}
+
+	if len(updates) == 0 {
+		c.JSON(http.StatusOK, gin.H{"message": "No changes to update"})
+		return
+	}
+
+	query := fmt.Sprintf("UPDATE users SET %s WHERE id = ?", strings.Join(updates, ", "))
+	args = append(args, userID)
+
+	result, err := db.Exec(query, args...)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update user: " + err.Error()})
+		c.Abort()
+		return
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "User not found"})
+		c.Abort()
+		return
+	}
+
+	Services.NotifyUserRefresh(userID, db)
+	c.JSON(http.StatusOK, gin.H{"message": "User updated successfully"})
 }
 
 func UserAutocomplete(c *gin.Context, db *sql.DB) {
