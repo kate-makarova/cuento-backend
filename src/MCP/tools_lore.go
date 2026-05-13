@@ -8,7 +8,6 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"google.golang.org/genai"
 )
 
 type loreTopicResult struct {
@@ -23,12 +22,12 @@ func registerLoreTools(s *server.MCPServer, db *sql.DB) {
 		mcp.NewTool("get_lore_topics",
 			mcp.WithDescription("Returns a list of all lore topics with their ID, name, status, and subforum ID."),
 		),
-		&genai.FunctionDeclaration{
+		ToolDefinition{
 			Name:        "get_lore_topics",
 			Description: "Returns a list of all lore topics with their ID, name, status, and subforum ID.",
-		},
-		func(ctx context.Context, args map[string]any) (string, error) {
-			return executGetLoreTopics(ctx, db)
+			Execute: func(ctx context.Context, args map[string]any) (string, error) {
+				return executGetLoreTopics(ctx, db)
+			},
 		},
 	)
 }

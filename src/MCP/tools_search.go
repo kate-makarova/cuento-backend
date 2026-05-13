@@ -10,7 +10,6 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"google.golang.org/genai"
 )
 
 type bucketSearchResult struct {
@@ -25,13 +24,13 @@ func registerSearchTools(s *server.MCPServer, db *sql.DB) {
 		mcp.NewTool("get_search_buckets",
 			mcp.WithDescription("Returns the list of available search buckets that can be used with search_content."),
 		),
-		&genai.FunctionDeclaration{
+		ToolDefinition{
 			Name:        "get_search_buckets",
 			Description: "Returns the list of available search buckets that can be used with search_content.",
-		},
-		func(ctx context.Context, args map[string]any) (string, error) {
-			data, _ := json.Marshal(Services.AllSonicBuckets)
-			return string(data), nil
+			Execute: func(ctx context.Context, args map[string]any) (string, error) {
+				data, _ := json.Marshal(Services.AllSonicBuckets)
+				return string(data), nil
+			},
 		},
 	)
 
@@ -62,13 +61,13 @@ func registerSearchTools(s *server.MCPServer, db *sql.DB) {
 				mcp.Description("Max results per bucket. Default 10, max 100."),
 			),
 		),
-		&genai.FunctionDeclaration{
+		ToolDefinition{
 			Name: "search_content",
 			Description: "Search forum content using a keyword or phrase. " +
 				"Results are filtered by the user's subforum visibility permissions. " + bucketsDesc,
-			Parameters: schemaObject(
+			Schema: schemaObject(
 				[]string{"user_id", "query"},
-				map[string]*genai.Schema{
+				map[string]*ToolProp{
 					"user_id":     schemaInteger("The ID of the current user. Used to apply subforum visibility permissions."),
 					"query":       schemaString("The keyword or phrase to search for."),
 					"buckets":     schemaStringArray("Which buckets to search. Omit to search all. " + bucketsDesc),
@@ -77,9 +76,9 @@ func registerSearchTools(s *server.MCPServer, db *sql.DB) {
 					"limit":       schemaInteger("Max results per bucket. Default 10, max 100."),
 				},
 			),
-		},
-		func(ctx context.Context, args map[string]any) (string, error) {
-			return executeSearchContent(ctx, args, db)
+			Execute: func(ctx context.Context, args map[string]any) (string, error) {
+				return executeSearchContent(ctx, args, db)
+			},
 		},
 	)
 }

@@ -75,6 +75,25 @@ func ListAvailableModels(db *sql.DB) ([]string, error) {
 	}
 }
 
+// openAIBaseURLs maps provider names to their base URLs.
+// Empty string means use the default OpenAI endpoint.
+var openAIBaseURLs = map[string]string{
+	"openai":   "",
+	"deepseek": "https://api.deepseek.com/v1",
+	"groq":     "https://api.groq.com/openai/v1",
+	"mistral":  "https://api.mistral.ai/v1",
+}
+
+// defaultModels maps provider names to sensible default model names.
+var defaultModels = map[string]string{
+	"gemini":   "gemini-2.0-flash",
+	"claude":   "claude-3-5-sonnet-20241022",
+	"openai":   "gpt-4o",
+	"deepseek": "deepseek-chat",
+	"groq":     "llama-3.3-70b-versatile",
+	"mistral":  "mistral-large-latest",
+}
+
 func buildAgent(db *sql.DB) (*AIAgent, error) {
 	apiKey, err := Services.GetGlobalSetting("ai_api_key", db)
 	if err != nil || apiKey == "" {
@@ -88,7 +107,11 @@ func buildAgent(db *sql.DB) (*AIAgent, error) {
 
 	aiModel, err := Services.GetGlobalSetting("ai_model", db)
 	if err != nil || aiModel == "" {
-		aiModel = "gemini-2.0-flash"
+		if def, ok := defaultModels[aiName]; ok {
+			aiModel = def
+		} else {
+			aiModel = "gemini-2.0-flash"
+		}
 	}
 
 	switch aiName {
@@ -98,7 +121,23 @@ func buildAgent(db *sql.DB) (*AIAgent, error) {
 			return nil, fmt.Errorf("failed to create Gemini client: %w", err)
 		}
 		return NewAIAgent(client), nil
+
+	case "claude":
+		client, err := NewClaudeClient(apiKey, aiModel)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Claude client: %w", err)
+		}
+		return NewAIAgent(client), nil
+
+	case "openai", "deepseek", "groq", "mistral":
+		baseURL := openAIBaseURLs[aiName]
+		client, err := NewOpenAICompatClient(apiKey, aiModel, baseURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create %s client: %w", aiName, err)
+		}
+		return NewAIAgent(client), nil
+
 	default:
-		return nil, fmt.Errorf("unknown ai_name: %s", aiName)
+		return nil, fmt.Errorf("unknown ai_name: %s (supported: gemini, claude, openai, deepseek, groq, mistral)", aiName)
 	}
 }
