@@ -76,7 +76,8 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 
 	systemInstruction := fmt.Sprintf(
 		"The current user's ID is %d. Use this when calling tools that require a user_id. "+
-			"Never include post IDs, topic IDs, or any other technical identifiers in your response text.",
+			"Never include post IDs, topic IDs, or any other technical identifiers in your response text. "+
+			"Always respond in the same language the user wrote their message in.",
 		userID,
 	)
 
@@ -86,6 +87,8 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 		code := http.StatusInternalServerError
 		if strings.Contains(err.Error(), "high demand") || strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "overloaded") {
 			code = http.StatusServiceUnavailable
+		} else if strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "quota") {
+			code = http.StatusTooManyRequests
 		}
 		_ = c.Error(&Middlewares.AppError{Code: code, Message: "AI error: " + err.Error()})
 		c.Abort()
