@@ -7,8 +7,10 @@ import (
 	"cuento-backend/src/Services"
 	"cuento-backend/src/Websockets"
 	"database/sql"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -61,6 +63,14 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 	defer rows.Close()
 
 	var history []ChatMessage
+	history = append(history, ChatMessage{
+		Role:    "user",
+		Content: fmt.Sprintf("[system] The current user's ID is %d. Use this when calling tools that require a user_id.", userID),
+	})
+	history = append(history, ChatMessage{
+		Role:    "assistant",
+		Content: "Understood.",
+	})
 	for rows.Next() {
 		var msg ChatMessage
 		if err := rows.Scan(&msg.Role, &msg.Content); err != nil {
@@ -72,7 +82,11 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 	// Call AI
 	reply, err := activeAgent.Chat(context.Background(), history)
 	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "AI error: " + err.Error()})
+		code := http.StatusInternalServerError
+		if strings.Contains(err.Error(), "high demand") || strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "overloaded") {
+			code = http.StatusServiceUnavailable
+		}
+		_ = c.Error(&Middlewares.AppError{Code: code, Message: "AI error: " + err.Error()})
 		c.Abort()
 		return
 	}
@@ -102,6 +116,16 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
 
+func GetAvailableModels(c *gin.Context, db *sql.DB) {
+	models, err := ListAvailableModels(db)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch models: " + err.Error()})
+		c.Abort()
+		return
+	}
+	c.JSON(http.StatusOK, models)
+}
+
 func GetAIChatHistory(c *gin.Context, db *sql.DB) {
 	userID := Services.GetUserIdFromContext(c)
 	if userID == 0 {
@@ -118,7 +142,7 @@ func GetAIChatHistory(c *gin.Context, db *sql.DB) {
 	}
 
 	rows, err := db.Query(
-		"SELECT id, user_id, role, content, date_created FROM ai_chat_messages WHERE user_id = ? ORDER BY date_created DESC LIMIT ?",
+		"SELECT id, user_id, role, content, date_created FROM ai_chat_messages WHERE user_id = ? ORDER BY date_created ASC LIMIT ?",
 		userID, limit,
 	)
 	if err != nil {

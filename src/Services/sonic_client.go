@@ -130,6 +130,167 @@ func SonicPushFlattenedEntity(bucket, entityName string, id int64, db *sql.DB) e
 	return SonicPush(SonicCollection, bucket, strconv.FormatInt(entityID, 10), doc, sonic.LangAutoDetect)
 }
 
+// AllSonicBuckets lists every known bucket in a defined order.
+var AllSonicBuckets = []string{
+	SonicBucketGamePosts,
+	SonicBucketGeneralPosts,
+	SonicBucketLorePosts,
+	SonicBucketCharacters,
+	SonicBucketWantedPosts,
+	SonicBucketEpisodes,
+}
+
+// EntityBuckets maps bucket name to entity base-table prefix for flattened buckets.
+var EntityBuckets = map[string]string{
+	SonicBucketCharacters:  "character",
+	SonicBucketWantedPosts: "wanted_character",
+	SonicBucketEpisodes:    "episode",
+}
+
+// SearchResultItem is returned by SearchInBucket.
+type SearchResultItem struct {
+	ID      string `json:"id"`
+	Content string `json:"content"`
+	TopicID *int64 `json:"topic_id,omitempty"`
+}
+
+// SearchInBucket queries Sonic for query in the given bucket, then fetches full content
+// from the database. Results are filtered to visibleSubforums; filterSubforum and
+// filterTopicType (0 = no filter) are applied as additional constraints.
+func SearchInBucket(bucket, query string, limit, filterSubforum, filterTopicType int, visibleSubforums map[int]bool, db *sql.DB) ([]SearchResultItem, error) {
+	sonicIDs, err := SonicQuery(SonicCollection, bucket, query, limit, 0, sonic.LangAutoDetect)
+	if err != nil || len(sonicIDs) == 0 {
+		return nil, nil
+	}
+
+	placeholders := strings.Repeat("?,", len(sonicIDs)-1) + "?"
+	args := make([]interface{}, len(sonicIDs))
+	for i, id := range sonicIDs {
+		args[i] = id
+	}
+
+	// --- permission + filter query ---
+	var metaQuery string
+	switch bucket {
+	case SonicBucketGamePosts, SonicBucketGeneralPosts, SonicBucketLorePosts:
+		metaQuery = fmt.Sprintf(`SELECT p.id, t.subforum_id, t.type FROM posts p JOIN topics t ON p.topic_id = t.id WHERE p.id IN (%s)`, placeholders)
+	case SonicBucketCharacters:
+		metaQuery = fmt.Sprintf(`SELECT cb.id, t.subforum_id, t.type FROM character_base cb JOIN topics t ON cb.topic_id = t.id WHERE cb.id IN (%s)`, placeholders)
+	case SonicBucketWantedPosts:
+		metaQuery = fmt.Sprintf(`SELECT wc.id, t.subforum_id, t.type FROM wanted_character_base wc JOIN topics t ON wc.topic_id = t.id WHERE wc.id IN (%s)`, placeholders)
+	case SonicBucketEpisodes:
+		metaQuery = fmt.Sprintf(`SELECT eb.id, t.subforum_id, t.type FROM episode_base eb JOIN topics t ON eb.topic_id = t.id WHERE eb.id IN (%s)`, placeholders)
+	default:
+		return nil, fmt.Errorf("unknown bucket: %s", bucket)
+	}
+
+	metaRows, err := db.Query(metaQuery, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer metaRows.Close()
+
+	allowedIDs := make(map[string]bool)
+	for metaRows.Next() {
+		var rawID int64
+		var subforumID, topicType int
+		if err := metaRows.Scan(&rawID, &subforumID, &topicType); err != nil {
+			continue
+		}
+		if !visibleSubforums[subforumID] {
+			continue
+		}
+		if filterSubforum != 0 && subforumID != filterSubforum {
+			continue
+		}
+		if filterTopicType != 0 && topicType != filterTopicType {
+			continue
+		}
+		allowedIDs[strconv.FormatInt(rawID, 10)] = true
+	}
+
+	if len(allowedIDs) == 0 {
+		return nil, nil
+	}
+
+	// Rebuild args from allowed IDs only
+	filtered := make([]string, 0, len(allowedIDs))
+	for _, id := range sonicIDs { // preserve Sonic ranking order
+		if allowedIDs[id] {
+			filtered = append(filtered, id)
+		}
+	}
+
+	// --- content fetch ---
+	filteredPlaceholders := strings.Repeat("?,", len(filtered)-1) + "?"
+	filteredArgs := make([]interface{}, len(filtered))
+	for i, id := range filtered {
+		filteredArgs[i] = id
+	}
+
+	switch bucket {
+	case SonicBucketGamePosts, SonicBucketGeneralPosts, SonicBucketLorePosts:
+		rows, err := db.Query(fmt.Sprintf(`SELECT id, content, topic_id FROM posts WHERE id IN (%s)`, filteredPlaceholders), filteredArgs...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		contentMap := make(map[string]SearchResultItem, len(filtered))
+		for rows.Next() {
+			var id, topicID int64
+			var content string
+			if err := rows.Scan(&id, &content, &topicID); err != nil {
+				continue
+			}
+			sid := strconv.FormatInt(id, 10)
+			contentMap[sid] = SearchResultItem{ID: sid, Content: content, TopicID: &topicID}
+		}
+
+		results := make([]SearchResultItem, 0, len(filtered))
+		for _, id := range filtered {
+			if item, ok := contentMap[id]; ok {
+				results = append(results, item)
+			}
+		}
+		return results, nil
+
+	default:
+		entityName := EntityBuckets[bucket]
+		rows, err := db.Query(
+			fmt.Sprintf(`SELECT b.*, f.* FROM %s_base b LEFT JOIN %s_flattened f ON b.id = f.entity_id WHERE b.id IN (%s)`, entityName, entityName, filteredPlaceholders),
+			filteredArgs...,
+		)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		cols, err := rows.Columns()
+		if err != nil {
+			return nil, err
+		}
+
+		contentMap := make(map[string]SearchResultItem, len(filtered))
+		for rows.Next() {
+			id, doc, err := scanFlattenedRowForSonic(rows, cols)
+			if err != nil {
+				continue
+			}
+			sid := strconv.FormatInt(id, 10)
+			contentMap[sid] = SearchResultItem{ID: sid, Content: doc}
+		}
+
+		results := make([]SearchResultItem, 0, len(filtered))
+		for _, id := range filtered {
+			if item, ok := contentMap[id]; ok {
+				results = append(results, item)
+			}
+		}
+		return results, nil
+	}
+}
+
 func scanFlattenedRowForSonic(rows *sql.Rows, cols []string) (int64, string, error) {
 	vals := make([]interface{}, len(cols))
 	ptrs := make([]interface{}, len(cols))

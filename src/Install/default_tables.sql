@@ -122,6 +122,9 @@ VALUES ('ai_api_key', '');
 INSERT INTO global_settings (setting_name, setting_value)
 VALUES ('ai_name', '');
 
+INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('ai_model', '');
+
 CREATE TABLE categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NULL,

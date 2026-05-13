@@ -734,6 +734,9 @@ func main() {
 	protectedRouter.GET("/ai-chat/history", "Get AI chat history for the current user", func(c *gin.Context) {
 		MCP.GetAIChatHistory(c, Services.DB)
 	})
+	protectedRouter.GET("/ai-chat/models", "Get available AI models for the configured provider", func(c *gin.Context) {
+		MCP.GetAvailableModels(c, Services.DB)
+	})
 
 	// WebSocket route with special authentication
 	wsGroup := r.Group("/")
