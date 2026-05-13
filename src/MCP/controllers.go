@@ -63,14 +63,6 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 	defer rows.Close()
 
 	var history []ChatMessage
-	history = append(history, ChatMessage{
-		Role:    "user",
-		Content: fmt.Sprintf("[system] The current user's ID is %d. Use this when calling tools that require a user_id.", userID),
-	})
-	history = append(history, ChatMessage{
-		Role:    "assistant",
-		Content: "Understood.",
-	})
 	for rows.Next() {
 		var msg ChatMessage
 		if err := rows.Scan(&msg.Role, &msg.Content); err != nil {
@@ -79,8 +71,10 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 		history = append(history, msg)
 	}
 
+	systemInstruction := fmt.Sprintf("The current user's ID is %d. Use this when calling tools that require a user_id.", userID)
+
 	// Call AI
-	reply, err := activeAgent.Chat(context.Background(), history)
+	reply, err := activeAgent.Chat(context.Background(), history, systemInstruction)
 	if err != nil {
 		code := http.StatusInternalServerError
 		if strings.Contains(err.Error(), "high demand") || strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "overloaded") {
