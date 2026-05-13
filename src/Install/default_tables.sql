@@ -814,6 +814,7 @@ create table ai_chat_messages
     user_id      int                      not null,
     role         enum('user', 'assistant') not null,
     content      text                     not null,
+    sources      json                     null,
     date_created datetime                 not null default current_timestamp,
     constraint fk_ai_chat_messages_user foreign key (user_id) references users (id) on delete cascade
 );

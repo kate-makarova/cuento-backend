@@ -2,7 +2,9 @@ package MCP
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"google.golang.org/genai"
 )
@@ -22,7 +24,7 @@ func NewGeminiClient(apiKey string, model string) (*GeminiClient, error) {
 	return &GeminiClient{client: client, model: model}, nil
 }
 
-func (g *GeminiClient) Chat(ctx context.Context, history []ChatMessage, systemInstruction string) (string, error) {
+func (g *GeminiClient) Chat(ctx context.Context, history []ChatMessage, systemInstruction string) (string, []ChatSource, error) {
 	contents := make([]*genai.Content, len(history))
 	for i, msg := range history {
 		role := msg.Role
@@ -44,24 +46,24 @@ func (g *GeminiClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 		}
 	}
 
-	// Tool-calling loop: keep going until Gemini returns a text response
+	var collectedSources []ChatSource
+
 	const maxRounds = 10
 	for round := 0; round < maxRounds; round++ {
 		result, err := g.client.Models.GenerateContent(ctx, g.model, contents, cfg)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		if len(result.Candidates) == 0 {
-			return "", fmt.Errorf("empty response from Gemini (no candidates)")
+			return "", nil, fmt.Errorf("empty response from Gemini (no candidates)")
 		}
 
 		candidate := result.Candidates[0]
 		if candidate.Content == nil {
-			return "", fmt.Errorf("empty response from Gemini (finish_reason=%v)", candidate.FinishReason)
+			return "", nil, fmt.Errorf("empty response from Gemini (finish_reason=%v)", candidate.FinishReason)
 		}
 
-		// Check if this turn has any function calls
 		var functionCalls []*genai.Part
 		var textParts []*genai.Part
 		for _, part := range candidate.Content.Parts {
@@ -72,18 +74,15 @@ func (g *GeminiClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 			}
 		}
 
-		// No function calls — return the text response
 		if len(functionCalls) == 0 {
 			if len(textParts) > 0 {
-				return textParts[0].Text, nil
+				return textParts[0].Text, collectedSources, nil
 			}
-			return "", fmt.Errorf("empty response from Gemini (finish_reason=%v)", candidate.FinishReason)
+			return "", nil, fmt.Errorf("empty response from Gemini (finish_reason=%v)", candidate.FinishReason)
 		}
 
-		// Append model's function call turn to contents
 		contents = append(contents, candidate.Content)
 
-		// Execute each function call and collect responses
 		responseParts := make([]*genai.Part, 0, len(functionCalls))
 		for _, part := range functionCalls {
 			fc := part.FunctionCall
@@ -101,18 +100,61 @@ func (g *GeminiClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 					"error": err.Error(),
 				}))
 			} else {
+				collectedSources = append(collectedSources, extractSources(fc.Name, output)...)
 				responseParts = append(responseParts, genai.NewPartFromFunctionResponse(fc.Name, map[string]any{
 					"result": output,
 				}))
 			}
 		}
 
-		// Append tool results as a user turn
 		contents = append(contents, &genai.Content{
 			Role:  "user",
 			Parts: responseParts,
 		})
 	}
 
-	return "", fmt.Errorf("exceeded maximum tool call rounds")
+	return "", nil, fmt.Errorf("exceeded maximum tool call rounds")
+}
+
+// extractSources parses tool output JSON and collects post/topic ID pairs.
+func extractSources(toolName, output string) []ChatSource {
+	switch toolName {
+	case "search_content":
+		var buckets []struct {
+			Results []struct {
+				ID        string `json:"id"`
+				TopicID   *int64 `json:"topic_id"`
+				TopicName string `json:"topic_name"`
+				TopicType *int   `json:"topic_type"`
+			} `json:"results"`
+		}
+		if json.Unmarshal([]byte(output), &buckets) == nil {
+			var sources []ChatSource
+			for _, b := range buckets {
+				for _, r := range b.Results {
+					s := ChatSource{TopicID: r.TopicID, TopicName: r.TopicName, TopicType: r.TopicType}
+					if id, err := strconv.ParseInt(r.ID, 10, 64); err == nil {
+						s.PostID = &id
+					}
+					sources = append(sources, s)
+				}
+			}
+			return sources
+		}
+	case "get_lore_topics":
+		var topics []struct {
+			ID   int64  `json:"id"`
+			Name string `json:"name"`
+		}
+		if json.Unmarshal([]byte(output), &topics) == nil {
+			var sources []ChatSource
+			for _, t := range topics {
+				id := t.ID
+				topicType := 4 // LoreTopic
+				sources = append(sources, ChatSource{TopicID: &id, TopicName: t.Name, TopicType: &topicType})
+			}
+			return sources
+		}
+	}
+	return nil
 }

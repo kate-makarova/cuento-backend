@@ -149,9 +149,11 @@ var EntityBuckets = map[string]string{
 
 // SearchResultItem is returned by SearchInBucket.
 type SearchResultItem struct {
-	ID      string `json:"id"`
-	Content string `json:"content"`
-	TopicID *int64 `json:"topic_id,omitempty"`
+	ID        string `json:"id"`
+	Content   string `json:"content"`
+	TopicID   *int64 `json:"topic_id,omitempty"`
+	TopicName string `json:"topic_name,omitempty"`
+	TopicType *int   `json:"topic_type,omitempty"`
 }
 
 // SearchInBucket queries Sonic for query in the given bucket, then fetches full content
@@ -230,7 +232,10 @@ func SearchInBucket(bucket, query string, limit, filterSubforum, filterTopicType
 
 	switch bucket {
 	case SonicBucketGamePosts, SonicBucketGeneralPosts, SonicBucketLorePosts:
-		rows, err := db.Query(fmt.Sprintf(`SELECT id, content, topic_id FROM posts WHERE id IN (%s)`, filteredPlaceholders), filteredArgs...)
+		rows, err := db.Query(fmt.Sprintf(
+			`SELECT p.id, p.content, p.topic_id, t.name, t.type
+			 FROM posts p JOIN topics t ON p.topic_id = t.id
+			 WHERE p.id IN (%s)`, filteredPlaceholders), filteredArgs...)
 		if err != nil {
 			return nil, err
 		}
@@ -239,12 +244,19 @@ func SearchInBucket(bucket, query string, limit, filterSubforum, filterTopicType
 		contentMap := make(map[string]SearchResultItem, len(filtered))
 		for rows.Next() {
 			var id, topicID int64
-			var content string
-			if err := rows.Scan(&id, &content, &topicID); err != nil {
+			var content, topicName string
+			var topicType int
+			if err := rows.Scan(&id, &content, &topicID, &topicName, &topicType); err != nil {
 				continue
 			}
 			sid := strconv.FormatInt(id, 10)
-			contentMap[sid] = SearchResultItem{ID: sid, Content: content, TopicID: &topicID}
+			contentMap[sid] = SearchResultItem{
+				ID:        sid,
+				Content:   extractMatchingParagraphs(content, query),
+				TopicID:   &topicID,
+				TopicName: topicName,
+				TopicType: &topicType,
+			}
 		}
 
 		results := make([]SearchResultItem, 0, len(filtered))
@@ -258,7 +270,11 @@ func SearchInBucket(bucket, query string, limit, filterSubforum, filterTopicType
 	default:
 		entityName := EntityBuckets[bucket]
 		rows, err := db.Query(
-			fmt.Sprintf(`SELECT b.*, f.* FROM %s_base b LEFT JOIN %s_flattened f ON b.id = f.entity_id WHERE b.id IN (%s)`, entityName, entityName, filteredPlaceholders),
+			fmt.Sprintf(`SELECT b.*, f.*, t.name AS _topic_name, t.type AS _topic_type
+			 FROM %s_base b
+			 LEFT JOIN %s_flattened f ON b.id = f.entity_id
+			 JOIN topics t ON b.topic_id = t.id
+			 WHERE b.id IN (%s)`, entityName, entityName, filteredPlaceholders),
 			filteredArgs...,
 		)
 		if err != nil {
@@ -273,12 +289,18 @@ func SearchInBucket(bucket, query string, limit, filterSubforum, filterTopicType
 
 		contentMap := make(map[string]SearchResultItem, len(filtered))
 		for rows.Next() {
-			id, doc, err := scanFlattenedRowForSonic(rows, cols)
+			id, topicID, topicName, topicType, doc, err := scanFlattenedRowWithTopicID(rows, cols)
 			if err != nil {
 				continue
 			}
 			sid := strconv.FormatInt(id, 10)
-			contentMap[sid] = SearchResultItem{ID: sid, Content: doc}
+			contentMap[sid] = SearchResultItem{
+				ID:        sid,
+				Content:   extractMatchingParagraphs(doc, query),
+				TopicID:   &topicID,
+				TopicName: topicName,
+				TopicType: &topicType,
+			}
 		}
 
 		results := make([]SearchResultItem, 0, len(filtered))
@@ -289,6 +311,90 @@ func SearchInBucket(bucket, query string, limit, filterSubforum, filterTopicType
 		}
 		return results, nil
 	}
+}
+
+// extractMatchingParagraphs returns the paragraphs from text that contain the query term.
+// Paragraphs are split on blank lines or single newlines. If no paragraph matches
+// (e.g. Sonic used stemming/fuzzy matching), the first paragraph is returned as fallback.
+func extractMatchingParagraphs(text, query string) string {
+	paragraphs := strings.Split(text, "\n")
+	lowerQuery := strings.ToLower(query)
+
+	var matched []string
+	for _, p := range paragraphs {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if strings.Contains(strings.ToLower(p), lowerQuery) {
+			matched = append(matched, p)
+		}
+	}
+
+	if len(matched) > 0 {
+		return strings.Join(matched, "\n")
+	}
+
+	// Fallback: first non-empty paragraph
+	for _, p := range paragraphs {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			return p
+		}
+	}
+	return text
+}
+
+func scanFlattenedRowWithTopicID(rows *sql.Rows, cols []string) (id int64, topicID int64, topicName string, topicType int, doc string, err error) {
+	vals := make([]interface{}, len(cols))
+	ptrs := make([]interface{}, len(cols))
+	for i := range vals {
+		ptrs[i] = &vals[i]
+	}
+	if err = rows.Scan(ptrs...); err != nil {
+		return
+	}
+
+	var parts []string
+	for i, col := range cols {
+		raw := vals[i]
+		if raw == nil {
+			continue
+		}
+		var s string
+		switch v := raw.(type) {
+		case []byte:
+			s = string(v)
+		case string:
+			s = v
+		case int64:
+			s = strconv.FormatInt(v, 10)
+		default:
+			s = fmt.Sprintf("%v", v)
+		}
+		switch col {
+		case "id":
+			if id == 0 {
+				id, _ = strconv.ParseInt(s, 10, 64)
+			}
+		case "topic_id":
+			topicID, _ = strconv.ParseInt(s, 10, 64)
+		case "entity_id", "_topic_name", "_topic_type":
+			if col == "_topic_name" {
+				topicName = s
+			} else if col == "_topic_type" {
+				t, _ := strconv.Atoi(s)
+				topicType = t
+			}
+		default:
+			s = strings.TrimSpace(s)
+			if s != "" {
+				parts = append(parts, s)
+			}
+		}
+	}
+	doc = strings.Join(parts, " ")
+	return
 }
 
 func scanFlattenedRowForSonic(rows *sql.Rows, cols []string) (int64, string, error) {

@@ -7,6 +7,7 @@ import (
 	"cuento-backend/src/Services"
 	"cuento-backend/src/Websockets"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -50,9 +51,11 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	// Load history for context (chronological order)
+	// Load last 20 messages for context (chronological order)
 	rows, err := db.Query(
-		"SELECT role, content FROM ai_chat_messages WHERE user_id = ? ORDER BY date_created ASC",
+		`SELECT role, content FROM (
+			SELECT role, content, date_created FROM ai_chat_messages WHERE user_id = ? ORDER BY date_created DESC LIMIT 20
+		) sub ORDER BY date_created ASC`,
 		userID,
 	)
 	if err != nil {
@@ -71,10 +74,14 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 		history = append(history, msg)
 	}
 
-	systemInstruction := fmt.Sprintf("The current user's ID is %d. Use this when calling tools that require a user_id.", userID)
+	systemInstruction := fmt.Sprintf(
+		"The current user's ID is %d. Use this when calling tools that require a user_id. "+
+			"Never include post IDs, topic IDs, or any other technical identifiers in your response text.",
+		userID,
+	)
 
 	// Call AI
-	reply, err := activeAgent.Chat(context.Background(), history, systemInstruction)
+	replyText, sources, err := activeAgent.Chat(context.Background(), history, systemInstruction)
 	if err != nil {
 		code := http.StatusInternalServerError
 		if strings.Contains(err.Error(), "high demand") || strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "overloaded") {
@@ -85,14 +92,26 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	// Serialize sources for storage
+	var sourcesJSON []byte
+	if len(sources) > 0 {
+		sourcesJSON, _ = json.Marshal(sources)
+	}
+
 	// Save assistant reply
 	var replyID int64
 	res, err := db.Exec(
-		"INSERT INTO ai_chat_messages (user_id, role, content, date_created) VALUES (?, 'assistant', ?, NOW())",
-		userID, reply,
+		"INSERT INTO ai_chat_messages (user_id, role, content, sources, date_created) VALUES (?, 'assistant', ?, ?, NOW())",
+		userID, replyText, sourcesJSON,
 	)
 	if err == nil {
 		replyID, _ = res.LastInsertId()
+	}
+
+	// Convert to entity sources for the response
+	entitySources := make([]Entities.AISource, len(sources))
+	for i, s := range sources {
+		entitySources[i] = Entities.AISource{PostID: s.PostID, TopicID: s.TopicID, TopicName: s.TopicName, TopicType: s.TopicType}
 	}
 
 	// Push reply to user over WebSocket
@@ -102,7 +121,8 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 			Id:          int(replyID),
 			UserId:      userID,
 			Role:        "assistant",
-			Content:     reply,
+			Content:     replyText,
+			Sources:     entitySources,
 			DateCreated: time.Now(),
 		},
 	})
@@ -136,7 +156,7 @@ func GetAIChatHistory(c *gin.Context, db *sql.DB) {
 	}
 
 	rows, err := db.Query(
-		"SELECT id, user_id, role, content, date_created FROM ai_chat_messages WHERE user_id = ? ORDER BY date_created ASC LIMIT ?",
+		"SELECT id, user_id, role, content, sources, date_created FROM ai_chat_messages WHERE user_id = ? ORDER BY date_created ASC LIMIT ?",
 		userID, limit,
 	)
 	if err != nil {
@@ -149,8 +169,12 @@ func GetAIChatHistory(c *gin.Context, db *sql.DB) {
 	messages := make([]Entities.AIChatMessage, 0)
 	for rows.Next() {
 		var msg Entities.AIChatMessage
-		if err := rows.Scan(&msg.Id, &msg.UserId, &msg.Role, &msg.Content, &msg.DateCreated); err != nil {
+		var sourcesRaw []byte
+		if err := rows.Scan(&msg.Id, &msg.UserId, &msg.Role, &msg.Content, &sourcesRaw, &msg.DateCreated); err != nil {
 			continue
+		}
+		if len(sourcesRaw) > 0 {
+			_ = json.Unmarshal(sourcesRaw, &msg.Sources) // []Entities.AISource
 		}
 		messages = append(messages, msg)
 	}
