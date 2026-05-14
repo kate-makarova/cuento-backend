@@ -332,6 +332,58 @@ func RegisterPostEventHandlers() {
 		}
 	})
 
+	// Subscriber: Decrement stats on post deleted
+	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.PostCreatedEvent)
+		if !ok || event.Type != "post_deleted" {
+			return
+		}
+
+		// 1. Determine topic type.
+		var topicType Entities.TopicType
+		if err := db.QueryRow("SELECT type FROM topics WHERE id = ?", event.TopicID).Scan(&topicType); err != nil {
+			fmt.Printf("Error fetching topic type on post delete: %v\n", err)
+			return
+		}
+
+		// 2. Decrement global stats.
+		_, _ = db.Exec("UPDATE global_stats SET stat_value = GREATEST(stat_value - 1, 0) WHERE stat_name = 'total_post_number'")
+		if topicType == Entities.EpisodeTopic {
+			_, _ = db.Exec("UPDATE global_stats SET stat_value = GREATEST(stat_value - 1, 0) WHERE stat_name = 'total_episode_post_number'")
+		}
+
+		// 3. Recalculate topic stats (post count + last post).
+		_, _ = db.Exec(`
+			UPDATE topics SET
+				post_number            = (SELECT COUNT(*) FROM posts WHERE topic_id = ? AND COALESCE(is_deleted, 0) != 1),
+				date_last_post         = (SELECT MAX(date_created) FROM posts WHERE topic_id = ? AND COALESCE(is_deleted, 0) != 1),
+				last_post_author_user_id = (SELECT author_user_id FROM posts WHERE topic_id = ? AND COALESCE(is_deleted, 0) != 1 ORDER BY date_created DESC LIMIT 1)
+			WHERE id = ?`,
+			event.TopicID, event.TopicID, event.TopicID, event.TopicID)
+
+		// 4. Recalculate subforum stats (post count + last post).
+		refreshSubforumStats(db, event.SubforumID)
+
+		// 5. Decrement author's post count.
+		if topicType == Entities.EpisodeTopic {
+			_, _ = db.Exec("UPDATE users SET total_posts = GREATEST(total_posts - 1, 0) WHERE id = ?", event.Post.AuthorUserId)
+		} else {
+			_, _ = db.Exec("UPDATE users SET total_general_posts = GREATEST(total_general_posts - 1, 0) WHERE id = ?", event.Post.AuthorUserId)
+		}
+
+		// 6. Decrement character post count (episode posts only).
+		if topicType == Entities.EpisodeTopic {
+			var characterID int64
+			err := db.QueryRow(`
+				SELECT cpb.character_id FROM posts p
+				JOIN character_profile_base cpb ON cpb.id = p.character_profile_id
+				WHERE p.id = ?`, event.Post.Id).Scan(&characterID)
+			if err == nil && characterID > 0 {
+				_, _ = db.Exec("UPDATE character_base SET total_posts = GREATEST(total_posts - 1, 0) WHERE id = ?", characterID)
+			}
+		}
+	})
+
 	// Subscriber: Award currency for episode post
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
