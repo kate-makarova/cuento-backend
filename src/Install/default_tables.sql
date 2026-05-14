@@ -824,6 +824,7 @@ create table ai_task_queue
     id             int                                        not null auto_increment primary key,
     user_id        int                                        not null,
     status         enum('pending', 'processing', 'done', 'failed') not null default 'pending',
+    retries        int                                        not null default 0,
     error          text                                       null,
     date_created   datetime                                   not null default current_timestamp,
     date_started   datetime                                   null,

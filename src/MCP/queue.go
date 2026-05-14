@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 )
@@ -122,12 +123,29 @@ func executeTask(db *sql.DB, taskID, userID int) {
 		userID,
 	)
 
-	replyText, sources, err := activeAgent.Chat(ctx, history, systemInstruction)
-	if err != nil {
-		markFailed(db, taskID, userID, err.Error())
-		pushError(userID, err.Error())
-		notifyQueuePositions(db, taskID)
-		return
+	const maxRetries = 4
+	var replyText string
+	var sources []ChatSource
+	var lastErr error
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		replyText, sources, lastErr = activeAgent.Chat(ctx, history, systemInstruction)
+		if lastErr == nil {
+			break
+		}
+
+		is429 := strings.Contains(lastErr.Error(), "429") || strings.Contains(lastErr.Error(), "quota")
+		if !is429 || attempt == maxRetries {
+			markFailed(db, taskID, userID, lastErr.Error())
+			pushError(userID, lastErr.Error())
+			notifyQueuePositions(db, taskID)
+			return
+		}
+
+		// Rate-limited: record the retry and pause before the next attempt.
+		_, _ = db.Exec(`UPDATE ai_task_queue SET retries = retries + 1 WHERE id = ?`, taskID)
+		log.Printf("AI queue: task %d rate-limited (attempt %d/%d), retrying in 30s", taskID, attempt+1, maxRetries)
+		time.Sleep(30 * time.Second)
 	}
 
 	// Serialize sources.
