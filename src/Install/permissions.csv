@@ -169,6 +169,7 @@ role_id,type,permission
 3,0,/ai-chat/message
 3,0,/ai-chat/history
 3,0,/ai-chat/models
+3,0,/ai-chat/clear
 3,0,/admin/design-draft/list
 3,0,/admin/design-draft/get/:id
 3,0,/admin/design-draft/create

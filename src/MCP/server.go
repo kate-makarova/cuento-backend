@@ -39,6 +39,8 @@ func StartMCPServer(db *sql.DB, addr string) error {
 	registerLoreTools(s, db)
 	registerSearchTools(s, db)
 
+	StartQueueWorker(db)
+
 	httpServer := server.NewStreamableHTTPServer(s)
 	fmt.Printf("MCP server listening on %s/mcp\n", addr)
 	return httpServer.Start(addr)

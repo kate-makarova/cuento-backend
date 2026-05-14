@@ -1,18 +1,13 @@
 package MCP
 
 import (
-	"context"
 	"cuento-backend/src/Entities"
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
-	"cuento-backend/src/Websockets"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -51,86 +46,32 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	// Load last 20 messages for context (chronological order)
-	rows, err := db.Query(
-		`SELECT role, content FROM (
-			SELECT role, content, date_created FROM ai_chat_messages WHERE user_id = ? ORDER BY date_created DESC LIMIT 20
-		) sub ORDER BY date_created ASC`,
-		userID,
-	)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to load history"})
-		c.Abort()
-		return
-	}
-	defer rows.Close()
-
-	var history []ChatMessage
-	for rows.Next() {
-		var msg ChatMessage
-		if err := rows.Scan(&msg.Role, &msg.Content); err != nil {
-			continue
-		}
-		history = append(history, msg)
-	}
-
-	systemInstruction := fmt.Sprintf(
-		"The current user's ID is %d. Use this when calling tools that require a user_id. "+
-			"Never include post IDs, topic IDs, or any other technical identifiers in your response text. "+
-			"Always respond in the same language the user wrote their message in.",
-		userID,
-	)
-
-	// Call AI
-	replyText, sources, err := activeAgent.Chat(context.Background(), history, systemInstruction)
-	if err != nil {
-		code := http.StatusInternalServerError
-		if strings.Contains(err.Error(), "high demand") || strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "overloaded") {
-			code = http.StatusServiceUnavailable
-		} else if strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "quota") {
-			code = http.StatusTooManyRequests
-		}
-		_ = c.Error(&Middlewares.AppError{Code: code, Message: "AI error: " + err.Error()})
-		c.Abort()
-		return
-	}
-
-	// Serialize sources for storage
-	var sourcesJSON []byte
-	if len(sources) > 0 {
-		sourcesJSON, _ = json.Marshal(sources)
-	}
-
-	// Save assistant reply
-	var replyID int64
+	// Enqueue AI task
 	res, err := db.Exec(
-		"INSERT INTO ai_chat_messages (user_id, role, content, sources, date_created) VALUES (?, 'assistant', ?, ?, NOW())",
-		userID, replyText, sourcesJSON,
+		"INSERT INTO ai_task_queue (user_id, status, date_created) VALUES (?, 'pending', NOW())",
+		userID,
 	)
-	if err == nil {
-		replyID, _ = res.LastInsertId()
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to queue task"})
+		c.Abort()
+		return
+	}
+	taskID, _ := res.LastInsertId()
+
+	// Count tasks ahead of this one.
+	var position int
+	_ = db.QueryRow(
+		`SELECT COUNT(*) FROM ai_task_queue WHERE status IN ('pending', 'processing') AND id < ?`,
+		taskID,
+	).Scan(&position)
+
+	if position > 0 {
+		AddAISubscriber(userID, int(taskID))
 	}
 
-	// Convert to entity sources for the response
-	entitySources := make([]Entities.AISource, len(sources))
-	for i, s := range sources {
-		entitySources[i] = Entities.AISource{PostID: s.PostID, TopicID: s.TopicID, TopicName: s.TopicName, TopicType: s.TopicType}
-	}
+	notifyWorker()
 
-	// Push reply to user over WebSocket
-	Websockets.MainHub.SendNotification(userID, map[string]interface{}{
-		"type": "ai_message",
-		"data": Entities.AIChatMessage{
-			Id:          int(replyID),
-			UserId:      userID,
-			Role:        "assistant",
-			Content:     replyText,
-			Sources:     entitySources,
-			DateCreated: time.Now(),
-		},
-	})
-
-	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	c.JSON(http.StatusOK, gin.H{"message": "ok", "queue_position": position})
 }
 
 func GetAvailableModels(c *gin.Context, db *sql.DB) {
@@ -177,10 +118,31 @@ func GetAIChatHistory(c *gin.Context, db *sql.DB) {
 			continue
 		}
 		if len(sourcesRaw) > 0 {
-			_ = json.Unmarshal(sourcesRaw, &msg.Sources) // []Entities.AISource
+			_ = json.Unmarshal(sourcesRaw, &msg.Sources)
 		}
 		messages = append(messages, msg)
 	}
 
 	c.JSON(http.StatusOK, messages)
+}
+
+func ClearAIContext(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
+		c.Abort()
+		return
+	}
+
+	_, err := db.Exec(
+		"INSERT INTO ai_chat_messages (user_id, role, content, date_created) VALUES (?, 'clear', '', NOW())",
+		userID,
+	)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to clear context"})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }

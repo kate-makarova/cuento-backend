@@ -737,6 +737,9 @@ func main() {
 	protectedRouter.GET("/ai-chat/models", "Get available AI models for the configured provider", func(c *gin.Context) {
 		MCP.GetAvailableModels(c, Services.DB)
 	})
+	protectedRouter.POST("/ai-chat/clear", "Clear AI chat context for the current user", func(c *gin.Context) {
+		MCP.ClearAIContext(c, Services.DB)
+	})
 
 	// WebSocket route with special authentication
 	wsGroup := r.Group("/")

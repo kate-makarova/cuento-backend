@@ -810,11 +810,25 @@ CREATE TABLE absent_users
 
 create table ai_chat_messages
 (
-    id           int                      not null auto_increment primary key,
-    user_id      int                      not null,
-    role         enum('user', 'assistant') not null,
-    content      text                     not null,
-    sources      json                     null,
-    date_created datetime                 not null default current_timestamp,
+    id           int                               not null auto_increment primary key,
+    user_id      int                               not null,
+    role         enum('user', 'assistant', 'clear') not null,
+    content      text                              not null,
+    sources      json                              null,
+    date_created datetime                          not null default current_timestamp,
     constraint fk_ai_chat_messages_user foreign key (user_id) references users (id) on delete cascade
+);
+
+create table ai_task_queue
+(
+    id             int                                        not null auto_increment primary key,
+    user_id        int                                        not null,
+    status         enum('pending', 'processing', 'done', 'failed') not null default 'pending',
+    error          text                                       null,
+    date_created   datetime                                   not null default current_timestamp,
+    date_started   datetime                                   null,
+    date_completed datetime                                   null,
+    index idx_ai_task_queue_status (status, date_created),
+    index idx_ai_task_queue_user (user_id),
+    constraint fk_ai_task_queue_user foreign key (user_id) references users (id) on delete cascade
 );
