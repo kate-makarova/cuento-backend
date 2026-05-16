@@ -833,3 +833,11 @@ create table ai_task_queue
     index idx_ai_task_queue_user (user_id),
     constraint fk_ai_task_queue_user foreign key (user_id) references users (id) on delete cascade
 );
+
+create table vector_search_bucket_subforum
+(
+    subforum_id bigint unsigned not null,
+    bucket      varchar(64)    not null,
+    primary key (subforum_id, bucket),
+    constraint fk_vsbs_subforum foreign key (subforum_id) references subforums (id) on delete cascade
+);
