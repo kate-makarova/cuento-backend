@@ -10,10 +10,36 @@ import (
 	"strings"
 )
 
+// isVectorEnabled checks whether the given subforum+bucket pair is configured
+// for vector indexing in vector_search_bucket_subforum.
+func isVectorEnabled(subforumID int, bucket string, db *sql.DB) bool {
+	var count int
+	_ = db.QueryRow(
+		`SELECT COUNT(*) FROM vector_search_bucket_subforum WHERE subforum_id = ? AND bucket = ?`,
+		subforumID, bucket,
+	).Scan(&count)
+	return count > 0
+}
+
+// postBucket returns the Qdrant bucket for a given topic type, or ("", false) if not applicable.
+func postBucket(topicType Entities.TopicType) (string, bool) {
+	switch topicType {
+	case Entities.EpisodeTopic:
+		return Services.SonicBucketGamePosts, true
+	case Entities.GeneralTopic:
+		return Services.SonicBucketGeneralPosts, true
+	case Entities.LoreTopic:
+		return Services.SonicBucketLorePosts, true
+	}
+	return "", false
+}
+
 func RegisterQdrantEventHandlers() {
+	// ── Posts ────────────────────────────────────────────────────────────────
+
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type == "post_updated" {
+		if !ok {
 			return
 		}
 		if !Services.QdrantAvailable() {
@@ -24,101 +50,125 @@ func RegisterQdrantEventHandlers() {
 		if err := db.QueryRow("SELECT type FROM topics WHERE id = ?", event.TopicID).Scan(&topicType); err != nil {
 			return
 		}
-
-		var bucket string
-		switch topicType {
-		case Entities.EpisodeTopic:
-			bucket = Services.SonicBucketGamePosts
-		case Entities.GeneralTopic:
-			bucket = Services.SonicBucketGeneralPosts
-		case Entities.LoreTopic:
-			bucket = Services.SonicBucketLorePosts
-		default:
+		bucket, ok := postBucket(topicType)
+		if !ok {
 			return
 		}
 
-		objectID := strconv.Itoa(event.Post.Id)
-		if err := Services.QdrantPush(bucket, objectID, event.Post.Content); err != nil {
-			fmt.Printf("Error pushing post %s to Qdrant: %v\n", objectID, err)
+		switch event.Type {
+		case "", "post_created":
+			if !isVectorEnabled(event.SubforumID, bucket, db) {
+				return
+			}
+			if err := Services.EnqueueEmbedding(bucket, int64(event.Post.Id), db); err != nil {
+				fmt.Printf("Error enqueueing post %d for embedding: %v\n", event.Post.Id, err)
+			}
+
+		case "post_updated":
+			if !isVectorEnabled(event.SubforumID, bucket, db) {
+				return
+			}
+			if err := Services.EnqueueEmbedding(bucket, int64(event.Post.Id), db); err != nil {
+				fmt.Printf("Error enqueueing post %d for re-embedding: %v\n", event.Post.Id, err)
+			}
+
+		case "post_deleted":
+			if err := Services.QdrantDelete(bucket, strconv.Itoa(event.Post.Id)); err != nil {
+				fmt.Printf("Error deleting post %d from Qdrant: %v\n", event.Post.Id, err)
+			}
 		}
 	})
+
+	// ── Characters ───────────────────────────────────────────────────────────
 
 	Events.Subscribe(Events.CharacterCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.CharacterCreatedEvent)
-		if !ok {
+		if !ok || !Services.QdrantAvailable() {
 			return
 		}
-		if !Services.QdrantAvailable() {
+		if !isVectorEnabled(event.SubforumID, Services.SonicBucketCharacters, db) {
 			return
 		}
-		if err := Services.QdrantPushFlattenedEntity(Services.SonicBucketCharacters, "character", event.CharacterID, db); err != nil {
-			fmt.Printf("Error pushing character %d to Qdrant: %v\n", event.CharacterID, err)
+		if err := Services.EnqueueEmbedding(Services.SonicBucketCharacters, event.CharacterID, db); err != nil {
+			fmt.Printf("Error enqueueing character %d for embedding: %v\n", event.CharacterID, err)
 		}
 	})
+
+	Events.Subscribe(Events.CharacterUpdated, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.CharacterUpdatedEvent)
+		if !ok || !Services.QdrantAvailable() {
+			return
+		}
+		if !isVectorEnabled(event.SubforumID, Services.SonicBucketCharacters, db) {
+			return
+		}
+		if err := Services.EnqueueEmbedding(Services.SonicBucketCharacters, event.CharacterID, db); err != nil {
+			fmt.Printf("Error enqueueing character %d for re-embedding: %v\n", event.CharacterID, err)
+		}
+	})
+
+	// ── Episodes ─────────────────────────────────────────────────────────────
 
 	Events.Subscribe(Events.EpisodeCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.EpisodeCreatedEvent)
-		if !ok {
+		if !ok || !Services.QdrantAvailable() {
 			return
 		}
-		if !Services.QdrantAvailable() {
+		if !isVectorEnabled(event.SubforumID, Services.SonicBucketEpisodes, db) {
 			return
 		}
-		if err := Services.QdrantPushFlattenedEntity(Services.SonicBucketEpisodes, "episode", event.EpisodeID, db); err != nil {
-			fmt.Printf("Error pushing episode %d to Qdrant: %v\n", event.EpisodeID, err)
+		if err := Services.EnqueueEmbedding(Services.SonicBucketEpisodes, event.EpisodeID, db); err != nil {
+			fmt.Printf("Error enqueueing episode %d for embedding: %v\n", event.EpisodeID, err)
 		}
 	})
+
+	Events.Subscribe(Events.EpisodeUpdated, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.EpisodeUpdatedEvent)
+		if !ok || !Services.QdrantAvailable() {
+			return
+		}
+		if !isVectorEnabled(event.SubforumID, Services.SonicBucketEpisodes, db) {
+			return
+		}
+		if err := Services.EnqueueEmbedding(Services.SonicBucketEpisodes, event.EpisodeID, db); err != nil {
+			fmt.Printf("Error enqueueing episode %d for re-embedding: %v\n", event.EpisodeID, err)
+		}
+	})
+
+	// ── Wanted Characters ────────────────────────────────────────────────────
 
 	Events.Subscribe(Events.WantedCharacterCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.WantedCharacterCreatedEvent)
-		if !ok {
+		if !ok || !Services.QdrantAvailable() {
 			return
 		}
-		if !Services.QdrantAvailable() {
+		if !isVectorEnabled(event.SubforumID, Services.SonicBucketWantedPosts, db) {
 			return
 		}
-		if err := Services.QdrantPushFlattenedEntity(Services.SonicBucketWantedPosts, "wanted_character", event.WantedCharacterID, db); err != nil {
-			fmt.Printf("Error pushing wanted character %d to Qdrant: %v\n", event.WantedCharacterID, err)
+		if err := Services.EnqueueEmbedding(Services.SonicBucketWantedPosts, event.WantedCharacterID, db); err != nil {
+			fmt.Printf("Error enqueueing wanted character %d for embedding: %v\n", event.WantedCharacterID, err)
 		}
 	})
 
-	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
-		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type != "post_deleted" {
+	Events.Subscribe(Events.WantedCharacterUpdated, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.WantedCharacterUpdatedEvent)
+		if !ok || !Services.QdrantAvailable() {
 			return
 		}
-		if !Services.QdrantAvailable() {
+		if !isVectorEnabled(event.SubforumID, Services.SonicBucketWantedPosts, db) {
 			return
 		}
-
-		var topicType Entities.TopicType
-		if err := db.QueryRow("SELECT type FROM topics WHERE id = ?", event.TopicID).Scan(&topicType); err != nil {
-			return
-		}
-
-		var bucket string
-		switch topicType {
-		case Entities.EpisodeTopic:
-			bucket = Services.SonicBucketGamePosts
-		case Entities.GeneralTopic:
-			bucket = Services.SonicBucketGeneralPosts
-		case Entities.LoreTopic:
-			bucket = Services.SonicBucketLorePosts
-		default:
-			return
-		}
-
-		if err := Services.QdrantDelete(bucket, strconv.Itoa(event.Post.Id)); err != nil {
-			fmt.Printf("Error deleting post %d from Qdrant: %v\n", event.Post.Id, err)
+		if err := Services.EnqueueEmbedding(Services.SonicBucketWantedPosts, event.WantedCharacterID, db); err != nil {
+			fmt.Printf("Error enqueueing wanted character %d for re-embedding: %v\n", event.WantedCharacterID, err)
 		}
 	})
 
+	// ── Bulk deletes ─────────────────────────────────────────────────────────
+
+	// When topics are deleted, remove all associated posts and entity vectors.
 	Events.Subscribe(Events.TopicsDeleted, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.TopicsDeletedEvent)
-		if !ok || len(event.TopicIDs) == 0 {
-			return
-		}
-		if !Services.QdrantAvailable() {
+		if !ok || len(event.TopicIDs) == 0 || !Services.QdrantAvailable() {
 			return
 		}
 
@@ -145,18 +195,9 @@ func RegisterQdrantEventHandlers() {
 				if postRows.Scan(&postID, &topicType) != nil {
 					continue
 				}
-				var bucket string
-				switch topicType {
-				case Entities.EpisodeTopic:
-					bucket = Services.SonicBucketGamePosts
-				case Entities.GeneralTopic:
-					bucket = Services.SonicBucketGeneralPosts
-				case Entities.LoreTopic:
-					bucket = Services.SonicBucketLorePosts
-				default:
-					continue
+				if b, ok := postBucket(topicType); ok {
+					postIDs[b] = append(postIDs[b], strconv.FormatInt(postID, 10))
 				}
-				postIDs[bucket] = append(postIDs[bucket], strconv.FormatInt(postID, 10))
 			}
 		}
 		for bucket, ids := range postIDs {
@@ -166,67 +207,59 @@ func RegisterQdrantEventHandlers() {
 		}
 
 		charRows, err := db.Query(
-			fmt.Sprintf("SELECT id FROM character_base WHERE topic_id IN (%s)", placeholders),
-			args...,
+			fmt.Sprintf("SELECT id FROM character_base WHERE topic_id IN (%s)", placeholders), args...,
 		)
 		if err == nil {
 			defer charRows.Close()
 			for charRows.Next() {
-				var charID int64
-				if charRows.Scan(&charID) == nil {
-					_ = Services.QdrantDelete(Services.SonicBucketCharacters, strconv.FormatInt(charID, 10))
+				var id int64
+				if charRows.Scan(&id) == nil {
+					_ = Services.QdrantDelete(Services.SonicBucketCharacters, strconv.FormatInt(id, 10))
 				}
 			}
 		}
 
 		wantedRows, err := db.Query(
-			fmt.Sprintf("SELECT id FROM wanted_character_base WHERE topic_id IN (%s)", placeholders),
-			args...,
+			fmt.Sprintf("SELECT id FROM wanted_character_base WHERE topic_id IN (%s)", placeholders), args...,
 		)
 		if err == nil {
 			defer wantedRows.Close()
 			for wantedRows.Next() {
-				var wcID int64
-				if wantedRows.Scan(&wcID) == nil {
-					_ = Services.QdrantDelete(Services.SonicBucketWantedPosts, strconv.FormatInt(wcID, 10))
+				var id int64
+				if wantedRows.Scan(&id) == nil {
+					_ = Services.QdrantDelete(Services.SonicBucketWantedPosts, strconv.FormatInt(id, 10))
 				}
 			}
 		}
 	})
 
-	Events.Subscribe(Events.UserWiped, func(db *sql.DB, data Events.EventData) {
-		event, ok := data.(Events.UserWipedEvent)
-		if !ok || len(event.DeletedGeneralPostIDs) == 0 {
-			return
-		}
-		if !Services.QdrantAvailable() {
-			return
-		}
-
-		ids := make([]string, len(event.DeletedGeneralPostIDs))
-		for i, id := range event.DeletedGeneralPostIDs {
-			ids[i] = strconv.Itoa(id)
-		}
-		if err := Services.QdrantDeleteBatch(Services.SonicBucketGeneralPosts, ids); err != nil {
-			fmt.Printf("Error deleting general posts from Qdrant on user wipe: %v\n", err)
-		}
-	})
-
+	// When episode topics are deleted, remove their vectors.
 	Events.Subscribe(Events.EpisodeTopicsDeleted, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.EpisodeTopicsDeletedEvent)
-		if !ok || len(event.EpisodeIDs) == 0 {
+		if !ok || len(event.EpisodeIDs) == 0 || !Services.QdrantAvailable() {
 			return
 		}
-		if !Services.QdrantAvailable() {
-			return
-		}
-
 		ids := make([]string, len(event.EpisodeIDs))
 		for i, id := range event.EpisodeIDs {
 			ids[i] = strconv.Itoa(id)
 		}
 		if err := Services.QdrantDeleteBatch(Services.SonicBucketEpisodes, ids); err != nil {
 			fmt.Printf("Error deleting episodes from Qdrant: %v\n", err)
+		}
+	})
+
+	// When a user is wiped, remove their general posts.
+	Events.Subscribe(Events.UserWiped, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.UserWipedEvent)
+		if !ok || len(event.DeletedGeneralPostIDs) == 0 || !Services.QdrantAvailable() {
+			return
+		}
+		ids := make([]string, len(event.DeletedGeneralPostIDs))
+		for i, id := range event.DeletedGeneralPostIDs {
+			ids[i] = strconv.Itoa(id)
+		}
+		if err := Services.QdrantDeleteBatch(Services.SonicBucketGeneralPosts, ids); err != nil {
+			fmt.Printf("Error deleting general posts from Qdrant on user wipe: %v\n", err)
 		}
 	})
 }

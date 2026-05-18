@@ -22,6 +22,7 @@ func main() {
 	Services.InitDB()
 	Services.InitSonic()
 	Services.InitQdrant()
+	Services.QueueNotifyFunc = MCP.NotifyWorker
 	if err := Services.InitI18n("locales"); err != nil {
 		panic("failed to load i18n bundles: " + err.Error())
 	}
@@ -730,7 +731,7 @@ func main() {
 	protectedRouter.GET("/admin/qdrant/subforum-matrix", "Get vector search subforum×bucket matrix", func(c *gin.Context) {
 		Controllers.GetVectorSearchMatrix(c, Services.DB)
 	})
-	protectedRouter.POST("/admin/qdrant/subforum-matrix", "Replace all vector search subforum+bucket entries", func(c *gin.Context) {
+	protectedRouter.POST("/admin/qdrant/subforum-matrix/update", "Replace all vector search subforum+bucket entries", func(c *gin.Context) {
 		Controllers.UpdateVectorSearchMatrix(c, Services.DB)
 	})
 	protectedRouter.GET("/admin/user/roles/:id", "Get user roles", func(c *gin.Context) {

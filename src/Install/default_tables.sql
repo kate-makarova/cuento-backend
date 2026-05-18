@@ -821,14 +821,16 @@ create table ai_chat_messages
 
 create table ai_task_queue
 (
-    id             int                                        not null auto_increment primary key,
-    user_id        int                                        not null,
-    status         enum('pending', 'processing', 'done', 'failed') not null default 'pending',
-    retries        int                                        not null default 0,
-    error          text                                       null,
-    date_created   datetime                                   not null default current_timestamp,
-    date_started   datetime                                   null,
-    date_completed datetime                                   null,
+    id             int                                              not null auto_increment primary key,
+    type           varchar(32)                                      not null default 'chat',
+    user_id        int                                              null,
+    payload        json                                             null,
+    status         enum ('pending', 'processing', 'done', 'failed') not null default 'pending',
+    retries        int                                              not null default 0,
+    error          text                                             null,
+    date_created   datetime                                         not null default current_timestamp,
+    date_started   datetime                                         null,
+    date_completed datetime                                         null,
     index idx_ai_task_queue_status (status, date_created),
     index idx_ai_task_queue_user (user_id),
     constraint fk_ai_task_queue_user foreign key (user_id) references users (id) on delete cascade
