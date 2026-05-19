@@ -180,3 +180,9 @@ role_id,type,permission
 3,0,/admin/design-draft/create
 3,0,/admin/design-draft/update/:id
 3,0,/admin/design-draft/publish/:id
+3,0,/admin/frontend-templates/components
+3,0,/admin/frontend-templates/components/*name
+3,0,/admin/frontend-templates/components-default/*name
+3,0,/admin/frontend-templates/component/update
+3,0,/admin/frontend-templates/env/update
+3,0,/admin/github/commit

@@ -716,6 +716,24 @@ func main() {
 	protectedRouter.GET("/admin/health", "Get RAM and CPU health data", func(c *gin.Context) {
 		Controllers.GetHealthData(c)
 	})
+	protectedRouter.GET("/admin/frontend-templates/components", "List customizable frontend components", func(c *gin.Context) {
+		Controllers.GetFrontendComponents(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/frontend-templates/components/*name", "Get the custom template for a frontend component", func(c *gin.Context) {
+		Controllers.GetFrontendComponentTemplate(c)
+	})
+	protectedRouter.GET("/admin/frontend-templates/components-default/*name", "Get the default template for a frontend component", func(c *gin.Context) {
+		Controllers.GetFrontendComponentDefaultTemplate(c)
+	})
+	protectedRouter.POST("/admin/frontend-templates/component/update", "Commit an update to a custom frontend component template", func(c *gin.Context) {
+		Controllers.UpdateFrontendComponentTemplate(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/frontend-templates/env/update", "Update and commit the frontend environment file", func(c *gin.Context) {
+		Controllers.UpdateFrontendEnv(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/github/commit", "Commit files to the frontend GitHub repository", func(c *gin.Context) {
+		Controllers.CommitFrontendTemplates(c, Services.DB)
+	})
 	protectedRouter.GET("/admin/sonic/cursors", "Get Sonic ingest cursors for all buckets", func(c *gin.Context) {
 		Controllers.GetSonicCursors(c, Services.DB)
 	})
