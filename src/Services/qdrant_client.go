@@ -388,7 +388,7 @@ func QdrantSearchInBucket(bucket, query string, limit, filterSubforum, filterTop
 			sid := strconv.FormatInt(id, 10)
 			contentMap[sid] = SearchResultItem{
 				ID:        sid,
-				Content:   extractMatchingParagraphs(doc, query),
+				Content:   doc,
 				TopicID:   &topicID,
 				TopicName: topicName,
 				TopicType: &topicType,

@@ -159,6 +159,8 @@ func executeTask(db *sql.DB, taskID, userID int) {
 		time.Sleep(30 * time.Second)
 	}
 
+	replyText = Services.MarkdownToHTML(replyText)
+
 	// Serialize sources.
 	var sourcesJSON []byte
 	if len(sources) > 0 {

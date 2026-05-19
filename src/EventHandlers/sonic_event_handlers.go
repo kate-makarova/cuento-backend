@@ -12,6 +12,14 @@ import (
 	"github.com/expectedsh/go-sonic/sonic"
 )
 
+func updateSonicCursor(bucket string, id int64, db *sql.DB) {
+	_, _ = db.Exec(
+		`INSERT INTO sonic_ingest_cursor (bucket, last_id, date_ingested) VALUES (?, ?, NOW())
+		 ON DUPLICATE KEY UPDATE last_id = GREATEST(last_id, VALUES(last_id)), date_ingested = VALUES(date_ingested)`,
+		bucket, id,
+	)
+}
+
 func RegisterSonicEventHandlers() {
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
@@ -42,6 +50,8 @@ func RegisterSonicEventHandlers() {
 		objectID := strconv.Itoa(event.Post.Id)
 		if err := Services.SonicPush(Services.SonicCollection, bucket, objectID, event.Post.Content, sonic.LangAutoDetect); err != nil {
 			fmt.Printf("Error pushing post %s to Sonic: %v\n", objectID, err)
+		} else {
+			updateSonicCursor(bucket, int64(event.Post.Id), db)
 		}
 	})
 
@@ -55,6 +65,8 @@ func RegisterSonicEventHandlers() {
 		}
 		if err := Services.SonicPushFlattenedEntity(Services.SonicBucketCharacters, "character", int64(event.CharacterID), db); err != nil {
 			fmt.Printf("Error pushing character %d to Sonic: %v\n", event.CharacterID, err)
+		} else {
+			updateSonicCursor(Services.SonicBucketCharacters, int64(event.CharacterID), db)
 		}
 	})
 
@@ -78,6 +90,8 @@ func RegisterSonicEventHandlers() {
 		}
 		if err := Services.SonicPushFlattenedEntity(Services.SonicBucketEpisodes, "episode", event.EpisodeID, db); err != nil {
 			fmt.Printf("Error pushing episode %d to Sonic: %v\n", event.EpisodeID, err)
+		} else {
+			updateSonicCursor(Services.SonicBucketEpisodes, event.EpisodeID, db)
 		}
 	})
 
@@ -91,6 +105,8 @@ func RegisterSonicEventHandlers() {
 		}
 		if err := Services.SonicPushFlattenedEntity(Services.SonicBucketWantedPosts, "wanted_character", event.WantedCharacterID, db); err != nil {
 			fmt.Printf("Error pushing wanted character %d to Sonic: %v\n", event.WantedCharacterID, err)
+		} else {
+			updateSonicCursor(Services.SonicBucketWantedPosts, event.WantedCharacterID, db)
 		}
 	})
 

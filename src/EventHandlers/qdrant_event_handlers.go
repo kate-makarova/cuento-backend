@@ -34,6 +34,14 @@ func postBucket(topicType Entities.TopicType) (string, bool) {
 	return "", false
 }
 
+func updateQdrantCursor(bucket string, id int64, db *sql.DB) {
+	_, _ = db.Exec(
+		`INSERT INTO qdrant_ingest_cursor (bucket, last_id, date_ingested) VALUES (?, ?, NOW())
+		 ON DUPLICATE KEY UPDATE last_id = GREATEST(last_id, VALUES(last_id)), date_ingested = VALUES(date_ingested)`,
+		bucket, id,
+	)
+}
+
 func RegisterQdrantEventHandlers() {
 	// ── Posts ────────────────────────────────────────────────────────────────
 
@@ -62,6 +70,8 @@ func RegisterQdrantEventHandlers() {
 			}
 			if err := Services.EnqueueEmbedding(bucket, int64(event.Post.Id), db); err != nil {
 				fmt.Printf("Error enqueueing post %d for embedding: %v\n", event.Post.Id, err)
+			} else {
+				updateQdrantCursor(bucket, int64(event.Post.Id), db)
 			}
 
 		case "post_updated":
@@ -91,6 +101,8 @@ func RegisterQdrantEventHandlers() {
 		}
 		if err := Services.EnqueueEmbedding(Services.SonicBucketCharacters, int64(event.CharacterID), db); err != nil {
 			fmt.Printf("Error enqueueing character %d for embedding: %v\n", event.CharacterID, err)
+		} else {
+			updateQdrantCursor(Services.SonicBucketCharacters, int64(event.CharacterID), db)
 		}
 	})
 
@@ -129,6 +141,8 @@ func RegisterQdrantEventHandlers() {
 		}
 		if err := Services.EnqueueEmbedding(Services.SonicBucketEpisodes, event.EpisodeID, db); err != nil {
 			fmt.Printf("Error enqueueing episode %d for embedding: %v\n", event.EpisodeID, err)
+		} else {
+			updateQdrantCursor(Services.SonicBucketEpisodes, event.EpisodeID, db)
 		}
 	})
 
@@ -157,6 +171,8 @@ func RegisterQdrantEventHandlers() {
 		}
 		if err := Services.EnqueueEmbedding(Services.SonicBucketWantedPosts, event.WantedCharacterID, db); err != nil {
 			fmt.Printf("Error enqueueing wanted character %d for embedding: %v\n", event.WantedCharacterID, err)
+		} else {
+			updateQdrantCursor(Services.SonicBucketWantedPosts, event.WantedCharacterID, db)
 		}
 	})
 
