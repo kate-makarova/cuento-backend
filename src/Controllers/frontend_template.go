@@ -102,7 +102,7 @@ func getComponentFile(c *gin.Context, db *sql.DB, path string) {
 }
 
 func GetFrontendComponentTemplate(c *gin.Context, db *sql.DB) {
-	name := c.Param("name")
+	name := strings.TrimPrefix(c.Param("name"), "/")
 	def, ok := findComponentDef(name)
 	if !ok {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Unknown component: " + name})
@@ -113,7 +113,7 @@ func GetFrontendComponentTemplate(c *gin.Context, db *sql.DB) {
 }
 
 func GetFrontendComponentDefaultTemplate(c *gin.Context, db *sql.DB) {
-	name := c.Param("name")
+	name := strings.TrimPrefix(c.Param("name"), "/")
 	def, ok := findComponentDef(name)
 	if !ok {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Unknown component: " + name})
