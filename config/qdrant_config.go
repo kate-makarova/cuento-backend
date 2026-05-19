@@ -6,10 +6,9 @@ import (
 )
 
 type QdrantConfig struct {
-	Host      string
-	Port      int
-	APIKey    string
-	OpenAIKey string
+	Host   string
+	Port   int
+	APIKey string
 }
 
 func LoadQdrantConfig() *QdrantConfig {
@@ -24,9 +23,8 @@ func LoadQdrantConfig() *QdrantConfig {
 		}
 	}
 	return &QdrantConfig{
-		Host:      host,
-		Port:      port,
-		APIKey:    os.Getenv("QDRANT_API_KEY"),
-		OpenAIKey: os.Getenv("OPENAI_API_KEY"),
+		Host:   host,
+		Port:   port,
+		APIKey: os.Getenv("QDRANT_API_KEY"),
 	}
 }

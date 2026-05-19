@@ -19,13 +19,14 @@ const embeddingDims = 1536 // text-embedding-3-small
 var qdrantClient *qdrant.Client
 var openaiEmbedClient openai.Client
 
-func InitQdrant() {
-	cfg := config.LoadQdrantConfig()
-	if cfg.OpenAIKey == "" {
-		log.Printf("Warning: OPENAI_API_KEY not set — Qdrant vector search will be unavailable")
+func InitQdrant(db *sql.DB) {
+	aiKey, err := GetGlobalSetting("ai_api_key", db)
+	if err != nil || aiKey == "" {
+		log.Printf("Warning: ai_api_key not set in settings — Qdrant vector search will be unavailable")
 		return
 	}
 
+	cfg := config.LoadQdrantConfig()
 	client, err := qdrant.NewClient(&qdrant.Config{
 		Host:   cfg.Host,
 		Port:   cfg.Port,
@@ -58,7 +59,7 @@ func InitQdrant() {
 	}
 
 	qdrantClient = client
-	openaiEmbedClient = openai.NewClient(option.WithAPIKey(cfg.OpenAIKey))
+	openaiEmbedClient = openai.NewClient(option.WithAPIKey(aiKey))
 	log.Printf("Qdrant initialized at %s:%d", cfg.Host, cfg.Port)
 }
 

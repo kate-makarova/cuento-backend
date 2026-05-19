@@ -759,6 +759,14 @@ create table sonic_ingest_cursor
     primary key (bucket)
 );
 
+create table qdrant_ingest_cursor
+(
+    bucket        varchar(64) not null,
+    last_id       bigint      not null,
+    date_ingested datetime    not null default current_timestamp,
+    primary key (bucket)
+);
+
 CREATE TABLE auto_archiving_immunity
 (
     id           INT AUTO_INCREMENT PRIMARY KEY,

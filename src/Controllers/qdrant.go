@@ -9,9 +9,50 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+type QdrantCursorItem struct {
+	Bucket       string     `json:"bucket"`
+	LastId       *int64     `json:"last_id"`
+	DateIngested *time.Time `json:"date_ingested"`
+	CurrentMaxId int64      `json:"current_max_id"`
+}
+
+// GetQdrantCursors returns the ingest cursor state for all Qdrant buckets.
+// GET /admin/qdrant/cursors
+func GetQdrantCursors(c *gin.Context, db *sql.DB) {
+	rows, err := db.Query("SELECT bucket, last_id, date_ingested FROM qdrant_ingest_cursor")
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch cursors: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	cursorMap := make(map[string]*QdrantCursorItem)
+	for rows.Next() {
+		var item QdrantCursorItem
+		if err := rows.Scan(&item.Bucket, &item.LastId, &item.DateIngested); err == nil {
+			cursorMap[item.Bucket] = &item
+		}
+	}
+
+	result := make([]QdrantCursorItem, 0, len(Services.AllSonicBuckets))
+	for _, bucket := range Services.AllSonicBuckets {
+		item := QdrantCursorItem{Bucket: bucket}
+		if existing, ok := cursorMap[bucket]; ok {
+			item.LastId = existing.LastId
+			item.DateIngested = existing.DateIngested
+		}
+		item.CurrentMaxId = getBucketMaxId(bucket, db)
+		result = append(result, item)
+	}
+
+	c.JSON(http.StatusOK, result)
+}
 
 // GetQdrantCollectionStatus returns the number of indexed vectors per bucket.
 func GetQdrantCollectionStatus(c *gin.Context) {
@@ -42,7 +83,12 @@ func QdrantCatchUpBucket(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	fromID, _ := strconv.ParseInt(c.Query("from_id"), 10, 64)
+	var fromID int64
+	if q := c.Query("from_id"); q != "" {
+		fromID, _ = strconv.ParseInt(q, 10, 64)
+	} else {
+		_ = db.QueryRow("SELECT last_id FROM qdrant_ingest_cursor WHERE bucket = ?", bucket).Scan(&fromID)
+	}
 
 	var count int
 	var lastID int64
@@ -58,6 +104,14 @@ func QdrantCatchUpBucket(c *gin.Context, db *sql.DB) {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: ingestErr.Error()})
 		c.Abort()
 		return
+	}
+
+	if count > 0 {
+		_, _ = db.Exec(
+			`INSERT INTO qdrant_ingest_cursor (bucket, last_id, date_ingested) VALUES (?, ?, NOW())
+			 ON DUPLICATE KEY UPDATE last_id = VALUES(last_id), date_ingested = VALUES(date_ingested)`,
+			bucket, lastID,
+		)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -76,9 +130,10 @@ func qdrantIngestPostBucket(bucket string, fromID int64, db *sql.DB) (lastID int
 	rows, err := db.Query(
 		`SELECT p.id, p.content FROM posts p
 		 JOIN topics t ON p.topic_id = t.id
+		 JOIN vector_search_bucket_subforum vsbs ON vsbs.subforum_id = t.subforum_id AND vsbs.bucket = ?
 		 WHERE t.type = ? AND COALESCE(p.is_deleted, 0) != 1 AND t.status != ? AND p.id > ?
 		 ORDER BY p.id ASC`,
-		topicType, Entities.DeletedTopic, fromID,
+		bucket, topicType, Entities.DeletedTopic, fromID,
 	)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to fetch posts: %w", err)
@@ -108,10 +163,11 @@ func qdrantIngestFlattenedBucket(bucket, entityName string, fromID int64, db *sq
 			`SELECT b.*, f.* FROM %s_base b
 			 LEFT JOIN %s_flattened f ON b.id = f.entity_id
 			 JOIN topics t ON b.topic_id = t.id
+			 JOIN vector_search_bucket_subforum vsbs ON vsbs.subforum_id = t.subforum_id AND vsbs.bucket = ?
 			 WHERE b.id > ? AND t.status != ? ORDER BY b.id ASC`,
 			entityName, entityName,
 		),
-		fromID, Entities.DeletedTopic,
+		bucket, fromID, Entities.DeletedTopic,
 	)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to fetch %s entities: %w", entityName, err)

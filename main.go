@@ -21,7 +21,7 @@ import (
 func main() {
 	Services.InitDB()
 	Services.InitSonic()
-	Services.InitQdrant()
+	Services.InitQdrant(Services.DB)
 	Services.QueueNotifyFunc = MCP.NotifyWorker
 	if err := Services.InitI18n("locales"); err != nil {
 		panic("failed to load i18n bundles: " + err.Error())
@@ -721,6 +721,9 @@ func main() {
 	})
 	protectedRouter.POST("/admin/sonic/catchup/:bucket", "Catch up Sonic ingestion for a specific bucket", func(c *gin.Context) {
 		Controllers.CatchUpSonicBucket(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/qdrant/cursors", "Get Qdrant ingest cursors for all buckets", func(c *gin.Context) {
+		Controllers.GetQdrantCursors(c, Services.DB)
 	})
 	protectedRouter.GET("/admin/qdrant/status", "Get Qdrant vector counts per collection", func(c *gin.Context) {
 		Controllers.GetQdrantCollectionStatus(c)
