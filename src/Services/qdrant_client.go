@@ -14,10 +14,35 @@ import (
 	"github.com/qdrant/go-client/qdrant"
 )
 
-const embeddingDims = 1536 // text-embedding-3-small
+// OpenAIBaseURLs maps OpenAI-compatible provider names to their base URLs.
+// Empty string means use the default OpenAI endpoint.
+var OpenAIBaseURLs = map[string]string{
+	"openai":   "",
+	"deepseek": "https://api.deepseek.com/v1",
+	"groq":     "https://api.groq.com/openai/v1",
+	"mistral":  "https://api.mistral.ai/v1",
+}
+
+// defaultEmbedModels maps provider names to their default embedding model.
+var defaultEmbedModels = map[string]string{
+	"openai":   "text-embedding-3-small",
+	"deepseek": "text-embedding-3-small",
+	"mistral":  "mistral-embed",
+	"groq":     "nomic-embed-text-v1_5",
+}
+
+// defaultEmbedDims maps provider names to the vector dimension their embedding model produces.
+var defaultEmbedDims = map[string]uint64{
+	"openai":   1536,
+	"deepseek": 1536,
+	"mistral":  1024,
+	"groq":     768,
+}
 
 var qdrantClient *qdrant.Client
-var openaiEmbedClient openai.Client
+var OpenAIClient openai.Client
+var embedModel string
+var embedDims uint64
 
 func InitQdrant(db *sql.DB) {
 	aiKey, err := GetGlobalSetting("ai_api_key", db)
@@ -25,6 +50,18 @@ func InitQdrant(db *sql.DB) {
 		log.Printf("Warning: ai_api_key not set in settings — Qdrant vector search will be unavailable")
 		return
 	}
+
+	aiName, _ := GetGlobalSetting("ai_name", db)
+	opts := []option.RequestOption{option.WithAPIKey(aiKey)}
+	if baseURL, ok := OpenAIBaseURLs[aiName]; ok && baseURL != "" {
+		opts = append(opts, option.WithBaseURL(baseURL))
+	} else if _, supported := OpenAIBaseURLs[aiName]; !supported {
+		log.Printf("Warning: ai_name=%q does not support OpenAI-compatible embeddings — Qdrant vector search will be unavailable", aiName)
+		return
+	}
+	OpenAIClient = openai.NewClient(opts...)
+	embedModel = defaultEmbedModels[aiName]
+	embedDims = defaultEmbedDims[aiName]
 
 	cfg := config.LoadQdrantConfig()
 	client, err := qdrant.NewClient(&qdrant.Config{
@@ -44,11 +81,22 @@ func InitQdrant(db *sql.DB) {
 			log.Printf("Warning: could not check Qdrant collection %s: %v", bucket, err)
 			continue
 		}
+		if exists {
+			info, err := client.GetCollectionInfo(ctx, bucket)
+			if err == nil && info.GetConfig().GetParams().GetVectorsConfig().GetParams().GetSize() != embedDims {
+				log.Printf("Qdrant collection %s has wrong dimensions, recreating", bucket)
+				if err := client.DeleteCollection(ctx, bucket); err != nil {
+					log.Printf("Warning: could not delete Qdrant collection %s: %v", bucket, err)
+					continue
+				}
+				exists = false
+			}
+		}
 		if !exists {
 			if err := client.CreateCollection(ctx, &qdrant.CreateCollection{
 				CollectionName: bucket,
 				VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
-					Size:     embeddingDims,
+					Size:     embedDims,
 					Distance: qdrant.Distance_Cosine,
 				}),
 			}); err != nil {
@@ -59,7 +107,6 @@ func InitQdrant(db *sql.DB) {
 	}
 
 	qdrantClient = client
-	openaiEmbedClient = openai.NewClient(option.WithAPIKey(aiKey))
 	log.Printf("Qdrant initialized at %s:%d", cfg.Host, cfg.Port)
 }
 
@@ -82,8 +129,8 @@ func GetQdrantCollectionCounts() map[string]uint64 {
 }
 
 func embedText(ctx context.Context, text string) ([]float32, error) {
-	resp, err := openaiEmbedClient.Embeddings.New(ctx, openai.EmbeddingNewParams{
-		Model: openai.EmbeddingModelTextEmbedding3Small,
+	resp, err := OpenAIClient.Embeddings.New(ctx, openai.EmbeddingNewParams{
+		Model: openai.EmbeddingModel(embedModel),
 		Input: openai.EmbeddingNewParamsInputUnion{OfArrayOfStrings: []string{text}},
 	})
 	if err != nil {

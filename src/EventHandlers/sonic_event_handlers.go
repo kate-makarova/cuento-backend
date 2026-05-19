@@ -45,16 +45,26 @@ func RegisterSonicEventHandlers() {
 		}
 	})
 
-	Events.Subscribe(Events.CharacterCreated, func(db *sql.DB, data Events.EventData) {
-		event, ok := data.(Events.CharacterCreatedEvent)
+	Events.Subscribe(Events.CharacterAccepted, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.CharacterAcceptedEvent)
 		if !ok {
 			return
 		}
 		if !Services.SonicAvailable() {
 			return
 		}
-		if err := Services.SonicPushFlattenedEntity(Services.SonicBucketCharacters, "character", event.CharacterID, db); err != nil {
+		if err := Services.SonicPushFlattenedEntity(Services.SonicBucketCharacters, "character", int64(event.CharacterID), db); err != nil {
 			fmt.Printf("Error pushing character %d to Sonic: %v\n", event.CharacterID, err)
+		}
+	})
+
+	Events.Subscribe(Events.CharacterDeactivated, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.CharacterDeactivatedEvent)
+		if !ok || !Services.SonicAvailable() {
+			return
+		}
+		if err := Services.SonicDelete(Services.SonicCollection, Services.SonicBucketCharacters, strconv.Itoa(event.CharacterID)); err != nil {
+			fmt.Printf("Error removing character %d from Sonic: %v\n", event.CharacterID, err)
 		}
 	})
 

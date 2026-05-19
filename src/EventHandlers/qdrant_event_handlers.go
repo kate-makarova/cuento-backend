@@ -81,16 +81,26 @@ func RegisterQdrantEventHandlers() {
 
 	// ── Characters ───────────────────────────────────────────────────────────
 
-	Events.Subscribe(Events.CharacterCreated, func(db *sql.DB, data Events.EventData) {
-		event, ok := data.(Events.CharacterCreatedEvent)
+	Events.Subscribe(Events.CharacterAccepted, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.CharacterAcceptedEvent)
 		if !ok || !Services.QdrantAvailable() {
 			return
 		}
 		if !isVectorEnabled(event.SubforumID, Services.SonicBucketCharacters, db) {
 			return
 		}
-		if err := Services.EnqueueEmbedding(Services.SonicBucketCharacters, event.CharacterID, db); err != nil {
+		if err := Services.EnqueueEmbedding(Services.SonicBucketCharacters, int64(event.CharacterID), db); err != nil {
 			fmt.Printf("Error enqueueing character %d for embedding: %v\n", event.CharacterID, err)
+		}
+	})
+
+	Events.Subscribe(Events.CharacterDeactivated, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.CharacterDeactivatedEvent)
+		if !ok || !Services.QdrantAvailable() {
+			return
+		}
+		if err := Services.QdrantDelete(Services.SonicBucketCharacters, strconv.Itoa(event.CharacterID)); err != nil {
+			fmt.Printf("Error removing character %d from Qdrant: %v\n", event.CharacterID, err)
 		}
 	})
 

@@ -1175,7 +1175,9 @@ func AcceptCharacter(c *gin.Context, db *sql.DB) {
 	var name string
 	var avatar *string
 	var topicID int
-	err = tx.QueryRow("SELECT user_id, name, avatar, topic_id FROM character_base WHERE id = ?", id).Scan(&userID, &name, &avatar, &topicID)
+	var subforumID int
+	err = tx.QueryRow(`SELECT cb.user_id, cb.name, cb.avatar, cb.topic_id, COALESCE(t.subforum_id, 0)
+		FROM character_base cb JOIN topics t ON cb.topic_id = t.id WHERE cb.id = ?`, id).Scan(&userID, &name, &avatar, &topicID, &subforumID)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Character not found"})
 		c.Abort()
@@ -1230,6 +1232,7 @@ func AcceptCharacter(c *gin.Context, db *sql.DB) {
 		CharacterName: name,
 		UserID:        userID,
 		TopicID:       topicID,
+		SubforumID:    subforumID,
 	})
 
 	c.JSON(http.StatusOK, gin.H{"message": "Character accepted", "profile_id": profileID})

@@ -83,6 +83,7 @@ type CharacterAcceptedEvent struct {
 	CharacterName string
 	UserID        int
 	TopicID       int
+	SubforumID    int
 }
 
 type UserRegisteredEvent struct {
