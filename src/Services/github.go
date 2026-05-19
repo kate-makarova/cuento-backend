@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -89,6 +90,31 @@ func githubRequest(method, url, token string, body any) ([]byte, error) {
 		return nil, fmt.Errorf("github API error %d: %s", resp.StatusCode, respBody)
 	}
 	return respBody, nil
+}
+
+// GitHubGetFile fetches a file's decoded content from the repository.
+func GitHubGetFile(cfg GitHubConfig, path string) (string, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s?ref=%s", cfg.Owner, cfg.Repo, path, cfg.Branch)
+	data, err := githubRequest("GET", url, cfg.Token, nil)
+	if err != nil {
+		return "", err
+	}
+	var resp struct {
+		Content  string `json:"content"`
+		Encoding string `json:"encoding"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return "", fmt.Errorf("parse file response: %w", err)
+	}
+	if resp.Encoding != "base64" {
+		return "", fmt.Errorf("unexpected encoding: %s", resp.Encoding)
+	}
+	// GitHub wraps base64 content with newlines
+	decoded, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(resp.Content, "\n", ""))
+	if err != nil {
+		return "", fmt.Errorf("decode content: %w", err)
+	}
+	return string(decoded), nil
 }
 
 // GitHubCommit creates a single commit on the configured branch containing all provided files.

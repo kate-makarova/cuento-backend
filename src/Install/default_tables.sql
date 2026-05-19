@@ -125,6 +125,18 @@ VALUES ('ai_name', '');
 INSERT INTO global_settings (setting_name, setting_value)
 VALUES ('ai_model', '');
 
+INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('github_token', '');
+
+INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('github_owner', '');
+
+INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('github_repo', '');
+
+INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('github_branch', '');
+
 CREATE TABLE categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NULL,

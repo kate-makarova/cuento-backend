@@ -720,10 +720,10 @@ func main() {
 		Controllers.GetFrontendComponents(c, Services.DB)
 	})
 	protectedRouter.GET("/admin/frontend-templates/components/*name", "Get the custom template for a frontend component", func(c *gin.Context) {
-		Controllers.GetFrontendComponentTemplate(c)
+		Controllers.GetFrontendComponentTemplate(c, Services.DB)
 	})
 	protectedRouter.GET("/admin/frontend-templates/components-default/*name", "Get the default template for a frontend component", func(c *gin.Context) {
-		Controllers.GetFrontendComponentDefaultTemplate(c)
+		Controllers.GetFrontendComponentDefaultTemplate(c, Services.DB)
 	})
 	protectedRouter.POST("/admin/frontend-templates/component/update", "Commit an update to a custom frontend component template", func(c *gin.Context) {
 		Controllers.UpdateFrontendComponentTemplate(c, Services.DB)

@@ -5,15 +5,11 @@ import (
 	"cuento-backend/src/Services"
 	"database/sql"
 	"net/http"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
-
-const frontendDir = "./../frontend"
 
 type frontendComponent struct {
 	Name                string `json:"name"`
@@ -39,24 +35,42 @@ var frontendComponentDefs = []frontendComponentDef{
 	},
 }
 
-func readActiveCustomTemplates() map[string]bool {
-	envPath := filepath.Join(frontendDir, "src/environments/environment.prod.ts")
-	data, err := os.ReadFile(envPath)
+var customTemplateRe = regexp.MustCompile(`component:\s*['"]([^'"]+)['"]\s*,\s*template:\s*['"]([^'"]+)['"]`)
+var customTemplatesBlockRe = regexp.MustCompile(`(?s)customTemplates:\s*\[.*?]\s*as\s*\{[^}]+}\[]`)
+
+func findComponentDef(name string) (frontendComponentDef, bool) {
+	for _, def := range frontendComponentDefs {
+		if def.Name == name {
+			return def, true
+		}
+	}
+	return frontendComponentDef{}, false
+}
+
+func readActiveCustomTemplates(cfg Services.GitHubConfig) map[string]bool {
+	data, err := Services.GitHubGetFile(cfg, "src/environments/environment.prod.ts")
 	if err != nil {
 		return map[string]bool{}
 	}
 	active := map[string]bool{}
-	for _, match := range customTemplateRe.FindAllSubmatch(data, -1) {
-		active[string(match[1])] = true
+	for _, match := range customTemplateRe.FindAllStringSubmatch(data, -1) {
+		active[match[1]] = true
 	}
 	return active
 }
 
 func GetFrontendComponents(c *gin.Context, db *sql.DB) {
+	cfg, err := Services.GetGitHubConfig(db)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "GitHub config error: " + err.Error()})
+		c.Abort()
+		return
+	}
+
 	userID := Services.GetUserIdFromContext(c)
 	lang := Services.GetUserLanguage(userID, db)
 	localizer := Services.NewLocalizer(lang)
-	active := readActiveCustomTemplates()
+	active := readActiveCustomTemplates(cfg)
 
 	result := make([]frontendComponent, len(frontendComponentDefs))
 	for i, def := range frontendComponentDefs {
@@ -71,31 +85,23 @@ func GetFrontendComponents(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, result)
 }
 
-func readComponentFile(c *gin.Context, relPath string) {
-	absPath := filepath.Join(frontendDir, relPath)
-	content, err := os.ReadFile(absPath)
+func getComponentFile(c *gin.Context, db *sql.DB, path string) {
+	cfg, err := Services.GetGitHubConfig(db)
 	if err != nil {
-		if os.IsNotExist(err) {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Template file not found: " + relPath})
-		} else {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to read template file: " + err.Error()})
-		}
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "GitHub config error: " + err.Error()})
 		c.Abort()
 		return
 	}
-	c.String(http.StatusOK, string(content))
-}
-
-func findComponentDef(name string) (frontendComponentDef, bool) {
-	for _, def := range frontendComponentDefs {
-		if def.Name == name {
-			return def, true
-		}
+	content, err := Services.GitHubGetFile(cfg, path)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch file from GitHub: " + err.Error()})
+		c.Abort()
+		return
 	}
-	return frontendComponentDef{}, false
+	c.String(http.StatusOK, content)
 }
 
-func GetFrontendComponentTemplate(c *gin.Context) {
+func GetFrontendComponentTemplate(c *gin.Context, db *sql.DB) {
 	name := c.Param("name")
 	def, ok := findComponentDef(name)
 	if !ok {
@@ -103,10 +109,10 @@ func GetFrontendComponentTemplate(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	readComponentFile(c, def.TemplatePath)
+	getComponentFile(c, db, def.TemplatePath)
 }
 
-func GetFrontendComponentDefaultTemplate(c *gin.Context) {
+func GetFrontendComponentDefaultTemplate(c *gin.Context, db *sql.DB) {
 	name := c.Param("name")
 	def, ok := findComponentDef(name)
 	if !ok {
@@ -114,11 +120,8 @@ func GetFrontendComponentDefaultTemplate(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	readComponentFile(c, def.DefaultTemplatePath)
+	getComponentFile(c, db, def.DefaultTemplatePath)
 }
-
-var customTemplateRe = regexp.MustCompile(`component:\s*['"]([^'"]+)['"]\s*,\s*template:\s*['"]([^'"]+)['"]`)
-var customTemplatesBlockRe = regexp.MustCompile(`(?s)customTemplates:\s*\[.*?\]\s*as\s*\{[^}]+\}\[\]`)
 
 type updateEnvRequest struct {
 	ActiveComponents []string `json:"active_components"`
@@ -132,10 +135,17 @@ func UpdateFrontendEnv(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	envPath := filepath.Join(frontendDir, "src/environments/environment.prod.ts")
-	data, err := os.ReadFile(envPath)
+	cfg, err := Services.GetGitHubConfig(db)
 	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to read environment file: " + err.Error()})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "GitHub config error: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	const envFilePath = "src/environments/environment.prod.ts"
+	current, err := Services.GitHubGetFile(cfg, envFilePath)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch environment file: " + err.Error()})
 		c.Abort()
 		return
 	}
@@ -159,21 +169,14 @@ func UpdateFrontendEnv(c *gin.Context, db *sql.DB) {
 		newBlock = "customTemplates: [\n" + strings.Join(entries, ",\n") + "\n  ] as { component: string; template: string }[]"
 	}
 
-	updated := customTemplatesBlockRe.ReplaceAll(data, []byte(newBlock))
-	if string(updated) == string(data) {
+	updated := customTemplatesBlockRe.ReplaceAllString(current, newBlock)
+	if updated == current {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Could not locate customTemplates block in environment file"})
 		c.Abort()
 		return
 	}
 
-	cfg, err := Services.GetGitHubConfig(db)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "GitHub config error: " + err.Error()})
-		c.Abort()
-		return
-	}
-
-	files := []Services.GitHubFile{{Path: "src/environments/environment.prod.ts", Content: string(updated)}}
+	files := []Services.GitHubFile{{Path: envFilePath, Content: updated}}
 	if err := Services.GitHubCommit(cfg, "Update custom templates configuration", files); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "GitHub commit failed: " + err.Error()})
 		c.Abort()
