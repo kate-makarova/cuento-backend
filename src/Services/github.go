@@ -56,6 +56,15 @@ func GetGitHubConfig(db *sql.DB) (GitHubConfig, error) {
 	return cfg, nil
 }
 
+type GitHubError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *GitHubError) Error() string {
+	return fmt.Sprintf("github API error %d: %s", e.StatusCode, e.Body)
+}
+
 var githubHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
 func githubRequest(method, url, token string, body any) ([]byte, error) {
@@ -87,7 +96,7 @@ func githubRequest(method, url, token string, body any) ([]byte, error) {
 		return nil, err
 	}
 	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("github API error %d: %s", resp.StatusCode, respBody)
+		return nil, &GitHubError{StatusCode: resp.StatusCode, Body: string(respBody)}
 	}
 	return respBody, nil
 }

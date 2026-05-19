@@ -4,6 +4,7 @@ import (
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
 	"database/sql"
+	"errors"
 	"net/http"
 	"regexp"
 	"strings"
@@ -36,7 +37,7 @@ var frontendComponentDefs = []frontendComponentDef{
 }
 
 var customTemplateRe = regexp.MustCompile(`component:\s*['"]([^'"]+)['"]\s*,\s*template:\s*['"]([^'"]+)['"]`)
-var customTemplatesBlockRe = regexp.MustCompile(`(?s)customTemplates:\s*\[.*?]\s*as\s*\{[^}]+}\[]`)
+var customTemplatesBlockRe = regexp.MustCompile(`(?s)customTemplates:\s*\[.*?]\s*as\s*\{[^}]+}\s*\[]`)
 
 func findComponentDef(name string) (frontendComponentDef, bool) {
 	for _, def := range frontendComponentDefs {
@@ -79,7 +80,7 @@ func GetFrontendComponents(c *gin.Context, db *sql.DB) {
 			TemplatePath:        def.TemplatePath,
 			DefaultTemplatePath: def.DefaultTemplatePath,
 			Description:         Services.T(localizer, def.DescriptionKey),
-			Active:              active[def.DefaultTemplatePath],
+			Active:              active[def.Name],
 		}
 	}
 	c.JSON(http.StatusOK, result)
@@ -94,7 +95,12 @@ func getComponentFile(c *gin.Context, db *sql.DB, path string) {
 	}
 	content, err := Services.GitHubGetFile(cfg, path)
 	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch file from GitHub: " + err.Error()})
+		var ghErr *Services.GitHubError
+		if errors.As(err, &ghErr) && ghErr.StatusCode == http.StatusNotFound {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "File not found in repository: " + path})
+		} else {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch file from GitHub: " + err.Error()})
+		}
 		c.Abort()
 		return
 	}
@@ -158,15 +164,15 @@ func UpdateFrontendEnv(c *gin.Context, db *sql.DB) {
 	var entries []string
 	for _, def := range frontendComponentDefs {
 		if activeSet[def.Name] {
-			entries = append(entries, "    { component: '"+def.DefaultTemplatePath+"', template: '"+def.TemplatePath+"' }")
+			entries = append(entries, "    { component: '"+def.Name+"', default_template: '"+def.DefaultTemplatePath+"', template: '"+def.TemplatePath+"' }")
 		}
 	}
 
 	var newBlock string
 	if len(entries) == 0 {
-		newBlock = "customTemplates: [] as { component: string; template: string }[]"
+		newBlock = "customTemplates: [] as { component: string; default_template: string; template: string }[]"
 	} else {
-		newBlock = "customTemplates: [\n" + strings.Join(entries, ",\n") + "\n  ] as { component: string; template: string }[]"
+		newBlock = "customTemplates: [\n" + strings.Join(entries, ",\n") + "\n  ] as { component: string; default_template: string; template: string }[]"
 	}
 
 	updated := customTemplatesBlockRe.ReplaceAllString(current, newBlock)
