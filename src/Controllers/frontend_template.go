@@ -4,13 +4,15 @@ import (
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
+
+const customTemplatesFile = "src/environments/custom_templates.json"
 
 type frontendComponent struct {
 	Name                string `json:"name"`
@@ -36,9 +38,6 @@ var frontendComponentDefs = []frontendComponentDef{
 	},
 }
 
-var customTemplateRe = regexp.MustCompile(`component:\s*['"]([^'"]+)['"]\s*,\s*template:\s*['"]([^'"]+)['"]`)
-var customTemplatesBlockRe = regexp.MustCompile(`(?s)customTemplates:\s*\[.*?]\s*as\s*\{[^}]+}\s*\[]`)
-
 func findComponentDef(name string) (frontendComponentDef, bool) {
 	for _, def := range frontendComponentDefs {
 		if def.Name == name {
@@ -48,14 +47,25 @@ func findComponentDef(name string) (frontendComponentDef, bool) {
 	return frontendComponentDef{}, false
 }
 
+type customTemplateEntry struct {
+	Component       string `json:"component"`
+	DefaultTemplate string `json:"default_template"`
+	Template        string `json:"template"`
+}
+
 func readActiveCustomTemplates(cfg Services.GitHubConfig) map[string]bool {
-	data, err := Services.GitHubGetFile(cfg, "src/environments/environment.prod.ts")
+	data, err := Services.GitHubGetFile(cfg, customTemplatesFile)
 	if err != nil {
+		// Missing file = no active custom templates, not an error
 		return map[string]bool{}
 	}
-	active := map[string]bool{}
-	for _, match := range customTemplateRe.FindAllStringSubmatch(data, -1) {
-		active[match[1]] = true
+	var entries []customTemplateEntry
+	if err := json.Unmarshal([]byte(data), &entries); err != nil {
+		return map[string]bool{}
+	}
+	active := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		active[e.Component] = true
 	}
 	return active
 }
@@ -148,41 +158,33 @@ func UpdateFrontendEnv(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	const envFilePath = "src/environments/environment.prod.ts"
-	current, err := Services.GitHubGetFile(cfg, envFilePath)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch environment file: " + err.Error()})
-		c.Abort()
-		return
-	}
-
 	activeSet := make(map[string]bool, len(req.ActiveComponents))
 	for _, name := range req.ActiveComponents {
 		activeSet[name] = true
 	}
 
-	var entries []string
+	var entries []customTemplateEntry
 	for _, def := range frontendComponentDefs {
 		if activeSet[def.Name] {
-			entries = append(entries, "    { component: '"+def.Name+"', default_template: '"+def.DefaultTemplatePath+"', template: '"+def.TemplatePath+"' }")
+			entries = append(entries, customTemplateEntry{
+				Component:       def.Name,
+				DefaultTemplate: def.DefaultTemplatePath,
+				Template:        def.TemplatePath,
+			})
 		}
 	}
-
-	var newBlock string
-	if len(entries) == 0 {
-		newBlock = "customTemplates: [] as { component: string; default_template: string; template: string }[]"
-	} else {
-		newBlock = "customTemplates: [\n" + strings.Join(entries, ",\n") + "\n  ] as { component: string; default_template: string; template: string }[]"
+	if entries == nil {
+		entries = []customTemplateEntry{}
 	}
 
-	updated := customTemplatesBlockRe.ReplaceAllString(current, newBlock)
-	if updated == current {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Could not locate customTemplates block in environment file"})
+	content, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to serialize custom templates"})
 		c.Abort()
 		return
 	}
 
-	files := []Services.GitHubFile{{Path: envFilePath, Content: updated}}
+	files := []Services.GitHubFile{{Path: customTemplatesFile, Content: string(content)}}
 	if err := Services.GitHubCommit(cfg, "Update custom templates configuration", files); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "GitHub commit failed: " + err.Error()})
 		c.Abort()
