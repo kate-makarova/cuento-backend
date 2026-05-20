@@ -221,7 +221,7 @@ func UpdateFrontendComponentTemplate(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	files := []Services.GitHubFile{{Path: def.TemplatePath, Content: req.Content}}
+	files := []Services.GitHubFile{{Path: def.TemplatePath, Content: Services.SanitizeTemplate(req.Content)}}
 	if err := Services.GitHubCommit(cfg, "Update "+def.Name+" template", files); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "GitHub commit failed: " + err.Error()})
 		c.Abort()
