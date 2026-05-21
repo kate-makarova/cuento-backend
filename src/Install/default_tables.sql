@@ -867,7 +867,7 @@ create table vector_search_bucket_subforum
 create table mask_stats
 (
     id             bigint unsigned not null auto_increment primary key,
-    user_id        bigint unsigned not null,
+    user_id        int             not null,
     total_episodes int             not null default 0,
     total_posts    int             not null default 0,
     date_last_post datetime        null,
