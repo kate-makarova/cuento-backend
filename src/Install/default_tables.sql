@@ -863,3 +863,14 @@ create table vector_search_bucket_subforum
     primary key (subforum_id, bucket),
     constraint fk_vsbs_subforum foreign key (subforum_id) references subforums (id) on delete cascade
 );
+
+create table mask_stats
+(
+    id             bigint unsigned not null auto_increment primary key,
+    user_id        bigint unsigned not null,
+    total_episodes int             not null default 0,
+    total_posts    int             not null default 0,
+    date_last_post datetime        null,
+    unique key uq_mask_stats_user (user_id),
+    constraint fk_mask_stats_user foreign key (user_id) references users (id) on delete cascade
+);

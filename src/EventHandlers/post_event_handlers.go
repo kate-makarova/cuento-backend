@@ -384,6 +384,39 @@ func RegisterPostEventHandlers() {
 		}
 	})
 
+	// Subscriber: Update mask stats on episode post created
+	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.PostCreatedEvent)
+		if !ok || event.Type == "post_updated" {
+			return
+		}
+
+		if event.Post.CharacterProfile == nil || event.Post.CharacterProfile.IsMask == nil || !*event.Post.CharacterProfile.IsMask {
+			return
+		}
+
+		var topicType Entities.TopicType
+		if err := db.QueryRow("SELECT type FROM topics WHERE id = ?", event.TopicID).Scan(&topicType); err != nil || topicType != Entities.EpisodeTopic {
+			return
+		}
+
+		_, err := db.Exec(`
+			INSERT INTO mask_stats (user_id, total_posts, date_last_post)
+			VALUES (?, 1, ?)
+			ON DUPLICATE KEY UPDATE
+				total_posts    = total_posts + 1,
+				date_last_post = ?
+		`, event.Post.AuthorUserId, event.Post.DateCreated, event.Post.DateCreated)
+		if err != nil {
+			fmt.Printf("Error updating mask stats: %v\n", err)
+		}
+
+		_, err = db.Exec("UPDATE users SET total_posts = total_posts + 1 WHERE id = ?", event.Post.AuthorUserId)
+		if err != nil {
+			fmt.Printf("Error updating user total_posts: %v\n", err)
+		}
+	})
+
 	// Subscriber: Award currency for episode post
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)

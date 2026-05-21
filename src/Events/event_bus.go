@@ -76,6 +76,7 @@ type EpisodeCreatedEvent struct {
 	SubforumID int
 	TopicID    int64
 	TopicName  string
+	UserID     int
 }
 
 type CharacterAcceptedEvent struct {
@@ -149,8 +150,13 @@ type CharacterUpdatedEvent struct {
 }
 
 type EpisodeUpdatedEvent struct {
-	EpisodeID  int64
-	SubforumID int
+	EpisodeID        int64
+	SubforumID       int
+	UserID           int
+	PrevMaskUserIDs  []int
+	NewMaskUserIDs   []int
+	PrevCharacterIDs []int
+	NewCharacterIDs  []int
 }
 
 type WantedCharacterUpdatedEvent struct {
