@@ -421,5 +421,7 @@ func GetFactionTreeByCharacter(characterID int, db *sql.DB) ([]Entities.Faction,
 		result = append(result, tree...)
 	}
 
+	FillFactionSettingNames(result, db)
+
 	return result, nil
 }

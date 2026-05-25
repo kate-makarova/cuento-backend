@@ -779,6 +779,20 @@ func main() {
 		MCP.ClearAIContext(c, Services.DB)
 	})
 
+	// Fraction settings routes
+	protectedRouter.GET("/admin/faction-settings/list", "Get list of all faction settings ordered by level", func(c *gin.Context) {
+		Controllers.GetFactionSettings(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/faction-setting/create", "Create a new faction setting", func(c *gin.Context) {
+		Controllers.CreateFactionSetting(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/faction-setting/update/:id", "Update faction setting by ID", func(c *gin.Context) {
+		Controllers.UpdateFactionSetting(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/faction-setting/delete/:id", "Delete faction setting by ID", func(c *gin.Context) {
+		Controllers.DeleteFactionSetting(c, Services.DB)
+	})
+
 	// WebSocket route with special authentication
 	wsGroup := r.Group("/")
 	wsGroup.Use(Middlewares.WebSocketAuthMiddleware())

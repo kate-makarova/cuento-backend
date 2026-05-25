@@ -874,3 +874,12 @@ create table mask_stats
     unique key uq_mask_stats_user (user_id),
     constraint fk_mask_stats_user foreign key (user_id) references users (id) on delete cascade
 );
+
+create table faction_settings
+(
+    id               int          auto_increment primary key,
+    level            int          not null,
+    human_name       varchar(255) not null,
+    parent_faction_id int         null,
+    constraint fk_faction_settings_parent foreign key (parent_faction_id) references factions (id)
+);
