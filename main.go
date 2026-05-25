@@ -147,6 +147,9 @@ func main() {
 	publicRouter.GET("/character-profile/get/:id", "Get character profile details by ID", func(c *gin.Context) {
 		Controllers.GetCharacterProfile(c, Services.DB)
 	})
+	publicRouter.GET("/wanted-character/field-list/:machine_name", "Get distinct values of a string wanted character custom field", func(c *gin.Context) {
+		Controllers.WantedCustomFieldList(c, Services.DB)
+	})
 	publicRouter.POST("/wanted-character/list", "Get list of unclaimed wanted characters", func(c *gin.Context) {
 		Controllers.GetWantedCharacterList(c, Services.DB)
 	})

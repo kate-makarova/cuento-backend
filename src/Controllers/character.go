@@ -1892,7 +1892,7 @@ func CustomFieldList(c *gin.Context, db *sql.DB) {
 	}
 
 	query := fmt.Sprintf(
-		"SELECT DISTINCT `%s` FROM character_flattened WHERE `%s` IS NOT NULL AND `%s` != '' ORDER BY `%s` ASC",
+		"SELECT cf.`%s`, cb.id, cb.name FROM character_flattened cf JOIN character_base cb ON cb.id = cf.entity_id WHERE cf.`%s` IS NOT NULL AND cf.`%s` != '' ORDER BY cf.`%s` ASC",
 		machineName, machineName, machineName, machineName,
 	)
 	rows, err := db.Query(query)
@@ -1903,13 +1903,26 @@ func CustomFieldList(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
-	values := []string{}
+	type FieldValue struct {
+		Value      string                     `json:"value"`
+		Characters []*Entities.ShortCharacter `json:"characters"`
+	}
+
+	var values []FieldValue
+	indexByValue := map[string]int{}
 	for rows.Next() {
 		var val string
-		if err := rows.Scan(&val); err != nil {
+		var charID int
+		var charName string
+		if err := rows.Scan(&val, &charID, &charName); err != nil {
 			continue
 		}
-		values = append(values, val)
+		if idx, exists := indexByValue[val]; exists {
+			values[idx].Characters = append(values[idx].Characters, &Entities.ShortCharacter{Id: charID, Name: charName})
+		} else {
+			indexByValue[val] = len(values)
+			values = append(values, FieldValue{Value: val, Characters: []*Entities.ShortCharacter{{Id: charID, Name: charName}}})
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"human_field_name": matched.HumanFieldName, "values": values})
