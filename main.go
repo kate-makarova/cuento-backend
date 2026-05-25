@@ -47,6 +47,15 @@ func main() {
 	}()
 
 	// Evict users inactive for more than 10 minutes from the activity list
+	// Clean up stale guest fingerprints every 5 minutes
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			Services.GuestActivity.Cleanup()
+		}
+	}()
+
 	go func() {
 		ticker := time.NewTicker(1 * time.Minute)
 		defer ticker.Stop()
@@ -65,12 +74,13 @@ func main() {
 	r := gin.Default()
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true
-	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
+	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "X-Screen-Resolution", "Sec-CH-UA"}
 	r.Use(cors.New(config))
 
 	// Apply error middleware globally
 	r.Use(Middlewares.ErrorMiddleware())
 	r.Use(Middlewares.FeatureFlagsMiddleware(Services.DB))
+	r.Use(Middlewares.GuestTrackingMiddleware())
 
 	// Public routes
 	publicRouter := Router.NewCustomRouter(r.Group("/"))
