@@ -806,6 +806,23 @@ func main() {
 		Controllers.DeleteFactionSetting(c, Services.DB)
 	})
 
+	// Standard warnings routes
+	protectedRouter.GET("/standard-warnings", "Get list of standard warnings", func(c *gin.Context) {
+		Controllers.GetStandardWarnings(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/standard-warning/list", "Get list of all standard warnings (admin)", func(c *gin.Context) {
+		Controllers.GetStandardWarnings(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/standard-warning/create", "Create a new standard warning", func(c *gin.Context) {
+		Controllers.CreateStandardWarning(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/standard-warning/update/:id", "Update standard warning by ID", func(c *gin.Context) {
+		Controllers.UpdateStandardWarning(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/standard-warning/delete/:id", "Delete standard warning by ID", func(c *gin.Context) {
+		Controllers.DeleteStandardWarning(c, Services.DB)
+	})
+
 	// WebSocket route with special authentication
 	wsGroup := r.Group("/")
 	wsGroup.Use(Middlewares.WebSocketAuthMiddleware())

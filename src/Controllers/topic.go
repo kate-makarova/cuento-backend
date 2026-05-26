@@ -768,6 +768,23 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 				maskRows.Close()
 			}
 
+			// Fetch warnings for the episode
+			warningRows, err := db.Query(`SELECT sw.id, sw.name, sw.description, sw.locale, sw.rating_language, sw.rating_violence, sw.rating_sex FROM standard_warnings sw JOIN episode_warnings ew ON sw.id = ew.warning_id WHERE ew.episode_id = ? ORDER BY sw.name`, episode.Id)
+			if err == nil {
+				var warnings []Entities.StandardWarning
+				for warningRows.Next() {
+					var w Entities.StandardWarning
+					if err := warningRows.Scan(&w.Id, &w.Name, &w.Description, &w.Locale, &w.RatingLanguage, &w.RatingViolence, &w.RatingSex); err == nil {
+						warnings = append(warnings, w)
+					}
+				}
+				if warnings == nil {
+					warnings = []Entities.StandardWarning{}
+				}
+				episode.Warnings = warnings
+				warningRows.Close()
+			}
+
 			topic.Episode = episode
 		}
 	}
