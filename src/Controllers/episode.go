@@ -1087,3 +1087,31 @@ func ActivateEpisode(c *gin.Context, db *sql.DB) {
 		"topic_status":   topicStatus,
 	})
 }
+
+func AddEpisodeWarningsConsent(c *gin.Context, db *sql.DB) {
+	episodeId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid episode id"})
+		c.Abort()
+		return
+	}
+
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
+		c.Abort()
+		return
+	}
+
+	_, err = db.Exec(
+		"INSERT IGNORE INTO user_episode_warnings_consent (episode_id, user_id) VALUES (?, ?)",
+		episodeId, userID,
+	)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save consent: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Consent recorded"})
+}

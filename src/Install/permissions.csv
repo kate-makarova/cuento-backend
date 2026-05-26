@@ -193,5 +193,6 @@ role_id,type,permission
 2,0,/standard-warnings
 3,0,/admin/standard-warning/list
 3,0,/admin/standard-warning/create
-3,0,/admin/standard-warning/update/:id
-3,0,/admin/standard-warning/delete/:id
+3,0,/admin/standard-warning/update/:id/:locale
+3,0,/admin/standard-warning/delete/:id/:locale
+2,0,/episode/:id/warnings-consent

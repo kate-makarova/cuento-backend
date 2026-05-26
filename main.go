@@ -85,6 +85,10 @@ func main() {
 	// Public routes
 	publicRouter := Router.NewCustomRouter(r.Group("/"))
 
+	publicRouter.GET("/episode/:id/warnings/:locale", "Get warnings for an episode filtered by locale", func(c *gin.Context) {
+		Controllers.GetEpisodeWarnings(c, Services.DB)
+	})
+
 	// User routes (Public)
 	publicRouter.GET("/search/buckets", "Get list of available search buckets", func(c *gin.Context) {
 		Controllers.GetSonicBuckets(c)
@@ -488,6 +492,9 @@ func main() {
 	protectedRouter.POST("/episode/deactivate/:id", "Deactivate an episode", func(c *gin.Context) {
 		Controllers.DeactivateEpisode(c, Services.DB)
 	})
+	protectedRouter.POST("/episode/:id/warnings-consent", "Record that the user has seen the warnings for an episode", func(c *gin.Context) {
+		Controllers.AddEpisodeWarningsConsent(c, Services.DB)
+	})
 	protectedRouter.POST("/episode/activate/:id", "Activate an episode", func(c *gin.Context) {
 		Controllers.ActivateEpisode(c, Services.DB)
 	})
@@ -816,10 +823,10 @@ func main() {
 	protectedRouter.POST("/admin/standard-warning/create", "Create a new standard warning", func(c *gin.Context) {
 		Controllers.CreateStandardWarning(c, Services.DB)
 	})
-	protectedRouter.POST("/admin/standard-warning/update/:id", "Update standard warning by ID", func(c *gin.Context) {
+	protectedRouter.POST("/admin/standard-warning/update/:id/:locale", "Update standard warning by ID and locale", func(c *gin.Context) {
 		Controllers.UpdateStandardWarning(c, Services.DB)
 	})
-	protectedRouter.GET("/admin/standard-warning/delete/:id", "Delete standard warning by ID", func(c *gin.Context) {
+	protectedRouter.GET("/admin/standard-warning/delete/:id/:locale", "Delete standard warning by ID and locale", func(c *gin.Context) {
 		Controllers.DeleteStandardWarning(c, Services.DB)
 	})
 

@@ -305,58 +305,67 @@ create table episode_mask
 
 create table standard_warnings
 (
-    id               bigint unsigned auto_increment primary key,
+    id               bigint unsigned not null,
+    locale           varchar(10)     not null,
     name             varchar(255)    not null,
     description      text            null,
-    locale           varchar(10)     not null,
     rating_language  int             default 0 not null,
     rating_violence  int             default 0 not null,
-    rating_sex       int             default 0 not null
+    rating_sex       int             default 0 not null,
+    primary key (id, locale)
 );
 
 create table episode_warnings
 (
     episode_id bigint unsigned not null,
     warning_id bigint unsigned not null,
-    foreign key (episode_id) references episode_base (id),
-    foreign key (warning_id) references standard_warnings (id)
+    foreign key (episode_id) references episode_base (id)
 );
 
-INSERT INTO standard_warnings (name, description, locale, rating_language, rating_violence, rating_sex) VALUES
-('Cannibalism',    'Consumption of the flesh or organs of the same species, whether ritualistic, survival-based, or monstrous.',                                                                      'en', 0, 2, 0),
-('Torture',        'Intentional, prolonged infliction of severe physical or psychological pain on a captive character.',                                                                              'en', 0, 2, 0),
-('Body Horror',    'Severe, unsettling violations of normal anatomy (e.g., parasitic infestation, rapid mutation, skin-crawling transformations).',                                                   'en', 0, 1, 0),
-('Self-Harm',      'Depictions of characters intentionally causing physical injury to their own bodies or engaging in active suicidal ideation.',                                                     'en', 0, 1, 0),
-('Dismemberment',  'The traumatic loss, amputation, or severing of limbs, fingers, or major body parts during a scene.',                                                                             'en', 0, 2, 0),
-('Animal Cruelty', 'Intentional harm, abuse, or graphic death inflicted upon domestic animals, pets, or innocent wildlife.',                                                                         'en', 0, 1, 0),
-('Child Injury',   'Onscreen physical danger, severe injury, or trauma happening to characters who are minors within the setting.',                                                                  'en', 0, 1, 0),
-('Loss of Agency', 'Complete stripping of a character''s free will via magical mind control, heavy drugging, hypnosis, or telepathic hijacking.',                                                    'en', 0, 0, 0),
-('Severe Abuse',   'Intimate partner violence, systematic gaslighting, or severe domestic and emotional torment.',                                                                                   'en', 1, 1, 0),
-('Panic Attacks',  'Visceral, detailed depictions of acute anxiety, hyperventilation, flashbacks, or overwhelming PTSD episodes.',                                                                   'en', 0, 0, 0),
-('Slavery',        'Depictions of human/humanoid trafficking, forced labor, ownership of sentient beings, or institutional captivity.',                                                              'en', 0, 1, 0),
-('Hate Speech / Slurs', 'Explicit, targeted bigotry, whether utilizing real-world terms or highly intense, fictionalized fantasy/sci-fi equivalents.',                                              'en', 2, 0, 0),
-('Cult Activity',  'Extreme religious trauma, brainwashing techniques, ritualistic psychological breaking, or coercive group dynamics.',                                                             'en', 0, 0, 0),
-('Arachnophobia',  'Heavy focus on spiders, scorpions, swarming insects, or arachnid-based monsters/environments.',                                                                                 'en', 0, 0, 0),
-('Thalassophobia', 'Deep ocean environments, fear of the abyss, drowning, or massive underwater leviathans.',                                                                                       'en', 0, 0, 0),
-('Emetophobia',    'Detailed, sensory descriptions of characters vomiting, nausea, or severe gastrointestinal sickness.',                                                                           'en', 0, 1, 0);
+create table user_episode_warnings_consent
+(
+    episode_id bigint unsigned not null,
+    user_id    int             not null,
+    primary key (episode_id, user_id),
+    foreign key (episode_id) references episode_base (id),
+    foreign key (user_id) references users (id)
+);
 
-INSERT INTO standard_warnings (name, description, locale, rating_language, rating_violence, rating_sex) VALUES
-('Каннибализм',                       'Поедание плоти или органов существ своего же вида (ритуальное, ради выживания или чудовищами).',                                                                                        'ru', 0, 2, 0),
-('Пытки',                             'Умышленное, затяжное причинение сильной физической или психологической боли плененному персонажу.',                                                                                     'ru', 0, 2, 0),
-('Боди-хоррор',                       'Серьезные, пугающие нарушения нормальной анатомии (например, заражение паразитами, стремительные мутации, жуткие трансформации плоти).',                                               'ru', 0, 1, 0),
-('Селфхарм / Самоповреждение',        'Изображение персонажей, намеренно наносящих себе физические увечья, или проявления активных суицидальных мыслей.',                                                                      'ru', 0, 1, 0),
-('Расчленение',                       'Травматическая потеря, ампутация или отсечение конечностей, пальцев или крупных частей тела во время сцены.',                                                                           'ru', 0, 2, 0),
-('Жестокое обращение с животными',    'Умышленный вред, насилие или графическая смерть, причиненные домашним животным, питомцам или невинной дикой природе.',                                                                  'ru', 0, 1, 0),
-('Травмы детей',                      'Физическая опасность на экране, серьезные травмы или издевательства над персонажами, которые являются несовершеннолетними в рамках сеттинга.',                                          'ru', 0, 1, 0),
-('Потеря контроля / Нарушение воли',  'Полное лишение персонажа свободы воли посредством магического контроля разума, сильного воздействия наркотиков, гипноза или телепатического перехвата.',                               'ru', 0, 0, 0),
-('Жестокое обращение / Абьюз',        'Насилие со стороны интимного партнера, систематический газлайтинг или тяжелые домашние и эмоциональные мучения.',                                                                       'ru', 1, 1, 0),
-('Панические атаки',                  'Висцеральные, подробные изображения острой тревоги, гипервентиляции, флешбэков или тяжелых эпизодов ПТСР.',                                                                            'ru', 0, 0, 0),
-('Рабство',                           'Изображение торговли людьми/гуманоидами, принудительного труда, владения разумными существами или институционального плена.',                                                           'ru', 0, 1, 0),
-('Язык вражды / Оскорбления',         'Явная, целенаправленная нетерпимость с использованием реальных терминов или очень интенсивных, вымышленных фэнтезийных/научно-фантастических аналогов.',                               'ru', 2, 0, 0),
-('Культы / Секты',                    'Тяжелые религиозные травмы, методы промывания мозгов, ритуальное психологическое подавление или принудительная групповая динамика.',                                                    'ru', 0, 0, 0),
-('Арахнофобия',                       'Повышенное внимание к паукам, скорпионам, роящимся насекомым или существам/окружению на основе арахнидов.',                                                                             'ru', 0, 0, 0),
-('Талассофобия',                      'Глубоководная среда, страх бездны, утопления или массивных подводных левиафанов.',                                                                                                      'ru', 0, 0, 0),
-('Эметофобия',                        'Подробные, сенсорные описания рвоты персонажей, тошноты или тяжелого желудочно-кишечного недомогания.',                                                                                 'ru', 0, 1, 0);
+INSERT INTO standard_warnings (id, locale, name, description, rating_language, rating_violence, rating_sex) VALUES
+( 1, 'en', 'Cannibalism',       'Consumption of the flesh or organs of the same species, whether ritualistic, survival-based, or monstrous.',                                                 0, 2, 0),
+( 2, 'en', 'Torture',           'Intentional, prolonged infliction of severe physical or psychological pain on a captive character.',                                                         0, 2, 0),
+( 3, 'en', 'Body Horror',       'Severe, unsettling violations of normal anatomy (e.g., parasitic infestation, rapid mutation, skin-crawling transformations).',                              0, 1, 0),
+( 4, 'en', 'Self-Harm',         'Depictions of characters intentionally causing physical injury to their own bodies or engaging in active suicidal ideation.',                                0, 1, 0),
+( 5, 'en', 'Dismemberment',     'The traumatic loss, amputation, or severing of limbs, fingers, or major body parts during a scene.',                                                        0, 2, 0),
+( 6, 'en', 'Animal Cruelty',    'Intentional harm, abuse, or graphic death inflicted upon domestic animals, pets, or innocent wildlife.',                                                     0, 1, 0),
+( 7, 'en', 'Child Injury',      'Onscreen physical danger, severe injury, or trauma happening to characters who are minors within the setting.',                                              0, 1, 0),
+( 8, 'en', 'Loss of Agency',    'Complete stripping of a character''s free will via magical mind control, heavy drugging, hypnosis, or telepathic hijacking.',                               0, 0, 0),
+( 9, 'en', 'Severe Abuse',      'Intimate partner violence, systematic gaslighting, or severe domestic and emotional torment.',                                                               1, 1, 0),
+(10, 'en', 'Panic Attacks',     'Visceral, detailed depictions of acute anxiety, hyperventilation, flashbacks, or overwhelming PTSD episodes.',                                              0, 0, 0),
+(11, 'en', 'Slavery',           'Depictions of human/humanoid trafficking, forced labor, ownership of sentient beings, or institutional captivity.',                                         0, 1, 0),
+(12, 'en', 'Hate Speech / Slurs', 'Explicit, targeted bigotry, whether utilizing real-world terms or highly intense, fictionalized fantasy/sci-fi equivalents.',                            2, 0, 0),
+(13, 'en', 'Cult Activity',     'Extreme religious trauma, brainwashing techniques, ritualistic psychological breaking, or coercive group dynamics.',                                        0, 0, 0),
+(14, 'en', 'Arachnophobia',     'Heavy focus on spiders, scorpions, swarming insects, or arachnid-based monsters/environments.',                                                             0, 0, 0),
+(15, 'en', 'Thalassophobia',    'Deep ocean environments, fear of the abyss, drowning, or massive underwater leviathans.',                                                                   0, 0, 0),
+(16, 'en', 'Emetophobia',       'Detailed, sensory descriptions of characters vomiting, nausea, or severe gastrointestinal sickness.',                                                       0, 1, 0);
+
+INSERT INTO standard_warnings (id, locale, name, description, rating_language, rating_violence, rating_sex) VALUES
+( 1, 'ru', 'Каннибализм',                      'Поедание плоти или органов существ своего же вида (ритуальное, ради выживания или чудовищами).',                                                                         0, 2, 0),
+( 2, 'ru', 'Пытки',                            'Умышленное, затяжное причинение сильной физической или психологической боли плененному персонажу.',                                                                      0, 2, 0),
+( 3, 'ru', 'Боди-хоррор',                      'Серьезные, пугающие нарушения нормальной анатомии (например, заражение паразитами, стремительные мутации, жуткие трансформации плоти).',                                0, 1, 0),
+( 4, 'ru', 'Селфхарм / Самоповреждение',       'Изображение персонажей, намеренно наносящих себе физические увечья, или проявления активных суицидальных мыслей.',                                                      0, 1, 0),
+( 5, 'ru', 'Расчленение',                      'Травматическая потеря, ампутация или отсечение конечностей, пальцев или крупных частей тела во время сцены.',                                                           0, 2, 0),
+( 6, 'ru', 'Жестокое обращение с животными',   'Умышленный вред, насилие или графическая смерть, причиненные домашним животным, питомцам или невинной дикой природе.',                                                  0, 1, 0),
+( 7, 'ru', 'Травмы детей',                     'Физическая опасность на экране, серьезные травмы или издевательства над персонажами, которые являются несовершеннолетними в рамках сеттинга.',                          0, 1, 0),
+( 8, 'ru', 'Потеря контроля / Нарушение воли', 'Полное лишение персонажа свободы воли посредством магического контроля разума, сильного воздействия наркотиков, гипноза или телепатического перехвата.',               0, 0, 0),
+( 9, 'ru', 'Жестокое обращение / Абьюз',       'Насилие со стороны интимного партнера, систематический газлайтинг или тяжелые домашние и эмоциональные мучения.',                                                       1, 1, 0),
+(10, 'ru', 'Панические атаки',                 'Висцеральные, подробные изображения острой тревоги, гипервентиляции, флешбэков или тяжелых эпизодов ПТСР.',                                                            0, 0, 0),
+(11, 'ru', 'Рабство',                          'Изображение торговли людьми/гуманоидами, принудительного труда, владения разумными существами или институционального плена.',                                           0, 1, 0),
+(12, 'ru', 'Язык вражды / Оскорбления',        'Явная, целенаправленная нетерпимость с использованием реальных терминов или очень интенсивных, вымышленных фэнтезийных/научно-фантастических аналогов.',               2, 0, 0),
+(13, 'ru', 'Культы / Секты',                   'Тяжелые религиозные травмы, методы промывания мозгов, ритуальное психологическое подавление или принудительная групповая динамика.',                                    0, 0, 0),
+(14, 'ru', 'Арахнофобия',                      'Повышенное внимание к паукам, скорпионам, роящимся насекомым или существам/окружению на основе арахнидов.',                                                             0, 0, 0),
+(15, 'ru', 'Талассофобия',                     'Глубоководная среда, страх бездны, утопления или массивных подводных левиафанов.',                                                                                       0, 0, 0),
+(16, 'ru', 'Эметофобия',                       'Подробные, сенсорные описания рвоты персонажей, тошноты или тяжелого желудочно-кишечного недомогания.',                                                                 0, 1, 0);
 
 create table global_stats
 (
