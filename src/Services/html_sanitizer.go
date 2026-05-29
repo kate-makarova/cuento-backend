@@ -29,6 +29,7 @@ var templatePolicy = func() *bluemonday.Policy {
 		"u", "ul",
 		"var",
 		"wbr",
+		"app-notifications",
 	)
 
 	p.AllowAttrs("cite").OnElements("blockquote", "q", "del", "ins")
@@ -37,6 +38,9 @@ var templatePolicy = func() *bluemonday.Policy {
 	p.AllowAttrs("span", "width").OnElements("col", "colgroup")
 	p.AllowAttrs("colspan", "rowspan", "headers", "scope").OnElements("td", "th")
 	p.AllowAttrs("class", "id", "style").Globally()
+
+	// Angular structural/directive attributes
+	p.AllowAttrs("app-ulinks", "appRouterLinks", "app-navlinks", "[innerHTML]", "i18n").Globally()
 
 	p.AllowStyles("color", "background-color", "background",
 		"font-size", "font-weight", "font-style", "font-family",
