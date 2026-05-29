@@ -79,6 +79,13 @@ func GetBBCompiler() bbcode.Compiler {
 		out := bbcode.NewHTMLTag("")
 		out.Name = "div"
 
+		if id, ok := getArg(node, "id"); ok {
+			out.Attrs["id"] = id
+		}
+		if class, ok := getArg(node, "class"); ok {
+			out.Attrs["class"] = class
+		}
+
 		style := "display: block; "
 		if border, ok := getArg(node, "border"); ok {
 			style += fmt.Sprintf("border: %s;", border)
