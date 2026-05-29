@@ -1,6 +1,13 @@
 package Services
 
-import "github.com/microcosm-cc/bluemonday"
+import (
+	"github.com/microcosm-cc/bluemonday"
+	"strings"
+)
+
+// angularBooleanAttrs are Angular directive attributes used without a value.
+// Bluemonday normalizes them to attr="", so we strip the empty value afterward.
+var angularBooleanAttrs = []string{"app-ulinks", "appRouterLinks", "app-navlinks"}
 
 // templatePolicy allows rich HTML for component templates but strips
 // all JavaScript vectors: <script>, inline event handlers, <iframe>,
@@ -59,5 +66,9 @@ var templatePolicy = func() *bluemonday.Policy {
 // SanitizeTemplate strips all JavaScript vectors from an HTML template
 // while preserving structural and presentational markup.
 func SanitizeTemplate(html string) string {
-	return templatePolicy.Sanitize(html)
+	result := templatePolicy.Sanitize(html)
+	for _, attr := range angularBooleanAttrs {
+		result = strings.ReplaceAll(result, attr+`=""`, attr)
+	}
+	return result
 }
