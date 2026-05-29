@@ -212,6 +212,24 @@ func GetBBCompiler() bbcode.Compiler {
 		return out, true
 	})
 
+	compiler.SetTag("ul", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "ul"
+		return out, true
+	})
+
+	compiler.SetTag("ol", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "ol"
+		return out, true
+	})
+
+	compiler.SetTag("li", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "li"
+		return out, true
+	})
+
 	compiler.SetTag("spoiler", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
 		out := bbcode.NewHTMLTag("")
 		out.Name = "spoiler-box"
