@@ -86,7 +86,7 @@ func GetBBCompiler() bbcode.Compiler {
 			out.Attrs["class"] = class
 		}
 
-		style := "display: block; "
+		var style string
 		if border, ok := getArg(node, "border"); ok {
 			style += fmt.Sprintf("border: %s;", border)
 		}
