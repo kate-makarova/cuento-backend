@@ -7,7 +7,14 @@ import (
 
 // angularBooleanAttrs are Angular directive attributes used without a value.
 // Bluemonday normalizes them to attr="", so we strip the empty value afterward.
+// angularBooleanAttrs are Angular directive attributes used without a value.
+// Bluemonday normalizes them to attr="", so we strip the empty value afterward.
 var angularBooleanAttrs = []string{"app-ulinks", "appRouterLinks", "app-navlinks"}
+
+// angularAttrCasefix restores Angular attribute casing that bluemonday lowercases.
+var angularAttrCasefix = map[string]string{
+	"[innerhtml]": "[innerHTML]",
+}
 
 // templatePolicy allows rich HTML for component templates but strips
 // all JavaScript vectors: <script>, inline event handlers, <iframe>,
@@ -69,6 +76,9 @@ func SanitizeTemplate(html string) string {
 	result := templatePolicy.Sanitize(html)
 	for _, attr := range angularBooleanAttrs {
 		result = strings.ReplaceAll(result, attr+`=""`, attr)
+	}
+	for lower, correct := range angularAttrCasefix {
+		result = strings.ReplaceAll(result, lower, correct)
 	}
 	return result
 }
