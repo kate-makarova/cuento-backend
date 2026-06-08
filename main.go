@@ -11,11 +11,14 @@ import (
 	"cuento-backend/src/Services"
 	"cuento-backend/src/Websockets"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
 func main() {
@@ -71,7 +74,17 @@ func main() {
 		}
 	}()
 
+	nrApp, err := newrelic.NewApplication(
+		newrelic.ConfigAppName(os.Getenv("NEW_RELIC_APP_NAME")),
+		newrelic.ConfigLicense(os.Getenv("NEW_RELIC_LICENSE_KEY")),
+		newrelic.ConfigAppLogForwardingEnabled(true),
+	)
+	if err != nil {
+		log.Printf("New Relic init skipped: %v", err)
+	}
+
 	r := gin.Default()
+	r.Use(Middlewares.NewRelicMiddleware(nrApp))
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "X-Screen-Resolution", "Sec-CH-UA"}
