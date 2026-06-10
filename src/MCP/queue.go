@@ -171,6 +171,9 @@ func executeTask(db *sql.DB, taskID, userID int) {
 
 	replyText = Services.MarkdownToHTML(replyText)
 
+	// Deduplicate sources by (PostID, TopicID) before saving.
+	sources = uniqueSources(sources)
+
 	// Serialize sources.
 	var sourcesJSON []byte
 	if len(sources) > 0 {
@@ -368,6 +371,31 @@ func executeEmbeddingQueueTask(db *sql.DB, taskID int) {
 	}
 
 	_, _ = db.Exec(`UPDATE ai_task_queue SET status = 'done', date_completed = NOW() WHERE id = ?`, taskID)
+}
+
+// uniqueSources removes duplicate ChatSource entries, keeping the first
+// occurrence of each (PostID, TopicID) pair.
+func uniqueSources(sources []ChatSource) []ChatSource {
+	type key struct {
+		postID  int64
+		topicID int64
+	}
+	seen := make(map[key]bool, len(sources))
+	out := sources[:0]
+	for _, s := range sources {
+		var k key
+		if s.PostID != nil {
+			k.postID = *s.PostID
+		}
+		if s.TopicID != nil {
+			k.topicID = *s.TopicID
+		}
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // sendQueuePosition queries the current position of a subscriber's task and
