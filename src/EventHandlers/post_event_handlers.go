@@ -211,7 +211,7 @@ func RegisterPostEventHandlers() {
 		}
 
 		for _, m := range milestones {
-			if postCount%m.threshold != 0 {
+			if postCount == 0 || postCount%m.threshold != 0 {
 				continue
 			}
 			var amount int
