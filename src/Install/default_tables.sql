@@ -974,6 +974,7 @@ create table external_app_permissions
     subforum_id     bigint unsigned not null,
     permission      varchar(255)   not null,
     primary key (external_app_id, subforum_id, permission),
+    key idx_eap_subforum_id (subforum_id),
     constraint fk_external_app_permissions_app     foreign key (external_app_id) references external_apps (id) on delete cascade,
     constraint fk_external_app_permissions_subforum foreign key (subforum_id)    references subforums (id)      on delete cascade
 );
