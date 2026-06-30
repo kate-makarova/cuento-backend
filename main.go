@@ -813,6 +813,37 @@ func main() {
 		Controllers.DeleteFactionSetting(c, Services.DB)
 	})
 
+	// External app public endpoints
+	publicRouter.POST("/external-app/post", "Create a post as an external app (authenticated via X-Api-Key header)", func(c *gin.Context) {
+		Controllers.ExternalAppPost(c, Services.DB)
+	})
+	publicRouter.GET("/external-app/active-topics", "Get active topics for an external app (authenticated via X-Api-Key header)", func(c *gin.Context) {
+		Controllers.ExternalAppGetActiveTopics(c, Services.DB)
+	})
+
+	// External apps routes
+	protectedRouter.GET("/admin/external-app/list", "Get list of all external apps", func(c *gin.Context) {
+		Controllers.GetExternalAppList(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/external-app/create", "Create a new external app with a generated API key", func(c *gin.Context) {
+		Controllers.CreateExternalApp(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/external-app/update/:id", "Update external app name or status by ID", func(c *gin.Context) {
+		Controllers.UpdateExternalApp(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/external-app/delete/:id", "Delete external app by ID", func(c *gin.Context) {
+		Controllers.DeleteExternalApp(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/external-app/:id/permissions", "Get permissions for an external app", func(c *gin.Context) {
+		Controllers.GetExternalAppPermissions(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/external-app/:id/permission/create", "Add a permission to an external app", func(c *gin.Context) {
+		Controllers.AddExternalAppPermission(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/external-app/:id/permission/delete", "Remove a permission from an external app", func(c *gin.Context) {
+		Controllers.DeleteExternalAppPermission(c, Services.DB)
+	})
+
 	// Standard warnings routes
 	protectedRouter.GET("/standard-warnings", "Get list of standard warnings", func(c *gin.Context) {
 		Controllers.GetStandardWarnings(c, Services.DB)

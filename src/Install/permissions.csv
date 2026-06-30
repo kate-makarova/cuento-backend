@@ -196,3 +196,10 @@ role_id,type,permission
 3,0,/admin/standard-warning/update/:id/:locale
 3,0,/admin/standard-warning/delete/:id/:locale
 2,0,/episode/:id/warnings-consent
+3,0,/admin/external-app/list
+3,0,/admin/external-app/create
+3,0,/admin/external-app/update/:id
+3,0,/admin/external-app/delete/:id
+3,0,/admin/external-app/:id/permissions
+3,0,/admin/external-app/:id/permission/create
+3,0,/admin/external-app/:id/permission/delete
