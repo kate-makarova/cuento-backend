@@ -186,7 +186,7 @@ role_id,type,permission
 3,0,/admin/frontend-templates/component/update
 3,0,/admin/frontend-templates/env/update
 3,0,/admin/github/commit
-3,0,/admin/faction-settings/list
+
 3,0,/admin/faction-setting/create
 3,0,/admin/faction-setting/update/:id
 3,0,/admin/faction-setting/delete/:id

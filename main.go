@@ -800,7 +800,7 @@ func main() {
 	})
 
 	// Fraction settings routes
-	protectedRouter.GET("/admin/faction-settings/list", "Get list of all faction settings ordered by level", func(c *gin.Context) {
+	publicRouter.GET("/faction-settings/list", "Get list of all faction settings ordered by level", func(c *gin.Context) {
 		Controllers.GetFactionSettings(c, Services.DB)
 	})
 	protectedRouter.POST("/admin/faction-setting/create", "Create a new faction setting", func(c *gin.Context) {
