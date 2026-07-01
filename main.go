@@ -387,6 +387,9 @@ func main() {
 	})
 
 	// Character Template routes
+	publicRouter.GET("/template/episode/get", "Get episode template (public)", func(c *gin.Context) {
+		Controllers.GetTemplate(c, Services.DB)
+	})
 	protectedRouter.GET("/template/:type/get", "Get character template by type", func(c *gin.Context) {
 		Controllers.GetTemplate(c, Services.DB)
 	})
