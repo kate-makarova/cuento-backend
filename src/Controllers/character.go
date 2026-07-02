@@ -1908,7 +1908,7 @@ func CustomFieldList(c *gin.Context, db *sql.DB) {
 		Characters []*Entities.ShortCharacter `json:"characters"`
 	}
 
-	var values []FieldValue
+	values := []FieldValue{}
 	indexByValue := map[string]int{}
 	for rows.Next() {
 		var val string

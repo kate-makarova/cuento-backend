@@ -1024,7 +1024,7 @@ func WantedCustomFieldList(c *gin.Context, db *sql.DB) {
 		Characters []WantedCharacterRef `json:"characters"`
 	}
 
-	var values []FieldValue
+	values := []FieldValue{}
 	indexByValue := map[string]int{}
 	for rows.Next() {
 		var val string
