@@ -540,6 +540,18 @@ func main() {
 	protectedRouter.GET("/admin/character/:id/protection-history", "Get absences and immunities for a character", func(c *gin.Context) {
 		Controllers.GetCharacterProtectionHistory(c, Services.DB)
 	})
+	protectedRouter.GET("/admin/character/database-field-schema", "Get all unique field machine name + type combinations from character_main", func(c *gin.Context) {
+		Controllers.CharacterFieldSchema(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/character-profile/database-field-schema", "Get all unique field machine name + type combinations from character_profile_main", func(c *gin.Context) {
+		Controllers.CharacterProfileFieldSchema(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/episode/database-field-schema", "Get all unique field machine name + type combinations from episode_main", func(c *gin.Context) {
+		Controllers.EpisodeFieldSchema(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/wanted-character/database-field-schema", "Get all unique field machine name + type combinations from wanted_character_main", func(c *gin.Context) {
+		Controllers.WantedCharacterFieldSchema(c, Services.DB)
+	})
 	protectedRouter.POST("/admin/user/create", "Create a new user account (admin)", func(c *gin.Context) {
 		Controllers.CreateUser(c, Services.DB)
 	})

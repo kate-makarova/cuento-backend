@@ -1851,6 +1851,27 @@ func ActivateCharacter(c *gin.Context, db *sql.DB) {
 	})
 }
 
+func CharacterFieldSchema(c *gin.Context, db *sql.DB) {
+	rows, err := db.Query("SELECT DISTINCT field_machine_name, field_type FROM character_main WHERE field_machine_name IS NOT NULL ORDER BY field_machine_name ASC")
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to query field schema: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	result := []Entities.FieldSchema{}
+	for rows.Next() {
+		var f Entities.FieldSchema
+		if err := rows.Scan(&f.MachineName, &f.FieldType); err != nil {
+			continue
+		}
+		result = append(result, f)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"fields": result})
+}
+
 func CustomFieldList(c *gin.Context, db *sql.DB) {
 	machineName := c.Param("machine_name")
 
@@ -2098,4 +2119,25 @@ func GetArchivingWarnings(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, characters)
+}
+
+func CharacterProfileFieldSchema(c *gin.Context, db *sql.DB) {
+	rows, err := db.Query("SELECT DISTINCT field_machine_name, field_type FROM character_profile_main WHERE field_machine_name IS NOT NULL ORDER BY field_machine_name ASC")
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to query field schema: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	result := []Entities.FieldSchema{}
+	for rows.Next() {
+		var f Entities.FieldSchema
+		if err := rows.Scan(&f.MachineName, &f.FieldType); err != nil {
+			continue
+		}
+		result = append(result, f)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"fields": result})
 }

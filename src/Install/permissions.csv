@@ -167,6 +167,10 @@ role_id,type,permission
 3,0,/character-claim/delete/:id
 3,0,/admin/character-list
 3,0,/admin/character/:id/protection-history
+3,0,/admin/character/database-field-schema
+3,0,/admin/character-profile/database-field-schema
+3,0,/admin/episode/database-field-schema
+3,0,/admin/wanted-character/database-field-schema
 3,2,show_admin_page
 3,2,show_add_immunity_button
 3,2,show_character_sheet_admin_block
