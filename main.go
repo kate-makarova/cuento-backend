@@ -519,6 +519,9 @@ func main() {
 	protectedRouter.POST("/admin/character/immunity", "Add auto-archiving immunity for a character (admin)", func(c *gin.Context) {
 		Controllers.AdminAddImmunity(c, Services.DB)
 	})
+	protectedRouter.POST("/character/immunity/buy", "Buy auto-archiving immunity for a character using currency", func(c *gin.Context) {
+		Controllers.BuyAutoArchivingImmunity(c, Services.DB)
+	})
 	protectedRouter.POST("/user/archive", "Archive the current user's account and deactivate all their characters", func(c *gin.Context) {
 		Controllers.ArchiveAccount(c, Services.DB)
 	})
