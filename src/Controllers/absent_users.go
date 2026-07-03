@@ -279,9 +279,23 @@ func AdminCreateAbsence(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, gin.H{"absence_start_date": start, "absence_end_date": end})
 }
 
+func getCharacterArchivalDate(characterID int, db *sql.DB) (time.Time, error) {
+	autoArchivingDays := Services.GetAutoArchivingDays(db)
+	var archivalDate time.Time
+	err := db.QueryRow(`
+		SELECT COALESCE(
+			(SELECT MAX(end_date) FROM auto_archiving_immunity WHERE character_id = ? AND end_date > NOW()),
+			DATE_ADD(COALESCE(cb.date_last_post, t.date_created), INTERVAL ? DAY)
+		)
+		FROM character_base cb
+		JOIN topics t ON t.id = cb.topic_id
+		WHERE cb.id = ?
+	`, characterID, autoArchivingDays, characterID).Scan(&archivalDate)
+	return archivalDate, err
+}
+
 type AddImmunityRequest struct {
 	CharacterID int    `json:"character_id" binding:"required"`
-	StartDate   string `json:"start_date" binding:"required"`
 	EndDate     string `json:"end_date" binding:"required"`
 	Reason      string `json:"reason" binding:"required"`
 }
@@ -295,31 +309,23 @@ func AdminAddImmunity(c *gin.Context, db *sql.DB) {
 	}
 
 	const dateLayout = "2006-01-02"
-	startDay, err := time.ParseInLocation(dateLayout, req.StartDate, time.Local)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid start_date format, expected: YYYY-MM-DD"})
-		c.Abort()
-		return
-	}
 	endDay, err := time.ParseInLocation(dateLayout, req.EndDate, time.Local)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid end_date format, expected: YYYY-MM-DD"})
 		c.Abort()
 		return
 	}
-
-	start := time.Date(startDay.Year(), startDay.Month(), startDay.Day(), 0, 0, 0, 0, time.Local)
 	end := time.Date(endDay.Year(), endDay.Month(), endDay.Day(), 23, 59, 59, 0, time.Local)
 
-	if !end.After(start) {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "end_date must be after start_date"})
+	start, err := getCharacterArchivalDate(req.CharacterID, db)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Character not found"})
 		c.Abort()
 		return
 	}
 
-	var exists int
-	if err := db.QueryRow("SELECT COUNT(*) FROM character_base WHERE id = ?", req.CharacterID).Scan(&exists); err != nil || exists == 0 {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Character not found"})
+	if !end.After(start) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "end_date must be after the character's archival date"})
 		c.Abort()
 		return
 	}
@@ -417,9 +423,8 @@ func GetCharacterProtectionHistory(c *gin.Context, db *sql.DB) {
 
 func BuyAutoArchivingImmunity(c *gin.Context, db *sql.DB) {
 	var req struct {
-		CharacterID  int    `json:"character_id" binding:"required"`
-		DurationDays int    `json:"duration_days" binding:"required,min=1"`
-		StartDate    string `json:"start_date" binding:"required"`
+		CharacterID  int `json:"character_id" binding:"required"`
+		DurationDays int `json:"duration_days" binding:"required,min=1"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
@@ -515,15 +520,13 @@ func BuyAutoArchivingImmunity(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	// Grant immunity
-	const dateLayout = "2006-01-02"
-	startDay, err := time.ParseInLocation(dateLayout, req.StartDate, time.Local)
+	// Grant immunity starting from the character's archival date
+	start, err := getCharacterArchivalDate(req.CharacterID, db)
 	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid start_date format, expected: YYYY-MM-DD"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to determine archival date: " + err.Error()})
 		c.Abort()
 		return
 	}
-	start := time.Date(startDay.Year(), startDay.Month(), startDay.Day(), 0, 0, 0, 0, time.Local)
 	end := start.Add(time.Duration(req.DurationDays) * 24 * time.Hour)
 	_, err = tx.Exec(
 		"INSERT INTO auto_archiving_immunity (character_id, start_date, end_date, reason) VALUES (?, ?, ?, ?)",
