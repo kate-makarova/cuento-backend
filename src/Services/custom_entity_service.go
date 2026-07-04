@@ -180,6 +180,7 @@ func fillEntity(entity interface{}, data map[string]interface{}, config []Entiti
 						}
 					} else if conf.FieldType == "free_format_date" {
 						if m, ok := val.(map[string]interface{}); ok {
+							cfValue.Data = m
 							if fs, ok := m["format_string"].(string); ok {
 								rendered := fs
 								if placeholders, ok := m["placeholders"].(map[string]interface{}); ok {

@@ -32,7 +32,8 @@ type CustomFieldData struct {
 type CustomFieldValue struct {
 	Content     interface{} `json:"content"`
 	ContentHtml string      `json:"content_html,omitempty"`
-	Sort        *int64      `json:"sort,omitempty"` // Only used for free_formatted_date fields
+	Sort        *int64      `json:"sort,omitempty"`
+	Data        interface{} `json:"data,omitempty"`
 }
 
 type CustomFieldEntity struct {
