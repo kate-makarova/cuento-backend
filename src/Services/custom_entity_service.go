@@ -545,7 +545,7 @@ func CreateEntity(className string, entity interface{}, db DBExecutor) (interfac
 				var valSortFreeFormattedDate *int64
 
 				if fc, isFreeFormat := fieldConfigMap[fieldName]; isFreeFormat && fc.FieldType == "free_format_date" {
-					fieldType = "free_formatted_date"
+					fieldType = "free_format_date"
 					if m, ok := fieldValue.(map[string]interface{}); ok {
 						if s, sv, buildErr := buildFreeFormatDateStoredValue(m, id, className, db); buildErr == nil {
 							valFreeFormattedDate = &s
@@ -587,7 +587,7 @@ func CreateEntity(className string, entity interface{}, db DBExecutor) (interfac
 							valDate = &v
 						}
 					case "JSON":
-						fieldType = "free_formatted_date"
+						fieldType = "free_format_date"
 						if m, ok := fieldValue.(map[string]interface{}); ok {
 							jsonBytes, _ := json.Marshal(m)
 							s := string(jsonBytes)
@@ -736,7 +736,7 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 				var valSortFreeFormattedDate *int64
 
 				if fc, isFreeFormat := fieldConfigMap[fieldName]; isFreeFormat && fc.FieldType == "free_format_date" {
-					fieldType = "free_formatted_date"
+					fieldType = "free_format_date"
 					if m, ok := actualFieldValue.(map[string]interface{}); ok {
 						if s, sv, buildErr := buildFreeFormatDateStoredValue(m, id, className, db); buildErr == nil {
 							valFreeFormattedDate = &s
@@ -778,7 +778,7 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 							valDate = &v
 						}
 					case "JSON":
-						fieldType = "free_formatted_date"
+						fieldType = "free_format_date"
 						if m, ok := actualFieldValue.(map[string]interface{}); ok {
 							jsonBytes, _ := json.Marshal(m)
 							s := string(jsonBytes)
