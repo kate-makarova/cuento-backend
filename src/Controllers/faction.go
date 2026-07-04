@@ -5,6 +5,7 @@ import (
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -318,4 +319,43 @@ func GetPendingFactions(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, factions)
+}
+
+func UpdateFactionFreeFormatDate(c *gin.Context, db *sql.DB) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid id"})
+		c.Abort()
+		return
+	}
+
+	var req Entities.FreeFormatDate
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	ffdJSON, err := json.Marshal(req)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to encode free_format_date"})
+		c.Abort()
+		return
+	}
+
+	res, err := db.Exec("UPDATE factions SET free_format_date = ? WHERE id = ?", string(ffdJSON), id)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update free_format_date: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Faction not found"})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Free format date updated"})
 }

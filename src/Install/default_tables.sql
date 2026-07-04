@@ -402,6 +402,7 @@ create table factions
     root_id                          int          null,
     faction_status                   int default 2 not null,
     use_date_from_another_faction_id int          null,
+    free_format_date                 json         null,
     constraint fk_factions_use_date_from foreign key (use_date_from_another_faction_id) references factions (id) on delete set null
 );
 
@@ -965,7 +966,6 @@ create table faction_settings
     level            int          not null,
     human_name       varchar(255) not null,
     parent_faction_id int         null,
-    free_format_date json         null,
     constraint fk_faction_settings_parent foreign key (parent_faction_id) references factions (id)
 );
 

@@ -11,10 +11,8 @@ func GetFactionTreeByRoot(rootID int, db *sql.DB) ([]Entities.Faction, error) {
 	query := `
 		SELECT f.id, f.name, f.parent_id, f.level, f.description, f.icon, f.show_on_profile, f.faction_status,
 		       f.use_date_from_another_faction_id,
-		       (COALESCE(fs_specific.free_format_date, fs_fallback.free_format_date) IS NOT NULL) AS free_form_date_set
+		       (f.free_format_date IS NOT NULL) AS free_form_date_set
 		FROM factions f
-		LEFT JOIN faction_settings fs_specific ON fs_specific.level = f.level AND fs_specific.parent_faction_id = f.parent_id
-		LEFT JOIN faction_settings fs_fallback ON fs_fallback.level = f.level AND fs_fallback.parent_faction_id IS NULL
 		WHERE f.root_id = ? OR f.id = ?
 	`
 	rows, err := db.Query(query, rootID, rootID)
@@ -149,10 +147,8 @@ func getFactionTree(db *sql.DB, statusFilter *[]Entities.FactionStatus) ([]Entit
 	query := `
 		SELECT f.id, f.name, f.parent_id, f.level, f.description, f.icon, f.show_on_profile, f.faction_status,
 		       f.use_date_from_another_faction_id,
-		       (COALESCE(fs_specific.free_format_date, fs_fallback.free_format_date) IS NOT NULL) AS free_form_date_set
+		       (f.free_format_date IS NOT NULL) AS free_form_date_set
 		FROM factions f
-		LEFT JOIN faction_settings fs_specific ON fs_specific.level = f.level AND fs_specific.parent_faction_id = f.parent_id
-		LEFT JOIN faction_settings fs_fallback ON fs_fallback.level = f.level AND fs_fallback.parent_faction_id IS NULL
 	`
 	var rows *sql.Rows
 	var err error

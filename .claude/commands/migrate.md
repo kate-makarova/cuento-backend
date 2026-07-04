@@ -10,7 +10,7 @@ Database credentials come from `docker-compose.yml`:
 
 1. **Generate migration SQL** by running from the project root:
    ```
-   go run src/Install/local_migration.go -db cuento -user user -pass password -container cuento-backend-db-1 2>/tmp/migrate_stderr.txt
+   go run src/Install/local_migration.go -db cuento -user user -pass password -container cuento-backend-db-1 -mysql-bin mariadb 2>/tmp/migrate_stderr.txt
    ```
    Capture stdout as the migration SQL. Show the contents of `/tmp/migrate_stderr.txt` for status.
 
