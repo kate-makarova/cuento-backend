@@ -385,6 +385,8 @@ func computeFreeFormatDateSort(factionId *int, placeholders map[string]interface
 				} else {
 					val = int64(f)
 				}
+			} else if raw == nil && min < 0 {
+				val = -min
 			}
 		}
 		// Weight = product of slot sizes for all less-significant positions
