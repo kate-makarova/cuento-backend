@@ -32,7 +32,7 @@ type CustomFieldData struct {
 type CustomFieldValue struct {
 	Content     interface{} `json:"content"`
 	ContentHtml string      `json:"content_html,omitempty"`
-	Sort        *int        `json:"sort,omitempty"` // Only used for free_formatted_date fields
+	Sort        *int64      `json:"sort,omitempty"` // Only used for free_formatted_date fields
 }
 
 type CustomFieldEntity struct {
@@ -68,7 +68,7 @@ type FreeFormatDateFieldValue struct {
 	FactionId    *int                   `json:"faction_id,omitempty"`
 	FormatString string                 `json:"format_string"`
 	Placeholders map[string]interface{} `json:"placeholders"`
-	SortValue    int                    `json:"sort_value"`
+	SortValue    int64                  `json:"sort_value"`
 }
 
 // Compile-time check or global compiler initialization
@@ -84,7 +84,7 @@ func GenerateEntityTables(entity CustomFieldEntity, entityName string, db *sql.D
 		"value_text TEXT," +
 		"value_date DATETIME," +
 		"value_free_formatted_date JSON," +
-		"sort_free_formatted_date INT)"
+		"sort_free_formatted_date BIGINT)"
 
 	customFieldFlattenedTableSQL := "CREATE TABLE IF NOT EXISTS " + entityName + "_flattened (" +
 		"entity_id INT PRIMARY KEY"
@@ -106,9 +106,9 @@ func GenerateEntityTables(entity CustomFieldEntity, entityName string, db *sql.D
 	}
 
 	for _, config := range entity.FieldConfig {
-		if config.FieldType == "free_formatted_date" {
+		if config.FieldType == "free_format_date" {
 			customFieldFlattenedTableSQL += ", " + config.MachineFieldName + " JSON"
-			customFieldFlattenedTableSQL += ", " + config.MachineFieldName + "_sort INT"
+			customFieldFlattenedTableSQL += ", " + config.MachineFieldName + "_sort BIGINT"
 		} else {
 			sqlType := fieldTypeMap[config.FieldType]
 			if sqlType == "" {
@@ -162,7 +162,7 @@ func UpdateFlattenedTable(entity CustomFieldEntity, entityName string, db *sql.D
 
 	// 2. Iterate over config and add missing columns
 	for _, config := range entity.FieldConfig {
-		if config.FieldType == "free_formatted_date" {
+		if config.FieldType == "free_format_date" {
 			configFieldNames[config.MachineFieldName] = true
 			configFieldNames[config.MachineFieldName+"_sort"] = true
 
@@ -173,7 +173,7 @@ func UpdateFlattenedTable(entity CustomFieldEntity, entityName string, db *sql.D
 				}
 			}
 			if !existingColumns[config.MachineFieldName+"_sort"] {
-				alterSQL := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s_sort INT", tableName, config.MachineFieldName)
+				alterSQL := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s_sort BIGINT", tableName, config.MachineFieldName)
 				if _, err := db.Exec(alterSQL); err != nil {
 					return fmt.Errorf("failed to add column %s_sort: %w", config.MachineFieldName, err)
 				}
@@ -225,7 +225,7 @@ func UpdateTriggers(entity CustomFieldEntity, entityName string, db *sql.DB) err
 	deleteTriggerBody := ""
 
 	for _, config := range entity.FieldConfig {
-		if config.FieldType == "free_formatted_date" {
+		if config.FieldType == "free_format_date" {
 			triggerBody += fmt.Sprintf(
 				"IF NEW.field_machine_name = '%s' THEN UPDATE %s_flattened SET %s = NEW.value_free_formatted_date, %s_sort = NEW.sort_free_formatted_date WHERE entity_id = NEW.entity_id; END IF; ",
 				config.MachineFieldName, entityName, config.MachineFieldName, config.MachineFieldName)

@@ -217,7 +217,7 @@ create table character_main
     value_text                 text           null,
     value_date                 varchar(255)   null,
     value_free_formatted_date  json           null,
-    sort_free_formatted_date   int            null
+    sort_free_formatted_date   bigint         null
 );
 
 create table character_profile_base
@@ -244,7 +244,7 @@ create table character_profile_main
     value_text                 text           null,
     value_date                 varchar(255)   null,
     value_free_formatted_date  json           null,
-    sort_free_formatted_date   int            null
+    sort_free_formatted_date   bigint         null
 );
 
 CREATE TABLE posts (
@@ -292,7 +292,7 @@ create table episode_main
     value_text                 text           null,
     value_date                 varchar(255)   null,
     value_free_formatted_date  json           null,
-    sort_free_formatted_date   int            null
+    sort_free_formatted_date   bigint         null
 );
 
 create table episode_character
@@ -648,7 +648,7 @@ create table wanted_character_main
     value_text                 text           null,
     value_date                 varchar(255)   null,
     value_free_formatted_date  json           null,
-    sort_free_formatted_date   int            null
+    sort_free_formatted_date   bigint         null
 );
 
 create table wanted_character_flattened

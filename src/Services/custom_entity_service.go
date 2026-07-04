@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -164,7 +165,7 @@ func fillEntity(entity interface{}, data map[string]interface{}, config []Entiti
 		sortColumns := make(map[string]bool)
 		for _, c := range config {
 			configMap[c.MachineFieldName] = c
-			if c.FieldType == "free_formatted_date" {
+			if c.FieldType == "free_format_date" {
 				sortColumns[c.MachineFieldName+"_sort"] = true
 			}
 		}
@@ -176,6 +177,18 @@ func fillEntity(entity interface{}, data map[string]interface{}, config []Entiti
 					if conf.FieldType == "text" {
 						if s, ok := val.(string); ok {
 							cfValue.ContentHtml = ParseBBCode(s)
+						}
+					} else if conf.FieldType == "free_format_date" {
+						if m, ok := val.(map[string]interface{}); ok {
+							if fs, ok := m["format_string"].(string); ok {
+								rendered := fs
+								if placeholders, ok := m["placeholders"].(map[string]interface{}); ok {
+									for k, v := range placeholders {
+										rendered = strings.ReplaceAll(rendered, "{"+k+"}", fmt.Sprintf("%v", v))
+									}
+								}
+								cfValue.Content = rendered
+							}
 						}
 					}
 				}
@@ -288,6 +301,121 @@ func getColumnTypes(className string, db DBExecutor) (map[string]string, error) 
 	return colTypeMap, nil
 }
 
+// computeFreeFormatDateSort fetches the faction's free_format_date template and computes
+// a sortable integer from the placeholder values using each placeholder's Position.
+func computeFreeFormatDateSort(factionId *int, placeholders map[string]interface{}, db DBExecutor) int64 {
+	if factionId == nil || len(placeholders) == 0 {
+		return 0
+	}
+
+	var ffdJSON string
+	err := db.QueryRow(`
+		SELECT COALESCE(f2.free_format_date, f.free_format_date)
+		FROM factions f
+		LEFT JOIN factions f2 ON f2.id = f.use_date_from_another_faction_id
+		WHERE f.id = ?
+	`, *factionId).Scan(&ffdJSON)
+	if err != nil || ffdJSON == "" {
+		return 0
+	}
+
+	var template Entities.FreeFormatDate
+	if err := json.Unmarshal([]byte(ffdJSON), &template); err != nil {
+		return 0
+	}
+
+	sorted := make([]Entities.FreeFormatDatePlaceholder, len(template.Placeholders))
+	copy(sorted, template.Placeholders)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Position < sorted[j].Position
+	})
+
+	// Compute the range (cardinality) of each placeholder position
+	ranges := make([]int64, len(sorted))
+	for i, p := range sorted {
+		if p.Type == Entities.FreeFormatDatePlaceholderTypeList {
+			ranges[i] = int64(len(p.ValueList))
+		} else {
+			min := 0
+			if p.MinValue != nil {
+				min = *p.MinValue
+			}
+			max := min + 999
+			if p.MaxValue != nil {
+				max = *p.MaxValue
+			}
+			ranges[i] = int64(max-min) + 1
+		}
+	}
+
+	var sortValue int64
+	for i, p := range sorted {
+		var val int64
+		raw := placeholders[p.Name]
+		if p.Type == Entities.FreeFormatDatePlaceholderTypeList {
+			if s, ok := raw.(string); ok {
+				for idx, v := range p.ValueList {
+					if v == s {
+						val = int64(idx)
+						break
+					}
+				}
+			} else if f, ok := raw.(float64); ok {
+				val = int64(f)
+			}
+		} else {
+			min := int64(0)
+			if p.MinValue != nil {
+				min = int64(*p.MinValue)
+			}
+			if f, ok := raw.(float64); ok {
+				val = int64(f) - min
+			}
+		}
+		// Weight = product of all subsequent ranges (more significant positions have larger weight)
+		weight := int64(1)
+		for j := i + 1; j < len(ranges); j++ {
+			weight *= ranges[j]
+		}
+		sortValue += val * weight
+	}
+
+	return sortValue
+}
+
+// buildFreeFormatDateStoredValue converts the incoming {faction_id, format_string, placeholders}
+// payload into a FreeFormatDateFieldValue and computes its sort value.
+func buildFreeFormatDateStoredValue(raw map[string]interface{}, entityId int64, entityType string, db DBExecutor) (jsonStr string, sortVal int64, err error) {
+	formatString, _ := raw["format_string"].(string)
+
+	placeholders, _ := raw["placeholders"].(map[string]interface{})
+
+	var factionId *int
+	if fid := raw["faction_id"]; fid != nil {
+		if f, ok := fid.(float64); ok {
+			i := int(f)
+			factionId = &i
+		}
+	}
+
+	sortVal = computeFreeFormatDateSort(factionId, placeholders, db)
+
+	stored := Entities.FreeFormatDateFieldValue{
+		EntityId:     int(entityId),
+		EntityType:   entityType,
+		FactionId:    factionId,
+		FormatString: formatString,
+		Placeholders: placeholders,
+		SortValue:    sortVal,
+	}
+
+	jsonBytes, err := json.Marshal(stored)
+	if err != nil {
+		return "", 0, err
+	}
+	return string(jsonBytes), sortVal, nil
+}
+
 func CreateEntity(className string, entity interface{}, db DBExecutor) (interface{}, int64, error) {
 	// Basic validation
 	for _, r := range className {
@@ -374,6 +502,12 @@ func CreateEntity(className string, entity interface{}, db DBExecutor) (interfac
 				return nil, 0, err
 			}
 
+			fieldConfigs, _ := GetFieldConfig(className, db)
+			fieldConfigMap := make(map[string]Entities.CustomFieldConfig)
+			for _, fc := range fieldConfigs {
+				fieldConfigMap[fc.MachineFieldName] = fc
+			}
+
 			insertQuery := fmt.Sprintf("INSERT INTO %s_main (entity_id, field_machine_name, field_type, value_int, value_decimal, value_string, value_text, value_date, value_free_formatted_date, sort_free_formatted_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", className)
 
 			iter := cfMapField.MapRange()
@@ -400,11 +534,6 @@ func CreateEntity(className string, entity interface{}, db DBExecutor) (interfac
 					fieldValue = fieldValueRaw
 				}
 
-				dbType, ok := colTypeMap[fieldName]
-				if !ok {
-					continue
-				}
-
 				var fieldType string
 				var valInt *int
 				var valDecimal *float64
@@ -412,54 +541,66 @@ func CreateEntity(className string, entity interface{}, db DBExecutor) (interfac
 				var valText *string
 				var valDate *string
 				var valFreeFormattedDate *string
-				var valSortFreeFormattedDate *int
+				var valSortFreeFormattedDate *int64
 
-				switch dbType {
-				case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT":
-					fieldType = "int"
-					if v, ok := fieldValue.(float64); ok {
-						i := int(v)
-						valInt = &i
-					} else if v, ok := fieldValue.(int); ok {
-						valInt = &v
-					}
-				case "DECIMAL", "FLOAT", "DOUBLE":
-					fieldType = "decimal"
-					if v, ok := fieldValue.(float64); ok {
-						valDecimal = &v
-					}
-				case "VARCHAR", "CHAR":
-					fieldType = "string"
-					if v, ok := fieldValue.(string); ok {
-						valString = &v
-					}
-				case "TEXT", "BLOB":
-					fieldType = "text"
-					if v, ok := fieldValue.(string); ok {
-						valText = &v
-					}
-				case "DATETIME", "DATE", "TIMESTAMP":
-					fieldType = "date"
-					if v, ok := fieldValue.(string); ok {
-						valDate = &v
-					}
-				case "JSON":
+				if fc, isFreeFormat := fieldConfigMap[fieldName]; isFreeFormat && fc.FieldType == "free_format_date" {
 					fieldType = "free_formatted_date"
-					if fieldValue != nil {
-						jsonBytes, err := json.Marshal(fieldValue)
-						if err == nil {
-							s := string(jsonBytes)
+					if m, ok := fieldValue.(map[string]interface{}); ok {
+						if s, sv, buildErr := buildFreeFormatDateStoredValue(m, id, className, db); buildErr == nil {
 							valFreeFormattedDate = &s
+							valSortFreeFormattedDate = &sv
 						}
 					}
-					if sv, ok := sortValue.(float64); ok {
-						i := int(sv)
-						valSortFreeFormattedDate = &i
+				} else {
+					dbType, ok := colTypeMap[fieldName]
+					if !ok {
+						continue
 					}
-				default:
-					fieldType = "string"
-					if v, ok := fieldValue.(string); ok {
-						valString = &v
+					switch dbType {
+					case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT":
+						fieldType = "int"
+						if v, ok := fieldValue.(float64); ok {
+							i := int(v)
+							valInt = &i
+						} else if v, ok := fieldValue.(int); ok {
+							valInt = &v
+						}
+					case "DECIMAL", "FLOAT", "DOUBLE":
+						fieldType = "decimal"
+						if v, ok := fieldValue.(float64); ok {
+							valDecimal = &v
+						}
+					case "VARCHAR", "CHAR":
+						fieldType = "string"
+						if v, ok := fieldValue.(string); ok {
+							valString = &v
+						}
+					case "TEXT", "BLOB":
+						fieldType = "text"
+						if v, ok := fieldValue.(string); ok {
+							valText = &v
+						}
+					case "DATETIME", "DATE", "TIMESTAMP":
+						fieldType = "date"
+						if v, ok := fieldValue.(string); ok {
+							valDate = &v
+						}
+					case "JSON":
+						fieldType = "free_formatted_date"
+						if m, ok := fieldValue.(map[string]interface{}); ok {
+							jsonBytes, _ := json.Marshal(m)
+							s := string(jsonBytes)
+							valFreeFormattedDate = &s
+							if sv, ok := sortValue.(float64); ok {
+								i := int64(sv)
+								valSortFreeFormattedDate = &i
+							}
+						}
+					default:
+						fieldType = "string"
+						if v, ok := fieldValue.(string); ok {
+							valString = &v
+						}
 					}
 				}
 
@@ -475,7 +616,7 @@ func CreateEntity(className string, entity interface{}, db DBExecutor) (interfac
 	return createdEntity, id, err
 }
 
-func GetFieldConfig(entityType string, db *sql.DB) ([]Entities.CustomFieldConfig, error) {
+func GetFieldConfig(entityType string, db DBExecutor) ([]Entities.CustomFieldConfig, error) {
 	var configBytes []byte
 	err := db.QueryRow("SELECT config FROM custom_field_config WHERE entity_type = ?", entityType).Scan(&configBytes)
 	if err != nil {
@@ -558,6 +699,12 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 				return nil, err
 			}
 
+			fieldConfigs, _ := GetFieldConfig(className, db)
+			fieldConfigMap := make(map[string]Entities.CustomFieldConfig)
+			for _, fc := range fieldConfigs {
+				fieldConfigMap[fc.MachineFieldName] = fc
+			}
+
 			for fieldName, fieldValueRaw := range fieldsMap {
 				if fieldName == "" {
 					continue
@@ -578,11 +725,6 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 					actualFieldValue = fieldValueRaw
 				}
 
-				dbType, ok := colTypeMap[fieldName]
-				if !ok {
-					continue
-				}
-
 				var fieldType string
 				var valInt *int
 				var valDecimal *float64
@@ -590,54 +732,66 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 				var valText *string
 				var valDate *string
 				var valFreeFormattedDate *string
-				var valSortFreeFormattedDate *int
+				var valSortFreeFormattedDate *int64
 
-				switch dbType {
-				case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT":
-					fieldType = "int"
-					if v, ok := actualFieldValue.(float64); ok {
-						i := int(v)
-						valInt = &i
-					} else if v, ok := actualFieldValue.(int); ok {
-						valInt = &v
-					}
-				case "DECIMAL", "FLOAT", "DOUBLE":
-					fieldType = "decimal"
-					if v, ok := actualFieldValue.(float64); ok {
-						valDecimal = &v
-					}
-				case "VARCHAR", "CHAR":
-					fieldType = "string"
-					if v, ok := actualFieldValue.(string); ok {
-						valString = &v
-					}
-				case "TEXT", "BLOB":
-					fieldType = "text"
-					if v, ok := actualFieldValue.(string); ok {
-						valText = &v
-					}
-				case "DATETIME", "DATE", "TIMESTAMP":
-					fieldType = "date"
-					if v, ok := actualFieldValue.(string); ok {
-						valDate = &v
-					}
-				case "JSON":
+				if fc, isFreeFormat := fieldConfigMap[fieldName]; isFreeFormat && fc.FieldType == "free_format_date" {
 					fieldType = "free_formatted_date"
-					if actualFieldValue != nil {
-						jsonBytes, err := json.Marshal(actualFieldValue)
-						if err == nil {
-							s := string(jsonBytes)
+					if m, ok := actualFieldValue.(map[string]interface{}); ok {
+						if s, sv, buildErr := buildFreeFormatDateStoredValue(m, id, className, db); buildErr == nil {
 							valFreeFormattedDate = &s
+							valSortFreeFormattedDate = &sv
 						}
 					}
-					if sv, ok := actualSortValue.(float64); ok {
-						i := int(sv)
-						valSortFreeFormattedDate = &i
+				} else {
+					dbType, ok := colTypeMap[fieldName]
+					if !ok {
+						continue
 					}
-				default:
-					fieldType = "string"
-					if v, ok := actualFieldValue.(string); ok {
-						valString = &v
+					switch dbType {
+					case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT":
+						fieldType = "int"
+						if v, ok := actualFieldValue.(float64); ok {
+							i := int(v)
+							valInt = &i
+						} else if v, ok := actualFieldValue.(int); ok {
+							valInt = &v
+						}
+					case "DECIMAL", "FLOAT", "DOUBLE":
+						fieldType = "decimal"
+						if v, ok := actualFieldValue.(float64); ok {
+							valDecimal = &v
+						}
+					case "VARCHAR", "CHAR":
+						fieldType = "string"
+						if v, ok := actualFieldValue.(string); ok {
+							valString = &v
+						}
+					case "TEXT", "BLOB":
+						fieldType = "text"
+						if v, ok := actualFieldValue.(string); ok {
+							valText = &v
+						}
+					case "DATETIME", "DATE", "TIMESTAMP":
+						fieldType = "date"
+						if v, ok := actualFieldValue.(string); ok {
+							valDate = &v
+						}
+					case "JSON":
+						fieldType = "free_formatted_date"
+						if m, ok := actualFieldValue.(map[string]interface{}); ok {
+							jsonBytes, _ := json.Marshal(m)
+							s := string(jsonBytes)
+							valFreeFormattedDate = &s
+							if sv, ok := actualSortValue.(float64); ok {
+								i := int64(sv)
+								valSortFreeFormattedDate = &i
+							}
+						}
+					default:
+						fieldType = "string"
+						if v, ok := actualFieldValue.(string); ok {
+							valString = &v
+						}
 					}
 				}
 
