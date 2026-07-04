@@ -302,8 +302,17 @@ func getColumnTypes(className string, db DBExecutor) (map[string]string, error) 
 	return colTypeMap, nil
 }
 
+func nextPowerOf10(n int64) int64 {
+	p := int64(1)
+	for p < n {
+		p *= 10
+	}
+	return p
+}
+
 // computeFreeFormatDateSort fetches the faction's free_format_date template and computes
-// a sortable integer from the placeholder values using each placeholder's Position.
+// a sortable integer. Each placeholder occupies a fixed power-of-10 "slot" wide enough
+// to hold all its possible values, so the most-significant position always dominates.
 func computeFreeFormatDateSort(factionId *int, placeholders map[string]interface{}, db DBExecutor) int64 {
 	if factionId == nil || len(placeholders) == 0 {
 		return 0
@@ -331,11 +340,13 @@ func computeFreeFormatDateSort(factionId *int, placeholders map[string]interface
 		return sorted[i].Position < sorted[j].Position
 	})
 
-	// Compute the range (cardinality) of each placeholder position
-	ranges := make([]int64, len(sorted))
+	// Compute the cardinality of each placeholder, then round up to the next power of 10
+	// so each position occupies a clean digit group in the final integer.
+	slotSizes := make([]int64, len(sorted))
 	for i, p := range sorted {
+		var cardinality int64
 		if p.Type == Entities.FreeFormatDatePlaceholderTypeList {
-			ranges[i] = int64(len(p.ValueList))
+			cardinality = int64(len(p.ValueList))
 		} else {
 			min := 0
 			if p.MinValue != nil {
@@ -345,8 +356,9 @@ func computeFreeFormatDateSort(factionId *int, placeholders map[string]interface
 			if p.MaxValue != nil {
 				max = *p.MaxValue
 			}
-			ranges[i] = int64(max-min) + 1
+			cardinality = int64(max-min) + 1
 		}
+		slotSizes[i] = nextPowerOf10(cardinality)
 	}
 
 	var sortValue int64
@@ -361,8 +373,6 @@ func computeFreeFormatDateSort(factionId *int, placeholders map[string]interface
 						break
 					}
 				}
-			} else if f, ok := raw.(float64); ok {
-				val = int64(f)
 			}
 		} else {
 			min := int64(0)
@@ -373,10 +383,10 @@ func computeFreeFormatDateSort(factionId *int, placeholders map[string]interface
 				val = int64(f) - min
 			}
 		}
-		// Weight = product of all subsequent ranges (more significant positions have larger weight)
+		// Weight = product of slot sizes for all less-significant positions
 		weight := int64(1)
-		for j := i + 1; j < len(ranges); j++ {
-			weight *= ranges[j]
+		for j := i + 1; j < len(slotSizes); j++ {
+			weight *= slotSizes[j]
 		}
 		sortValue += val * weight
 	}
