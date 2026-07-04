@@ -208,14 +208,16 @@ create table character_base
 
 create table character_main
 (
-    entity_id          int            null,
-    field_machine_name varchar(255)   null,
-    field_type         varchar(10)    null,
-    value_int          int            null,
-    value_decimal      decimal(10, 2) null,
-    value_string       varchar(255)   null,
-    value_text         text           null,
-    value_date         varchar(255)   null
+    entity_id                  int            null,
+    field_machine_name         varchar(255)   null,
+    field_type                 varchar(50)    null,
+    value_int                  int            null,
+    value_decimal              decimal(10, 2) null,
+    value_string               varchar(255)   null,
+    value_text                 text           null,
+    value_date                 varchar(255)   null,
+    value_free_formatted_date  json           null,
+    sort_free_formatted_date   int            null
 );
 
 create table character_profile_base
@@ -233,14 +235,16 @@ create table character_profile_base
 
 create table character_profile_main
 (
-    entity_id          int            null,
-    field_machine_name varchar(255)   null,
-    field_type         varchar(10)    null,
-    value_int          int            null,
-    value_decimal      decimal(10, 2) null,
-    value_string       varchar(255)   null,
-    value_text         text           null,
-    value_date         varchar(255)   null
+    entity_id                  int            null,
+    field_machine_name         varchar(255)   null,
+    field_type                 varchar(50)    null,
+    value_int                  int            null,
+    value_decimal              decimal(10, 2) null,
+    value_string               varchar(255)   null,
+    value_text                 text           null,
+    value_date                 varchar(255)   null,
+    value_free_formatted_date  json           null,
+    sort_free_formatted_date   int            null
 );
 
 CREATE TABLE posts (
@@ -279,14 +283,16 @@ create table episode_base
 
 create table episode_main
 (
-    entity_id          int            null,
-    field_machine_name varchar(255)   null,
-    field_type         varchar(10)    null,
-    value_int          int            null,
-    value_decimal      decimal(10, 2) null,
-    value_string       varchar(255)   null,
-    value_text         text           null,
-    value_date         varchar(255)   null
+    entity_id                  int            null,
+    field_machine_name         varchar(255)   null,
+    field_type                 varchar(50)    null,
+    value_int                  int            null,
+    value_decimal              decimal(10, 2) null,
+    value_string               varchar(255)   null,
+    value_text                 text           null,
+    value_date                 varchar(255)   null,
+    value_free_formatted_date  json           null,
+    sort_free_formatted_date   int            null
 );
 
 create table episode_character
@@ -385,16 +391,18 @@ INSERT INTO global_stats (stat_name, stat_value, stat_secondary) VALUES ('last_u
 
 create table factions
 (
-    id              int          auto_increment  primary key,
-    name            varchar(255) not null,
-    parent_id       int          null,
-    level           int          not null,
-    description     text         null,
-    icon            varchar(255) null,
-    show_on_profile boolean      not null,
-    can_be_multiple bool default FALSE null,
-    root_id         int          null,
-    faction_status int default 2 not null
+    id                               int          auto_increment  primary key,
+    name                             varchar(255) not null,
+    parent_id                        int          null,
+    level                            int          not null,
+    description                      text         null,
+    icon                             varchar(255) null,
+    show_on_profile                  boolean      not null,
+    can_be_multiple                  bool default FALSE null,
+    root_id                          int          null,
+    faction_status                   int default 2 not null,
+    use_date_from_another_faction_id int          null,
+    constraint fk_factions_use_date_from foreign key (use_date_from_another_faction_id) references factions (id) on delete set null
 );
 
 create table character_faction
@@ -630,14 +638,16 @@ create table wanted_character_base
 
 create table wanted_character_main
 (
-    entity_id          int            null,
-    field_machine_name varchar(255)   null,
-    field_type         varchar(10)    null,
-    value_int          int            null,
-    value_decimal      decimal(10, 2) null,
-    value_string       varchar(255)   null,
-    value_text         text           null,
-    value_date         varchar(255)   null
+    entity_id                  int            null,
+    field_machine_name         varchar(255)   null,
+    field_type                 varchar(50)    null,
+    value_int                  int            null,
+    value_decimal              decimal(10, 2) null,
+    value_string               varchar(255)   null,
+    value_text                 text           null,
+    value_date                 varchar(255)   null,
+    value_free_formatted_date  json           null,
+    sort_free_formatted_date   int            null
 );
 
 create table wanted_character_flattened
@@ -955,6 +965,7 @@ create table faction_settings
     level            int          not null,
     human_name       varchar(255) not null,
     parent_faction_id int         null,
+    free_format_date json         null,
     constraint fk_faction_settings_parent foreign key (parent_faction_id) references factions (id)
 );
 

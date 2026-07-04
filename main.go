@@ -818,6 +818,9 @@ func main() {
 	})
 
 	// Fraction settings routes
+	publicRouter.GET("/faction/:faction_id/free-format-date", "Get free format date config for a faction", func(c *gin.Context) {
+		Controllers.GetFactionFreeFormatDate(c, Services.DB)
+	})
 	publicRouter.GET("/faction-settings/list", "Get list of all faction settings ordered by level", func(c *gin.Context) {
 		Controllers.GetFactionSettings(c, Services.DB)
 	})
@@ -826,6 +829,9 @@ func main() {
 	})
 	protectedRouter.POST("/admin/faction-setting/update/:id", "Update faction setting by ID", func(c *gin.Context) {
 		Controllers.UpdateFactionSetting(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/faction-setting/update/:id/free-format-date", "Update free format date for faction setting", func(c *gin.Context) {
+		Controllers.UpdateFactionSettingFreeFormatDate(c, Services.DB)
 	})
 	protectedRouter.GET("/admin/faction-setting/delete/:id", "Delete faction setting by ID", func(c *gin.Context) {
 		Controllers.DeleteFactionSetting(c, Services.DB)

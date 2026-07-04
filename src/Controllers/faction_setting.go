@@ -4,12 +4,20 @@ import (
 	"cuento-backend/src/Entities"
 	"cuento-backend/src/Middlewares"
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
+
+func nullableJSON(b []byte) interface{} {
+	if len(b) == 0 {
+		return nil
+	}
+	return string(b)
+}
 
 func GetFactionSettings(c *gin.Context, db *sql.DB) {
 	rows, err := db.Query(`
@@ -218,6 +226,106 @@ func UpdateFactionSetting(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Faction setting updated"})
+}
+
+func GetFactionFreeFormatDate(c *gin.Context, db *sql.DB) {
+	factionId, err := strconv.Atoi(c.Param("faction_id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid faction id"})
+		c.Abort()
+		return
+	}
+
+	var level int
+	var parentId sql.NullInt64
+	if err := db.QueryRow("SELECT level, parent_id FROM factions WHERE id = ?", factionId).Scan(&level, &parentId); err != nil {
+		if err == sql.ErrNoRows {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Faction not found"})
+		} else {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get faction: " + err.Error()})
+		}
+		c.Abort()
+		return
+	}
+
+	// Specific match (same level + same parent) takes priority over generic fallback (null parent)
+	var freeFormatDateJSON sql.NullString
+	if parentId.Valid {
+		err = db.QueryRow(
+			"SELECT free_format_date FROM faction_settings WHERE level = ? AND parent_faction_id = ?",
+			level, parentId.Int64,
+		).Scan(&freeFormatDateJSON)
+		if err != nil && err != sql.ErrNoRows {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get faction setting: " + err.Error()})
+			c.Abort()
+			return
+		}
+	}
+
+	if !freeFormatDateJSON.Valid {
+		err = db.QueryRow(
+			"SELECT free_format_date FROM faction_settings WHERE level = ? AND parent_faction_id IS NULL",
+			level,
+		).Scan(&freeFormatDateJSON)
+		if err != nil && err != sql.ErrNoRows {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get faction setting: " + err.Error()})
+			c.Abort()
+			return
+		}
+	}
+
+	if !freeFormatDateJSON.Valid || freeFormatDateJSON.String == "" {
+		c.JSON(http.StatusOK, nil)
+		return
+	}
+
+	var ffd Entities.FreeFormatDate
+	if err := json.Unmarshal([]byte(freeFormatDateJSON.String), &ffd); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to parse free_format_date"})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, ffd)
+}
+
+func UpdateFactionSettingFreeFormatDate(c *gin.Context, db *sql.DB) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid id"})
+		c.Abort()
+		return
+	}
+
+	var req Entities.FreeFormatDate
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	ffdJSON, err := json.Marshal(req)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to encode free_format_date"})
+		c.Abort()
+		return
+	}
+
+	res, err := db.Exec("UPDATE faction_settings SET free_format_date = ? WHERE id = ?", string(ffdJSON), id)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update free_format_date: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Faction setting not found"})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Free format date updated"})
 }
 
 func DeleteFactionSetting(c *gin.Context, db *sql.DB) {

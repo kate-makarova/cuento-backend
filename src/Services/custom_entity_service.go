@@ -161,12 +161,16 @@ func fillEntity(entity interface{}, data map[string]interface{}, config []Entiti
 		cfMap := make(map[string]Entities.CustomFieldValue)
 
 		configMap := make(map[string]Entities.CustomFieldConfig)
+		sortColumns := make(map[string]bool)
 		for _, c := range config {
 			configMap[c.MachineFieldName] = c
+			if c.FieldType == "free_formatted_date" {
+				sortColumns[c.MachineFieldName+"_sort"] = true
+			}
 		}
 
 		for key, val := range data {
-			if !usedKeys[key] && key != "entity_id" { // Ignore entity_id as it's duplicate of id
+			if !usedKeys[key] && key != "entity_id" && !sortColumns[key] {
 				cfValue := Entities.CustomFieldValue{Content: val}
 				if conf, ok := configMap[key]; ok {
 					if conf.FieldType == "text" {
@@ -370,7 +374,7 @@ func CreateEntity(className string, entity interface{}, db DBExecutor) (interfac
 				return nil, 0, err
 			}
 
-			insertQuery := fmt.Sprintf("INSERT INTO %s_main (entity_id, field_machine_name, field_type, value_int, value_decimal, value_string, value_text, value_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", className)
+			insertQuery := fmt.Sprintf("INSERT INTO %s_main (entity_id, field_machine_name, field_type, value_int, value_decimal, value_string, value_text, value_date, value_free_formatted_date, sort_free_formatted_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", className)
 
 			iter := cfMapField.MapRange()
 			for iter.Next() {
@@ -378,9 +382,16 @@ func CreateEntity(className string, entity interface{}, db DBExecutor) (interfac
 				fieldValueRaw := iter.Value().Interface()
 
 				var fieldValue interface{}
+				var sortValue interface{}
 				if cfVal, ok := fieldValueRaw.(Entities.CustomFieldValue); ok {
 					fieldValue = cfVal.Content
+					if cfVal.Sort != nil {
+						sortValue = float64(*cfVal.Sort)
+					}
 					if contentMap, isMap := fieldValue.(map[string]interface{}); isMap {
+						if sv, hasSort := contentMap["sort"]; hasSort && sortValue == nil {
+							sortValue = sv
+						}
 						if content, hasContent := contentMap["content"]; hasContent {
 							fieldValue = content
 						}
@@ -400,6 +411,8 @@ func CreateEntity(className string, entity interface{}, db DBExecutor) (interfac
 				var valString *string
 				var valText *string
 				var valDate *string
+				var valFreeFormattedDate *string
+				var valSortFreeFormattedDate *int
 
 				switch dbType {
 				case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT":
@@ -430,6 +443,19 @@ func CreateEntity(className string, entity interface{}, db DBExecutor) (interfac
 					if v, ok := fieldValue.(string); ok {
 						valDate = &v
 					}
+				case "JSON":
+					fieldType = "free_formatted_date"
+					if fieldValue != nil {
+						jsonBytes, err := json.Marshal(fieldValue)
+						if err == nil {
+							s := string(jsonBytes)
+							valFreeFormattedDate = &s
+						}
+					}
+					if sv, ok := sortValue.(float64); ok {
+						i := int(sv)
+						valSortFreeFormattedDate = &i
+					}
 				default:
 					fieldType = "string"
 					if v, ok := fieldValue.(string); ok {
@@ -437,7 +463,7 @@ func CreateEntity(className string, entity interface{}, db DBExecutor) (interfac
 					}
 				}
 
-				_, err := db.Exec(insertQuery, id, fieldName, fieldType, valInt, valDecimal, valString, valText, valDate)
+				_, err := db.Exec(insertQuery, id, fieldName, fieldType, valInt, valDecimal, valString, valText, valDate, valFreeFormattedDate, valSortFreeFormattedDate)
 				if err != nil {
 					return nil, 0, fmt.Errorf("failed to insert custom field %s: %w", fieldName, err)
 				}
@@ -538,22 +564,22 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 				}
 
 				var actualFieldValue interface{}
-				// Check if fieldValueRaw is a map with a "content" key (like {"content": "value"})
+				var actualSortValue interface{}
 				if contentMap, isContentMap := fieldValueRaw.(map[string]interface{}); isContentMap {
+					if sv, hasSort := contentMap["sort"]; hasSort {
+						actualSortValue = sv
+					}
 					if content, hasContent := contentMap["content"]; hasContent {
 						actualFieldValue = content
 					} else {
-						// If it's a map but no "content" key, use the map itself or skip
 						actualFieldValue = fieldValueRaw
 					}
 				} else {
-					// If it's not a map, use the raw value directly
 					actualFieldValue = fieldValueRaw
 				}
 
 				dbType, ok := colTypeMap[fieldName]
 				if !ok {
-					// If the custom field is not in the flattened table schema, skip it or handle as error
 					continue
 				}
 
@@ -563,11 +589,13 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 				var valString *string
 				var valText *string
 				var valDate *string
+				var valFreeFormattedDate *string
+				var valSortFreeFormattedDate *int
 
 				switch dbType {
 				case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT":
 					fieldType = "int"
-					if v, ok := actualFieldValue.(float64); ok { // JSON numbers are float64 by default
+					if v, ok := actualFieldValue.(float64); ok {
 						i := int(v)
 						valInt = &i
 					} else if v, ok := actualFieldValue.(int); ok {
@@ -593,6 +621,19 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 					if v, ok := actualFieldValue.(string); ok {
 						valDate = &v
 					}
+				case "JSON":
+					fieldType = "free_formatted_date"
+					if actualFieldValue != nil {
+						jsonBytes, err := json.Marshal(actualFieldValue)
+						if err == nil {
+							s := string(jsonBytes)
+							valFreeFormattedDate = &s
+						}
+					}
+					if sv, ok := actualSortValue.(float64); ok {
+						i := int(sv)
+						valSortFreeFormattedDate = &i
+					}
 				default:
 					fieldType = "string"
 					if v, ok := actualFieldValue.(string); ok {
@@ -607,11 +648,11 @@ func PatchEntity(id int64, className string, updates map[string]interface{}, db 
 				}
 
 				if err == sql.ErrNoRows {
-					insertQuery := fmt.Sprintf("INSERT INTO %s_main (entity_id, field_machine_name, field_type, value_int, value_decimal, value_string, value_text, value_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", className)
-					_, err = db.Exec(insertQuery, id, fieldName, fieldType, valInt, valDecimal, valString, valText, valDate)
+					insertQuery := fmt.Sprintf("INSERT INTO %s_main (entity_id, field_machine_name, field_type, value_int, value_decimal, value_string, value_text, value_date, value_free_formatted_date, sort_free_formatted_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", className)
+					_, err = db.Exec(insertQuery, id, fieldName, fieldType, valInt, valDecimal, valString, valText, valDate, valFreeFormattedDate, valSortFreeFormattedDate)
 				} else {
-					updateQuery := fmt.Sprintf("UPDATE %s_main SET field_type = ?, value_int = ?, value_decimal = ?, value_string = ?, value_text = ?, value_date = ? WHERE entity_id = ? AND field_machine_name = ?", className)
-					_, err = db.Exec(updateQuery, fieldType, valInt, valDecimal, valString, valText, valDate, id, fieldName)
+					updateQuery := fmt.Sprintf("UPDATE %s_main SET field_type = ?, value_int = ?, value_decimal = ?, value_string = ?, value_text = ?, value_date = ?, value_free_formatted_date = ?, sort_free_formatted_date = ? WHERE entity_id = ? AND field_machine_name = ?", className)
+					_, err = db.Exec(updateQuery, fieldType, valInt, valDecimal, valString, valText, valDate, valFreeFormattedDate, valSortFreeFormattedDate, id, fieldName)
 				}
 
 				if err != nil {

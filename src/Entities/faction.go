@@ -1,16 +1,18 @@
 package Entities
 
 type Faction struct {
-	Id                 int                 `json:"id"`
-	Name               string              `json:"name"`
-	ParentId           *int                `json:"parent_id"`
-	Level              int                 `json:"level"`
-	Description        *string             `json:"description"`
-	Icon               *string             `json:"icon"`
-	ShowOnProfile      bool                `json:"show_on_profile"`
-	Characters         []CharacterListItem `json:"characters"`
-	FactionStatus      FactionStatus       `json:"faction_status"`
-	FactionSettingName *string             `json:"faction_setting_name"`
+	Id                   int                 `json:"id"`
+	Name                 string              `json:"name"`
+	ParentId             *int                `json:"parent_id"`
+	Level                int                 `json:"level"`
+	Description          *string             `json:"description"`
+	Icon                 *string             `json:"icon"`
+	ShowOnProfile        bool                `json:"show_on_profile"`
+	Characters           []CharacterListItem `json:"characters"`
+	FactionStatus        FactionStatus       `json:"faction_status"`
+	FactionSettingName   *string             `json:"faction_setting_name"`
+	UseDateFromFactionId *int                `json:"use_date_from_faction_id"`
+	FreeFormDateSet      bool                `json:"free_form_date_set"`
 }
 
 type ClaimFactionResponse struct {
