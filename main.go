@@ -388,6 +388,7 @@ func main() {
 
 	// Character Template routes
 	publicRouter.GET("/template/episode/get", "Get episode template (public)", func(c *gin.Context) {
+		c.Params = append(c.Params, gin.Param{Key: "type", Value: "episode"})
 		Controllers.GetTemplate(c, Services.DB)
 	})
 	protectedRouter.GET("/template/:type/get", "Get character template by type", func(c *gin.Context) {
