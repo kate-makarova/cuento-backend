@@ -143,6 +143,9 @@ VALUES ('use_rating_system', 'y');
 INSERT INTO global_settings (setting_name, setting_value)
 VALUES ('site_max_rating', 'L1V1S1');
 
+INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('global_free_format_date_id', NULL);
+
 CREATE TABLE categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NULL,
@@ -389,6 +392,13 @@ INSERT INTO global_stats (stat_name, stat_value) VALUES ('total_post_number', 0)
 INSERT INTO global_stats (stat_name, stat_value) VALUES ('total_episode_post_number', 0);
 INSERT INTO global_stats (stat_name, stat_value, stat_secondary) VALUES ('last_user', 0, '');
 
+create table free_format_date_settings
+(
+    id               int          auto_increment primary key,
+    name             varchar(255) not null,
+    free_format_date json         not null
+);
+
 create table factions
 (
     id                               int          auto_increment  primary key,
@@ -402,8 +412,9 @@ create table factions
     root_id                          int          null,
     faction_status                   int default 2 not null,
     use_date_from_another_faction_id int          null,
-    free_format_date                 json         null,
-    constraint fk_factions_use_date_from foreign key (use_date_from_another_faction_id) references factions (id) on delete set null
+    free_format_date_id              int          null,
+    constraint fk_factions_use_date_from foreign key (use_date_from_another_faction_id) references factions (id) on delete set null,
+    constraint fk_factions_free_format_date foreign key (free_format_date_id) references free_format_date_settings (id) on delete set null
 );
 
 create table character_faction

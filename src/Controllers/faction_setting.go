@@ -237,14 +237,15 @@ func GetFactionFreeFormatDate(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	// If the faction delegates to another via use_date_from_another_faction_id, use that faction's date instead
-	var freeFormatDateJSON sql.NullString
+	var setting Entities.FreeFormatDateSetting
+	var ffdJSON sql.NullString
 	err = db.QueryRow(`
-		SELECT COALESCE(f2.free_format_date, f.free_format_date)
+		SELECT fds.id, fds.name, fds.free_format_date
 		FROM factions f
 		LEFT JOIN factions f2 ON f2.id = f.use_date_from_another_faction_id
+		LEFT JOIN free_format_date_settings fds ON fds.id = COALESCE(f2.free_format_date_id, f.free_format_date_id)
 		WHERE f.id = ?
-	`, factionId).Scan(&freeFormatDateJSON)
+	`, factionId).Scan(&setting.Id, &setting.Name, &ffdJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Faction not found"})
@@ -255,19 +256,18 @@ func GetFactionFreeFormatDate(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	if !freeFormatDateJSON.Valid || freeFormatDateJSON.String == "" {
+	if !ffdJSON.Valid || ffdJSON.String == "" {
 		c.JSON(http.StatusOK, nil)
 		return
 	}
 
-	var ffd Entities.FreeFormatDate
-	if err := json.Unmarshal([]byte(freeFormatDateJSON.String), &ffd); err != nil {
+	if err := json.Unmarshal([]byte(ffdJSON.String), &setting.FreeFormatDate); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to parse free_format_date"})
 		c.Abort()
 		return
 	}
 
-	c.JSON(http.StatusOK, ffd)
+	c.JSON(http.StatusOK, setting)
 }
 
 func GetFactionFreeFormatDateByCharacters(c *gin.Context, db *sql.DB) {
@@ -288,14 +288,15 @@ func GetFactionFreeFormatDateByCharacters(c *gin.Context, db *sql.DB) {
 
 	query := fmt.Sprintf(`
 		SELECT DISTINCT
-			f.id,
-			f.name,
-			COALESCE(f2.free_format_date, f.free_format_date) AS free_format_date
+			fds.id,
+			fds.name,
+			fds.free_format_date
 		FROM character_faction cf
 		JOIN factions f ON f.id = cf.faction_id
 		LEFT JOIN factions f2 ON f2.id = f.use_date_from_another_faction_id
+		LEFT JOIN free_format_date_settings fds ON fds.id = COALESCE(f2.free_format_date_id, f.free_format_date_id)
 		WHERE cf.character_id IN (%s)
-		  AND COALESCE(f2.free_format_date, f.free_format_date) IS NOT NULL
+		  AND fds.id IS NOT NULL
 	`, placeholders)
 
 	rows, err := db.Query(query, args...)
@@ -306,28 +307,42 @@ func GetFactionFreeFormatDateByCharacters(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
-	var result []Entities.FactionFreeFormatDateItem
+	seen := make(map[int]bool)
+	result := []Entities.FreeFormatDateSetting{}
 	for rows.Next() {
-		var item Entities.FactionFreeFormatDateItem
+		var s Entities.FreeFormatDateSetting
 		var ffdJSON string
-		if err := rows.Scan(&item.Id, &item.Name, &ffdJSON); err != nil {
+		if err := rows.Scan(&s.Id, &s.Name, &ffdJSON); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan row: " + err.Error()})
 			c.Abort()
 			return
 		}
-		var ffd Entities.FreeFormatDate
-		if err := json.Unmarshal([]byte(ffdJSON), &ffd); err != nil {
+		if seen[s.Id] {
+			continue
+		}
+		if err := json.Unmarshal([]byte(ffdJSON), &s.FreeFormatDate); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to parse free_format_date"})
 			c.Abort()
 			return
 		}
-		item.FreeFormatDate = &ffd
-		result = append(result, item)
+		seen[s.Id] = true
+		result = append(result, s)
 	}
 
-	if result == nil {
-		result = []Entities.FactionFreeFormatDateItem{}
+	// Include global default if set and not already in the list
+	var globalId sql.NullInt64
+	_ = db.QueryRow("SELECT setting_value FROM global_settings WHERE setting_name = 'global_free_format_date_id'").Scan(&globalId)
+	if globalId.Valid && globalId.Int64 > 0 && !seen[int(globalId.Int64)] {
+		var s Entities.FreeFormatDateSetting
+		var ffdJSON string
+		err := db.QueryRow("SELECT id, name, free_format_date FROM free_format_date_settings WHERE id = ?", globalId.Int64).Scan(&s.Id, &s.Name, &ffdJSON)
+		if err == nil {
+			if jsonErr := json.Unmarshal([]byte(ffdJSON), &s.FreeFormatDate); jsonErr == nil {
+				result = append(result, s)
+			}
+		}
 	}
+
 	c.JSON(http.StatusOK, result)
 }
 

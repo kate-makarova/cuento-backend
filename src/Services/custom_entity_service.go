@@ -310,21 +310,16 @@ func nextPowerOf10(n int64) int64 {
 	return p
 }
 
-// computeFreeFormatDateSort fetches the faction's free_format_date template and computes
+// computeFreeFormatDateSort fetches the free_format_date template and computes
 // a sortable integer. Each placeholder occupies a fixed power-of-10 "slot" wide enough
 // to hold all its possible values, so the most-significant position always dominates.
-func computeFreeFormatDateSort(factionId *int, placeholders map[string]interface{}, db DBExecutor) int64 {
-	if factionId == nil || len(placeholders) == 0 {
+func computeFreeFormatDateSort(freeFormatDateId *int, placeholders map[string]interface{}, db DBExecutor) int64 {
+	if freeFormatDateId == nil || len(placeholders) == 0 {
 		return 0
 	}
 
 	var ffdJSON string
-	err := db.QueryRow(`
-		SELECT COALESCE(f2.free_format_date, f.free_format_date)
-		FROM factions f
-		LEFT JOIN factions f2 ON f2.id = f.use_date_from_another_faction_id
-		WHERE f.id = ?
-	`, *factionId).Scan(&ffdJSON)
+	err := db.QueryRow(`SELECT free_format_date FROM free_format_date_settings WHERE id = ?`, *freeFormatDateId).Scan(&ffdJSON)
 	if err != nil || ffdJSON == "" {
 		return 0
 	}
@@ -407,23 +402,23 @@ func buildFreeFormatDateStoredValue(raw map[string]interface{}, entityId int64, 
 
 	placeholders, _ := raw["placeholders"].(map[string]interface{})
 
-	var factionId *int
-	if fid := raw["faction_id"]; fid != nil {
+	var freeFormatDateId *int
+	if fid := raw["free_format_date_id"]; fid != nil {
 		if f, ok := fid.(float64); ok {
 			i := int(f)
-			factionId = &i
+			freeFormatDateId = &i
 		}
 	}
 
-	sortVal = computeFreeFormatDateSort(factionId, placeholders, db)
+	sortVal = computeFreeFormatDateSort(freeFormatDateId, placeholders, db)
 
 	stored := Entities.FreeFormatDateFieldValue{
-		EntityId:     int(entityId),
-		EntityType:   entityType,
-		FactionId:    factionId,
-		FormatString: formatString,
-		Placeholders: placeholders,
-		SortValue:    sortVal,
+		EntityId:         int(entityId),
+		EntityType:       entityType,
+		FreeFormatDateId: freeFormatDateId,
+		FormatString:     formatString,
+		Placeholders:     placeholders,
+		SortValue:        sortVal,
 	}
 
 	jsonBytes, err := json.Marshal(stored)

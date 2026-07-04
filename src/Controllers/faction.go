@@ -5,7 +5,6 @@ import (
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
 	"database/sql"
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,13 +13,14 @@ import (
 )
 
 type FactionUpdateRequest struct {
-	Name          *string                 `json:"name"`
-	ParentId      *int                    `json:"parent_id"`
-	Level         *int                    `json:"level"`
-	Description   *string                 `json:"description"`
-	Icon          *string                 `json:"icon"`
-	ShowOnProfile *bool                   `json:"show_on_profile"`
-	FactionStatus *Entities.FactionStatus `json:"faction_status"`
+	Name             *string                 `json:"name"`
+	ParentId         *int                    `json:"parent_id"`
+	Level            *int                    `json:"level"`
+	Description      *string                 `json:"description"`
+	Icon             *string                 `json:"icon"`
+	ShowOnProfile    *bool                   `json:"show_on_profile"`
+	FactionStatus    *Entities.FactionStatus `json:"faction_status"`
+	FreeFormatDateId *int                    `json:"free_format_date_id"`
 }
 
 func GetFactionChildren(c *gin.Context, db *sql.DB) {
@@ -150,6 +150,10 @@ func UpdateFactionById(c *gin.Context, db *sql.DB) {
 	if req.FactionStatus != nil {
 		setClauses = append(setClauses, "faction_status = ?")
 		args = append(args, *req.FactionStatus)
+	}
+	if req.FreeFormatDateId != nil {
+		setClauses = append(setClauses, "free_format_date_id = ?")
+		args = append(args, *req.FreeFormatDateId)
 	}
 
 	if len(setClauses) == 0 {
@@ -319,43 +323,4 @@ func GetPendingFactions(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, factions)
-}
-
-func UpdateFactionFreeFormatDate(c *gin.Context, db *sql.DB) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid id"})
-		c.Abort()
-		return
-	}
-
-	var req Entities.FreeFormatDate
-	if err := c.ShouldBindJSON(&req); err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
-		c.Abort()
-		return
-	}
-
-	ffdJSON, err := json.Marshal(req)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to encode free_format_date"})
-		c.Abort()
-		return
-	}
-
-	res, err := db.Exec("UPDATE factions SET free_format_date = ? WHERE id = ?", string(ffdJSON), id)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update free_format_date: " + err.Error()})
-		c.Abort()
-		return
-	}
-
-	rows, _ := res.RowsAffected()
-	if rows == 0 {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Faction not found"})
-		c.Abort()
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Free format date updated"})
 }

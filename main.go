@@ -834,8 +834,25 @@ func main() {
 	protectedRouter.POST("/admin/faction-setting/update/:id", "Update faction setting by ID", func(c *gin.Context) {
 		Controllers.UpdateFactionSetting(c, Services.DB)
 	})
-	protectedRouter.POST("/admin/faction/:id/free-format-date", "Update free format date for a faction", func(c *gin.Context) {
-		Controllers.UpdateFactionFreeFormatDate(c, Services.DB)
+
+	protectedRouter.GET("/admin/free-format-date-settings", "List all free format date settings", func(c *gin.Context) {
+		Controllers.ListFreeFormatDateSettings(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/free-format-date-settings/options", "List free format date setting ids and names", func(c *gin.Context) {
+		Controllers.ListFreeFormatDateSettingOptions(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/free-format-date-settings/:id", "Get a single free format date setting", func(c *gin.Context) {
+		Controllers.GetFreeFormatDateSetting(c, Services.DB)
+	})
+
+	protectedRouter.POST("/admin/free-format-date-settings", "Create a free format date setting", func(c *gin.Context) {
+		Controllers.CreateFreeFormatDateSetting(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/free-format-date-settings/:id", "Update a free format date setting", func(c *gin.Context) {
+		Controllers.UpdateFreeFormatDateSetting(c, Services.DB)
+	})
+	protectedRouter.DELETE("/admin/free-format-date-settings/:id", "Delete a free format date setting", func(c *gin.Context) {
+		Controllers.DeleteFreeFormatDateSetting(c, Services.DB)
 	})
 	protectedRouter.GET("/admin/faction-setting/delete/:id", "Delete faction setting by ID", func(c *gin.Context) {
 		Controllers.DeleteFactionSetting(c, Services.DB)

@@ -12,7 +12,7 @@ type Faction struct {
 	FactionStatus        FactionStatus       `json:"faction_status"`
 	FactionSettingName   *string             `json:"faction_setting_name"`
 	UseDateFromFactionId *int                `json:"use_date_from_faction_id"`
-	FreeFormDateSet      bool                `json:"free_form_date_set"`
+	FreeFormatDateId     *int                `json:"free_format_date_id"`
 }
 
 type ClaimFactionResponse struct {

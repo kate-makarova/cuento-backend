@@ -64,12 +64,12 @@ type FreeFormatDate struct {
 }
 
 type FreeFormatDateFieldValue struct {
-	EntityId     int                    `json:"entity_id"`
-	EntityType   string                 `json:"entity_type"`
-	FactionId    *int                   `json:"faction_id,omitempty"`
-	FormatString string                 `json:"format_string"`
-	Placeholders map[string]interface{} `json:"placeholders"`
-	SortValue    int64                  `json:"sort_value"`
+	EntityId         int                    `json:"entity_id"`
+	EntityType       string                 `json:"entity_type"`
+	FreeFormatDateId *int                   `json:"free_format_date_id,omitempty"`
+	FormatString     string                 `json:"format_string"`
+	Placeholders     map[string]interface{} `json:"placeholders"`
+	SortValue        int64                  `json:"sort_value"`
 }
 
 // Compile-time check or global compiler initialization
