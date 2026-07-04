@@ -242,8 +242,7 @@ func GetFactionFreeFormatDate(c *gin.Context, db *sql.DB) {
 	err = db.QueryRow(`
 		SELECT fds.id, fds.name, fds.free_format_date
 		FROM factions f
-		LEFT JOIN factions f2 ON f2.id = f.use_date_from_another_faction_id
-		LEFT JOIN free_format_date_settings fds ON fds.id = COALESCE(f2.free_format_date_id, f.free_format_date_id)
+		LEFT JOIN free_format_date_settings fds ON fds.id = f.free_format_date_id
 		WHERE f.id = ?
 	`, factionId).Scan(&setting.Id, &setting.Name, &ffdJSON)
 	if err != nil {
@@ -293,8 +292,7 @@ func GetFactionFreeFormatDateByCharacters(c *gin.Context, db *sql.DB) {
 			fds.free_format_date
 		FROM character_faction cf
 		JOIN factions f ON f.id = cf.faction_id
-		LEFT JOIN factions f2 ON f2.id = f.use_date_from_another_faction_id
-		LEFT JOIN free_format_date_settings fds ON fds.id = COALESCE(f2.free_format_date_id, f.free_format_date_id)
+		LEFT JOIN free_format_date_settings fds ON fds.id = f.free_format_date_id
 		WHERE cf.character_id IN (%s)
 		  AND fds.id IS NOT NULL
 	`, placeholders)
