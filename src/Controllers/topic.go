@@ -850,6 +850,9 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 				if wc.CharacterClaimId != nil {
 					wc.Factions, _ = Services.GetFactionTreeByCharacterClaim(*wc.CharacterClaimId, db)
 					wc.ClaimRecord = fetchActiveClaimRecord(*wc.CharacterClaimId, db)
+					if wc.ClaimRecord != nil {
+						wc.ActiveClaimRecord = &wc.ClaimRecord.ClaimExpirationDate
+					}
 				}
 				wc.UserInfo = fetchUserInfo(wc.AuthorUserId, db)
 				topic.WantedCharacter = wc
