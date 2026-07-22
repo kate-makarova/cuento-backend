@@ -391,6 +391,13 @@ func main() {
 		c.Params = append(c.Params, gin.Param{Key: "type", Value: "episode"})
 		Controllers.GetTemplate(c, Services.DB)
 	})
+	publicRouter.GET("/template/wanted_character/get", "Get wanted character template (public)", func(c *gin.Context) {
+		c.Params = append(c.Params, gin.Param{Key: "type", Value: "wanted_character"})
+		Controllers.GetTemplate(c, Services.DB)
+	})
+	publicRouter.GET("/custom-field/autocomplete", "Autocomplete distinct string custom field values", func(c *gin.Context) {
+		Controllers.CustomFieldAutocomplete(c, Services.DB)
+	})
 	protectedRouter.GET("/template/:type/get", "Get character template by type", func(c *gin.Context) {
 		Controllers.GetTemplate(c, Services.DB)
 	})

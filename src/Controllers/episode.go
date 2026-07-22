@@ -42,11 +42,12 @@ type UpdateEpisodeRequest struct {
 }
 
 type GetEpisodesRequest struct {
-	SubforumIDs  []int    `json:"subforum_ids"`
-	CharacterIDs []int    `json:"character_ids"`
-	FactionIDs   []int    `json:"faction_ids"`
-	Page         int      `json:"page"`
-	Order        []string `json:"order"`
+	SubforumIDs        []int             `json:"subforum_ids"`
+	CharacterIDs       []int             `json:"character_ids"`
+	FactionIDs         []int             `json:"faction_ids"`
+	Page               int               `json:"page"`
+	Order              []string          `json:"order"`
+	CustomFieldFilters map[string]string `json:"custom_field_filters"`
 }
 
 type GetEpisodesByMaskRequest struct {
@@ -381,6 +382,31 @@ func GetEpisodes(c *gin.Context, db *sql.DB) {
 			args = append(args, id)
 		}
 		query += " AND EXISTS (SELECT 1 FROM episode_character ec JOIN character_faction cf ON ec.character_id = cf.character_id WHERE ec.episode_id = e.id AND cf.faction_id IN (" + strings.Join(ph, ",") + "))"
+	}
+
+	if len(req.CustomFieldFilters) > 0 {
+		configMap := make(map[string]Entities.CustomFieldConfig, len(fieldConfig))
+		for _, fc := range fieldConfig {
+			configMap[fc.MachineFieldName] = fc
+		}
+		for fieldName, filterValue := range req.CustomFieldFilters {
+			if !safeIdentifier.MatchString(fieldName) {
+				continue
+			}
+			fc, exists := configMap[fieldName]
+			if !exists {
+				continue
+			}
+			if fc.FieldType == "select" || fc.FieldType == "int" {
+				if intVal, err := strconv.Atoi(filterValue); err == nil {
+					query += fmt.Sprintf(" AND ef.`%s` = ?", fieldName)
+					args = append(args, intVal)
+				}
+			} else {
+				query += fmt.Sprintf(" AND ef.`%s` = ?", fieldName)
+				args = append(args, filterValue)
+			}
+		}
 	}
 
 	limit := 20
