@@ -178,6 +178,19 @@ func fillEntity(entity interface{}, data map[string]interface{}, config []Entiti
 						if s, ok := val.(string); ok {
 							cfValue.ContentHtml = ParseBBCode(s)
 						}
+					} else if conf.FieldType == "select" {
+						if conf.Options != nil {
+							var id int
+							switch v := val.(type) {
+							case float64:
+								id = int(v)
+							case int:
+								id = v
+							}
+							key := strconv.Itoa(id)
+							label := conf.Options[key]
+							cfValue.Content = map[string]interface{}{"id": id, "value": label}
+						}
 					} else if conf.FieldType == "free_format_date" {
 						if m, ok := val.(map[string]interface{}); ok {
 							cfValue.Data = m
