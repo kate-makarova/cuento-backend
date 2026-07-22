@@ -161,6 +161,7 @@ func UpdateFlattenedTable(entity CustomFieldEntity, entityName string, db *sql.D
 		"string":  "VARCHAR(255)",
 		"text":    "TEXT",
 		"date":    "DATETIME",
+		"select":  "INT",
 	}
 
 	// Track fields present in the current configuration
