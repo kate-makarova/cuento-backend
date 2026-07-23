@@ -27,10 +27,13 @@ type UserDataProcessingResponse struct {
 	OriginalTopicId    *string `json:"original_topic_id"`
 	OriginalTopicTitle *string `json:"original_topic_title"`
 	NewTopicId         *int    `json:"new_topic_id"`
+	OriginalPostCount  *int    `json:"original_post_count"`
+	ParsedPostCount    *int    `json:"parsed_post_count"`
 }
 
 type CreateUserDataProcessingRequest struct {
-	OriginalTopicId string `json:"original_topic_id" binding:"required"`
+	OriginalTopicId   string `json:"original_topic_id" binding:"required"`
+	OriginalPostCount int    `json:"original_post_count" binding:"required"`
 }
 
 type MybbPostEntry struct {
@@ -85,8 +88,8 @@ func CreateUserDataProcessing(c *gin.Context, db *sql.DB) {
 
 	now := time.Now()
 	res, err := db.Exec(
-		"INSERT INTO user_data_processing (date_created, user_id, status, original_topic_id) VALUES (?, ?, ?, ?)",
-		now, userID, UserDataProcessingStatusPending, req.OriginalTopicId,
+		"INSERT INTO user_data_processing (date_created, user_id, status, original_topic_id, original_post_count) VALUES (?, ?, ?, ?, ?)",
+		now, userID, UserDataProcessingStatusPending, req.OriginalTopicId, req.OriginalPostCount,
 	)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create processing: " + err.Error()})
@@ -102,11 +105,12 @@ func CreateUserDataProcessing(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusCreated, UserDataProcessingResponse{
-		Id:              int(id),
-		DateCreated:     now,
-		UserId:          userID,
-		Status:          UserDataProcessingStatusPending,
-		OriginalTopicId: &req.OriginalTopicId,
+		Id:                int(id),
+		DateCreated:       now,
+		UserId:            userID,
+		Status:            UserDataProcessingStatusPending,
+		OriginalTopicId:   &req.OriginalTopicId,
+		OriginalPostCount: &req.OriginalPostCount,
 	})
 }
 
@@ -185,14 +189,20 @@ func ProcessMybbTopicJson(c *gin.Context, db *sql.DB) {
 		savedCount++
 	}
 
+	var parsedPostCount int
+	_ = db.QueryRow("SELECT COUNT(*) FROM user_data_migration WHERE processing_id = ?", req.ProcessingId).Scan(&parsedPostCount)
+
 	// Backfill the topic title from the first post's subject if not already set
 	if len(req.Response) > 0 {
 		_, _ = db.Exec(
-			"UPDATE user_data_processing SET status = ?, original_topic_title = COALESCE(original_topic_title, ?) WHERE id = ?",
-			UserDataProcessingStatusProcessed, req.Response[0].Subject, req.ProcessingId,
+			"UPDATE user_data_processing SET status = ?, original_topic_title = COALESCE(original_topic_title, ?), parsed_post_count = ? WHERE id = ?",
+			UserDataProcessingStatusProcessed, req.Response[0].Subject, parsedPostCount, req.ProcessingId,
 		)
 	} else {
-		_, _ = db.Exec("UPDATE user_data_processing SET status = ? WHERE id = ?", UserDataProcessingStatusProcessed, req.ProcessingId)
+		_, _ = db.Exec(
+			"UPDATE user_data_processing SET status = ?, parsed_post_count = ? WHERE id = ?",
+			UserDataProcessingStatusProcessed, parsedPostCount, req.ProcessingId,
+		)
 	}
 
 	foundUsers := make([]MigrationFoundUser, 0, len(usersSeen))
