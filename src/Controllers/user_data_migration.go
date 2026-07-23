@@ -71,6 +71,48 @@ type PublishUserDataProcessingRequest struct {
 	UserMap      map[string]int `json:"user_map" binding:"required"`
 }
 
+func GetUserDataProcessingList(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
+		c.Abort()
+		return
+	}
+
+	rows, err := db.Query(`
+		SELECT id, date_created, user_id, status,
+		       original_topic_id, original_topic_title, new_topic_id,
+		       original_post_count, parsed_post_count
+		FROM user_data_processing
+		WHERE user_id = ?
+		ORDER BY date_created DESC`,
+		userID,
+	)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch processing list: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	result := []UserDataProcessingResponse{}
+	for rows.Next() {
+		var r UserDataProcessingResponse
+		if err := rows.Scan(
+			&r.Id, &r.DateCreated, &r.UserId, &r.Status,
+			&r.OriginalTopicId, &r.OriginalTopicTitle, &r.NewTopicId,
+			&r.OriginalPostCount, &r.ParsedPostCount,
+		); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan processing row: " + err.Error()})
+			c.Abort()
+			return
+		}
+		result = append(result, r)
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
 func CreateUserDataProcessing(c *gin.Context, db *sql.DB) {
 	userID := Services.GetUserIdFromContext(c)
 	if userID == 0 {

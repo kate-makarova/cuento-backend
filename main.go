@@ -917,6 +917,9 @@ func main() {
 	})
 
 	// User data migration routes
+	protectedRouter.GET("/user-data-migration/list", "Get list of all data migration processings for the current user", func(c *gin.Context) {
+		Controllers.GetUserDataProcessingList(c, Services.DB)
+	})
 	protectedRouter.POST("/user-data-migration/create-processing", "Create a new user data processing record in pending status", func(c *gin.Context) {
 		Controllers.CreateUserDataProcessing(c, Services.DB)
 	})
