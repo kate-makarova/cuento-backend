@@ -126,7 +126,8 @@ func ProcessMybbTopicJson(c *gin.Context, db *sql.DB) {
 	}
 
 	var ownerID int
-	err := db.QueryRow("SELECT user_id FROM user_data_processing WHERE id = ?", req.ProcessingId).Scan(&ownerID)
+	var originalTopicId string
+	err := db.QueryRow("SELECT user_id, COALESCE(original_topic_id, '') FROM user_data_processing WHERE id = ?", req.ProcessingId).Scan(&ownerID, &originalTopicId)
 	if err == sql.ErrNoRows {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Processing record not found"})
 		c.Abort()
@@ -149,6 +150,10 @@ func ProcessMybbTopicJson(c *gin.Context, db *sql.DB) {
 	skippedCount := 0
 
 	for _, post := range req.Response {
+		if post.TopicId != originalTopicId {
+			continue
+		}
+
 		var existing int
 		_ = db.QueryRow(
 			"SELECT COUNT(*) FROM user_data_migration WHERE processing_id = ? AND original_topic_id = ? AND original_post_id = ?",
