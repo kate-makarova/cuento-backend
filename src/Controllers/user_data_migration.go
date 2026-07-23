@@ -20,10 +20,16 @@ const (
 )
 
 type UserDataProcessingResponse struct {
-	Id          int       `json:"id"`
-	DateCreated time.Time `json:"date_created"`
-	UserId      int       `json:"user_id"`
-	Status      int       `json:"status"`
+	Id                 int       `json:"id"`
+	DateCreated        time.Time `json:"date_created"`
+	UserId             int       `json:"user_id"`
+	Status             int       `json:"status"`
+	OriginalTopicId    *string   `json:"original_topic_id"`
+	OriginalTopicTitle *string   `json:"original_topic_title"`
+}
+
+type CreateUserDataProcessingRequest struct {
+	OriginalTopicId string `json:"original_topic_id" binding:"required"`
 }
 
 type MybbPostEntry struct {
@@ -69,10 +75,17 @@ func CreateUserDataProcessing(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	var req CreateUserDataProcessingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
 	now := time.Now()
 	res, err := db.Exec(
-		"INSERT INTO user_data_processing (date_created, user_id, status) VALUES (?, ?, ?)",
-		now, userID, UserDataProcessingStatusPending,
+		"INSERT INTO user_data_processing (date_created, user_id, status, original_topic_id) VALUES (?, ?, ?, ?)",
+		now, userID, UserDataProcessingStatusPending, req.OriginalTopicId,
 	)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create processing: " + err.Error()})
@@ -88,10 +101,11 @@ func CreateUserDataProcessing(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusCreated, UserDataProcessingResponse{
-		Id:          int(id),
-		DateCreated: now,
-		UserId:      userID,
-		Status:      UserDataProcessingStatusPending,
+		Id:              int(id),
+		DateCreated:     now,
+		UserId:          userID,
+		Status:          UserDataProcessingStatusPending,
+		OriginalTopicId: &req.OriginalTopicId,
 	})
 }
 
@@ -165,7 +179,15 @@ func ProcessMybbTopicJson(c *gin.Context, db *sql.DB) {
 		savedCount++
 	}
 
-	_, _ = db.Exec("UPDATE user_data_processing SET status = ? WHERE id = ?", UserDataProcessingStatusProcessed, req.ProcessingId)
+	// Backfill the topic title from the first post's subject if not already set
+	if len(req.Response) > 0 {
+		_, _ = db.Exec(
+			"UPDATE user_data_processing SET status = ?, original_topic_title = COALESCE(original_topic_title, ?) WHERE id = ?",
+			UserDataProcessingStatusProcessed, req.Response[0].Subject, req.ProcessingId,
+		)
+	} else {
+		_, _ = db.Exec("UPDATE user_data_processing SET status = ? WHERE id = ?", UserDataProcessingStatusProcessed, req.ProcessingId)
+	}
 
 	foundUsers := make([]MigrationFoundUser, 0, len(usersSeen))
 	for uid, uname := range usersSeen {

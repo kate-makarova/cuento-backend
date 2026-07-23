@@ -1016,10 +1016,12 @@ create table external_app_permissions
 
 create table user_data_processing
 (
-    id           int      auto_increment primary key,
-    date_created datetime not null,
-    user_id      int      not null,
-    status       int      not null default 0,
+    id                   int          auto_increment primary key,
+    date_created         datetime     not null,
+    user_id              int          not null,
+    status               int          not null default 0,
+    original_topic_id    varchar(64)  null,
+    original_topic_title varchar(255) null,
     constraint fk_udp_user foreign key (user_id) references users (id) on delete cascade
 );
 
