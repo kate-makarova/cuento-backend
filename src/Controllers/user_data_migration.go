@@ -487,7 +487,7 @@ func UserDataProcessingPublish(c *gin.Context, db *sql.DB) {
 			return
 		}
 		var profileID int
-		err = db.QueryRow("SELECT id FROM character_profile_base WHERE character_id = ? AND is_mask = false LIMIT 1", charID).Scan(&profileID)
+		err = db.QueryRow("SELECT id FROM character_profile_base WHERE character_id = ? AND is_mask IS NOT TRUE AND is_archived IS NOT TRUE LIMIT 1", charID).Scan(&profileID)
 		if err != nil {
 			profileID = 0
 		}

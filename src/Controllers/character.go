@@ -1190,18 +1190,32 @@ func AcceptCharacter(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	// 2. Create a character profile
-	profile := Entities.CharacterProfile{
-		CharacterId:   &id,
-		CharacterName: name,
-		Avatar:        avatar,
-	}
-
-	_, profileID, err := Services.CreateEntity("character_profile", &profile, tx)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create character profile: " + err.Error()})
+	// 2. Ensure an active character profile exists — create one only if none exists yet
+	var profileID int64
+	err = tx.QueryRow("SELECT id FROM character_profile_base WHERE character_id = ? AND is_mask IS NOT TRUE LIMIT 1", id).Scan(&profileID)
+	if err == sql.ErrNoRows {
+		profile := Entities.CharacterProfile{
+			CharacterId:   &id,
+			CharacterName: name,
+			Avatar:        avatar,
+		}
+		_, profileID, err = Services.CreateEntity("character_profile", &profile, tx)
+		if err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create character profile: " + err.Error()})
+			c.Abort()
+			return
+		}
+	} else if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to check character profile: " + err.Error()})
 		c.Abort()
 		return
+	} else {
+		// Profile already exists — unarchive it
+		if _, err = tx.Exec("UPDATE character_profile_base SET is_archived = false WHERE character_id = ? AND is_mask IS NOT TRUE", id); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to unarchive character profile: " + err.Error()})
+			c.Abort()
+			return
+		}
 	}
 
 	var claimRecordId int
