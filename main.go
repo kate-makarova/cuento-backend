@@ -916,6 +916,17 @@ func main() {
 		Controllers.DeleteStandardWarning(c, Services.DB)
 	})
 
+	// User data migration routes
+	protectedRouter.POST("/user-data-migration/create-processing", "Create a new user data processing record in pending status", func(c *gin.Context) {
+		Controllers.CreateUserDataProcessing(c, Services.DB)
+	})
+	protectedRouter.POST("/user-data-migration/process-mybb-topic", "Parse a MyBB topic JSON export and save posts to user_data_migration", func(c *gin.Context) {
+		Controllers.ProcessMybbTopicJson(c, Services.DB)
+	})
+	protectedRouter.POST("/user-data-migration/publish", "Publish processed migration posts to a topic in original order", func(c *gin.Context) {
+		Controllers.UserDataProcessingPublish(c, Services.DB)
+	})
+
 	// WebSocket route with special authentication
 	wsGroup := r.Group("/")
 	wsGroup.Use(Middlewares.WebSocketAuthMiddleware())
