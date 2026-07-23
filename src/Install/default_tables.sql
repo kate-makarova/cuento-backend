@@ -1025,6 +1025,8 @@ create table user_data_processing
     new_topic_id         int          null,
     original_post_count  int          null,
     parsed_post_count    int          null,
+    forum_domain         varchar(255) null,
+    data_extraction_urls json         null,
     constraint fk_udp_user foreign key (user_id) references users (id) on delete cascade
 );
 

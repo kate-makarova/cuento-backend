@@ -5,6 +5,7 @@ import (
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -24,16 +25,19 @@ type UserDataProcessingResponse struct {
 	DateCreated        time.Time `json:"date_created"`
 	UserId             int       `json:"user_id"`
 	Status             int       `json:"status"`
-	OriginalTopicId    *string `json:"original_topic_id"`
-	OriginalTopicTitle *string `json:"original_topic_title"`
-	NewTopicId         *int    `json:"new_topic_id"`
-	OriginalPostCount  *int    `json:"original_post_count"`
-	ParsedPostCount    *int    `json:"parsed_post_count"`
+	OriginalTopicId     *string  `json:"original_topic_id"`
+	OriginalTopicTitle  *string  `json:"original_topic_title"`
+	NewTopicId          *int     `json:"new_topic_id"`
+	OriginalPostCount   *int     `json:"original_post_count"`
+	ParsedPostCount     *int     `json:"parsed_post_count"`
+	ForumDomain         *string  `json:"forum_domain"`
+	DataExtractionUrls  []string `json:"data_extraction_urls"`
 }
 
 type CreateUserDataProcessingRequest struct {
 	OriginalTopicId   string `json:"original_topic_id" binding:"required"`
 	OriginalPostCount int    `json:"original_post_count" binding:"required"`
+	ForumDomain       string `json:"forum_domain" binding:"required"`
 }
 
 type MybbPostEntry struct {
@@ -82,7 +86,8 @@ func GetUserDataProcessingList(c *gin.Context, db *sql.DB) {
 	rows, err := db.Query(`
 		SELECT id, date_created, user_id, status,
 		       original_topic_id, original_topic_title, new_topic_id,
-		       original_post_count, parsed_post_count
+		       original_post_count, parsed_post_count,
+		       forum_domain, data_extraction_urls
 		FROM user_data_processing
 		WHERE user_id = ?
 		ORDER BY date_created DESC`,
@@ -98,14 +103,19 @@ func GetUserDataProcessingList(c *gin.Context, db *sql.DB) {
 	result := []UserDataProcessingResponse{}
 	for rows.Next() {
 		var r UserDataProcessingResponse
+		var urlsJSON *string
 		if err := rows.Scan(
 			&r.Id, &r.DateCreated, &r.UserId, &r.Status,
 			&r.OriginalTopicId, &r.OriginalTopicTitle, &r.NewTopicId,
 			&r.OriginalPostCount, &r.ParsedPostCount,
+			&r.ForumDomain, &urlsJSON,
 		); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan processing row: " + err.Error()})
 			c.Abort()
 			return
+		}
+		if urlsJSON != nil {
+			_ = json.Unmarshal([]byte(*urlsJSON), &r.DataExtractionUrls)
 		}
 		result = append(result, r)
 	}
@@ -129,9 +139,17 @@ func CreateUserDataProcessing(c *gin.Context, db *sql.DB) {
 	}
 
 	now := time.Now()
+	urls := generateExtractionUrls(req.ForumDomain, req.OriginalTopicId, req.OriginalPostCount)
+	urlsJSON, err := json.Marshal(urls)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to encode URLs: " + err.Error()})
+		c.Abort()
+		return
+	}
+
 	res, err := db.Exec(
-		"INSERT INTO user_data_processing (date_created, user_id, status, original_topic_id, original_post_count) VALUES (?, ?, ?, ?, ?)",
-		now, userID, UserDataProcessingStatusPending, req.OriginalTopicId, req.OriginalPostCount,
+		"INSERT INTO user_data_processing (date_created, user_id, status, original_topic_id, original_post_count, forum_domain, data_extraction_urls) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		now, userID, UserDataProcessingStatusPending, req.OriginalTopicId, req.OriginalPostCount, req.ForumDomain, urlsJSON,
 	)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create processing: " + err.Error()})
@@ -147,12 +165,14 @@ func CreateUserDataProcessing(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusCreated, UserDataProcessingResponse{
-		Id:                int(id),
-		DateCreated:       now,
-		UserId:            userID,
-		Status:            UserDataProcessingStatusPending,
-		OriginalTopicId:   &req.OriginalTopicId,
-		OriginalPostCount: &req.OriginalPostCount,
+		Id:                 int(id),
+		DateCreated:        now,
+		UserId:             userID,
+		Status:             UserDataProcessingStatusPending,
+		OriginalTopicId:    &req.OriginalTopicId,
+		OriginalPostCount:  &req.OriginalPostCount,
+		ForumDomain:        &req.ForumDomain,
+		DataExtractionUrls: urls,
 	})
 }
 
@@ -479,4 +499,13 @@ func UserDataProcessingPublish(c *gin.Context, db *sql.DB) {
 		"published_posts": publishedCount,
 		"skipped_posts":   skippedCount,
 	})
+}
+
+func generateExtractionUrls(domain, topicId string, postCount int) []string {
+	base := fmt.Sprintf("https://%s/api.php?method=post.get&topic_id=%s&limit=100", domain, topicId)
+	urls := []string{base}
+	for skip := 100; skip < postCount; skip += 100 {
+		urls = append(urls, fmt.Sprintf("%s&skip=%d", base, skip))
+	}
+	return urls
 }
