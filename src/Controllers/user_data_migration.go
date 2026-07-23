@@ -20,18 +20,27 @@ const (
 	ForumTypeMyBB                     = 1
 )
 
+type UserCharacterMapEntry struct {
+	OriginalUserId   string  `json:"original_user_id"`
+	OriginalUserName string  `json:"original_user_name"`
+	CharacterId      *int    `json:"character_id"`
+	CharacterName    *string `json:"character_name"`
+	UserId           *int    `json:"user_id"`
+}
+
 type UserDataProcessingResponse struct {
-	Id                 int       `json:"id"`
-	DateCreated        time.Time `json:"date_created"`
-	UserId             int       `json:"user_id"`
-	Status             int       `json:"status"`
-	OriginalTopicId     *string  `json:"original_topic_id"`
-	OriginalTopicTitle  *string  `json:"original_topic_title"`
-	NewTopicId          *int     `json:"new_topic_id"`
-	OriginalPostCount   *int     `json:"original_post_count"`
-	ParsedPostCount     *int     `json:"parsed_post_count"`
-	ForumDomain         *string  `json:"forum_domain"`
-	DataExtractionUrls  []string `json:"data_extraction_urls"`
+	Id                 int                               `json:"id"`
+	DateCreated        time.Time                         `json:"date_created"`
+	UserId             int                               `json:"user_id"`
+	Status             int                               `json:"status"`
+	OriginalTopicId    *string                           `json:"original_topic_id"`
+	OriginalTopicTitle *string                           `json:"original_topic_title"`
+	NewTopicId         *int                              `json:"new_topic_id"`
+	OriginalPostCount  *int                              `json:"original_post_count"`
+	ParsedPostCount    *int                              `json:"parsed_post_count"`
+	ForumDomain        *string                           `json:"forum_domain"`
+	DataExtractionUrls []string                          `json:"data_extraction_urls"`
+	UserCharacterMap   map[string]UserCharacterMapEntry  `json:"user_character_map"`
 }
 
 type CreateUserDataProcessingRequest struct {
@@ -52,27 +61,22 @@ type MybbPostEntry struct {
 }
 
 type ProcessMybbTopicRequest struct {
-	ProcessingId int             `json:"processing_id" binding:"required"`
-	ForumDomain  string          `json:"forum_domain" binding:"required"`
-	Response     []MybbPostEntry `json:"response" binding:"required"`
-}
-
-type MigrationFoundUser struct {
-	UserId   string `json:"user_id"`
-	UserName string `json:"user_name"`
+	ProcessingId int    `json:"processing_id" binding:"required"`
+	JsonBlob     string `json:"json_blob" binding:"required"`
 }
 
 type ProcessingResultResponse struct {
-	FoundPosts        int                  `json:"found_posts"`
-	SkippedDuplicates int                  `json:"skipped_duplicates"`
-	AllParsed         bool                 `json:"all_parsed"`
-	FoundUsers        []MigrationFoundUser `json:"found_users"`
+	FoundPosts        int                      `json:"found_posts"`
+	SkippedDuplicates int                      `json:"skipped_duplicates"`
+	AllParsed         bool                     `json:"all_parsed"`
+	FoundUsers        []UserCharacterMapEntry  `json:"found_users"`
 }
 
 type PublishUserDataProcessingRequest struct {
-	ProcessingId int            `json:"processing_id" binding:"required"`
-	TopicId      int            `json:"topic_id" binding:"required"`
-	UserMap      map[string]int `json:"user_map" binding:"required"`
+	ProcessingId  int            `json:"processing_id" binding:"required"`
+	TopicId       int            `json:"topic_id" binding:"required"`
+	UserMap       map[string]int `json:"user_map" binding:"required"`
+	SkipFirstPost *bool          `json:"skip_first_post"`
 }
 
 func GetUserDataProcessingList(c *gin.Context, db *sql.DB) {
@@ -87,7 +91,7 @@ func GetUserDataProcessingList(c *gin.Context, db *sql.DB) {
 		SELECT id, date_created, user_id, status,
 		       original_topic_id, original_topic_title, new_topic_id,
 		       original_post_count, parsed_post_count,
-		       forum_domain, data_extraction_urls
+		       forum_domain, data_extraction_urls, user_character_map
 		FROM user_data_processing
 		WHERE user_id = ?
 		ORDER BY date_created DESC`,
@@ -104,11 +108,12 @@ func GetUserDataProcessingList(c *gin.Context, db *sql.DB) {
 	for rows.Next() {
 		var r UserDataProcessingResponse
 		var urlsJSON *string
+		var charMapJSON *string
 		if err := rows.Scan(
 			&r.Id, &r.DateCreated, &r.UserId, &r.Status,
 			&r.OriginalTopicId, &r.OriginalTopicTitle, &r.NewTopicId,
 			&r.OriginalPostCount, &r.ParsedPostCount,
-			&r.ForumDomain, &urlsJSON,
+			&r.ForumDomain, &urlsJSON, &charMapJSON,
 		); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan processing row: " + err.Error()})
 			c.Abort()
@@ -117,10 +122,69 @@ func GetUserDataProcessingList(c *gin.Context, db *sql.DB) {
 		if urlsJSON != nil {
 			_ = json.Unmarshal([]byte(*urlsJSON), &r.DataExtractionUrls)
 		}
+		if charMapJSON != nil {
+			_ = json.Unmarshal([]byte(*charMapJSON), &r.UserCharacterMap)
+		}
+		if r.UserCharacterMap == nil {
+			r.UserCharacterMap = map[string]UserCharacterMapEntry{}
+		}
 		result = append(result, r)
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+func GetUserDataProcessing(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
+		c.Abort()
+		return
+	}
+
+	id := c.Param("id")
+	var r UserDataProcessingResponse
+	var urlsJSON *string
+	var charMapJSON *string
+	err := db.QueryRow(`
+		SELECT id, date_created, user_id, status,
+		       original_topic_id, original_topic_title, new_topic_id,
+		       original_post_count, parsed_post_count,
+		       forum_domain, data_extraction_urls, user_character_map
+		FROM user_data_processing
+		WHERE id = ?`, id,
+	).Scan(
+		&r.Id, &r.DateCreated, &r.UserId, &r.Status,
+		&r.OriginalTopicId, &r.OriginalTopicTitle, &r.NewTopicId,
+		&r.OriginalPostCount, &r.ParsedPostCount,
+		&r.ForumDomain, &urlsJSON, &charMapJSON,
+	)
+	if err == sql.ErrNoRows {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Processing record not found"})
+		c.Abort()
+		return
+	}
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch processing: " + err.Error()})
+		c.Abort()
+		return
+	}
+	if r.UserId != userID {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "Access denied"})
+		c.Abort()
+		return
+	}
+	if urlsJSON != nil {
+		_ = json.Unmarshal([]byte(*urlsJSON), &r.DataExtractionUrls)
+	}
+	if charMapJSON != nil {
+		_ = json.Unmarshal([]byte(*charMapJSON), &r.UserCharacterMap)
+	}
+	if r.UserCharacterMap == nil {
+		r.UserCharacterMap = map[string]UserCharacterMapEntry{}
+	}
+
+	c.JSON(http.StatusOK, r)
 }
 
 func CreateUserDataProcessing(c *gin.Context, db *sql.DB) {
@@ -193,7 +257,8 @@ func ProcessMybbTopicJson(c *gin.Context, db *sql.DB) {
 
 	var ownerID int
 	var originalTopicId string
-	err := db.QueryRow("SELECT user_id, COALESCE(original_topic_id, '') FROM user_data_processing WHERE id = ?", req.ProcessingId).Scan(&ownerID, &originalTopicId)
+	var forumDomain string
+	err := db.QueryRow("SELECT user_id, COALESCE(original_topic_id, ''), COALESCE(forum_domain, '') FROM user_data_processing WHERE id = ?", req.ProcessingId).Scan(&ownerID, &originalTopicId, &forumDomain)
 	if err == sql.ErrNoRows {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Processing record not found"})
 		c.Abort()
@@ -210,12 +275,22 @@ func ProcessMybbTopicJson(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	var apiResponse struct {
+		Response []MybbPostEntry `json:"response"`
+	}
+	if err := json.Unmarshal([]byte(req.JsonBlob), &apiResponse); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid JSON blob: " + err.Error()})
+		c.Abort()
+		return
+	}
+	posts := apiResponse.Response
+
 	now := time.Now()
 	usersSeen := map[string]string{}
 	savedCount := 0
 	skippedCount := 0
 
-	for _, post := range req.Response {
+	for _, post := range posts {
 		if post.TopicId != originalTopicId {
 			continue
 		}
@@ -238,7 +313,7 @@ func ProcessMybbTopicJson(c *gin.Context, db *sql.DB) {
 				 original_user_id, original_user_name, original_post_content_html, post_content_bb_parsed,
 				 is_published, date_processed, processing_id)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
-			req.ForumDomain, ForumTypeMyBB, post.TopicId, post.Id,
+			forumDomain, ForumTypeMyBB, post.TopicId, post.Id,
 			post.UserId, post.Username, post.Message, bbParsed,
 			now, req.ProcessingId,
 		)
@@ -254,22 +329,39 @@ func ProcessMybbTopicJson(c *gin.Context, db *sql.DB) {
 	var parsedPostCount int
 	_ = db.QueryRow("SELECT COUNT(*) FROM user_data_migration WHERE processing_id = ?", req.ProcessingId).Scan(&parsedPostCount)
 
+	// Merge newly seen users into user_character_map (add missing keys, never overwrite)
+	var existingMapJSON *string
+	_ = db.QueryRow("SELECT user_character_map FROM user_data_processing WHERE id = ?", req.ProcessingId).Scan(&existingMapJSON)
+	charMap := map[string]UserCharacterMapEntry{}
+	if existingMapJSON != nil {
+		_ = json.Unmarshal([]byte(*existingMapJSON), &charMap)
+	}
+	for uid, uname := range usersSeen {
+		if _, exists := charMap[uid]; !exists {
+			charMap[uid] = UserCharacterMapEntry{
+				OriginalUserId:   uid,
+				OriginalUserName: uname,
+			}
+		}
+	}
+	charMapJSON, _ := json.Marshal(charMap)
+
 	// Backfill the topic title from the first post's subject if not already set
-	if len(req.Response) > 0 {
+	if len(posts) > 0 {
 		_, _ = db.Exec(
-			"UPDATE user_data_processing SET status = ?, original_topic_title = COALESCE(original_topic_title, ?), parsed_post_count = ? WHERE id = ?",
-			UserDataProcessingStatusProcessed, req.Response[0].Subject, parsedPostCount, req.ProcessingId,
+			"UPDATE user_data_processing SET status = ?, original_topic_title = COALESCE(original_topic_title, ?), parsed_post_count = ?, user_character_map = ? WHERE id = ?",
+			UserDataProcessingStatusProcessed, posts[0].Subject, parsedPostCount, charMapJSON, req.ProcessingId,
 		)
 	} else {
 		_, _ = db.Exec(
-			"UPDATE user_data_processing SET status = ?, parsed_post_count = ? WHERE id = ?",
-			UserDataProcessingStatusProcessed, parsedPostCount, req.ProcessingId,
+			"UPDATE user_data_processing SET status = ?, parsed_post_count = ?, user_character_map = ? WHERE id = ?",
+			UserDataProcessingStatusProcessed, parsedPostCount, charMapJSON, req.ProcessingId,
 		)
 	}
 
-	foundUsers := make([]MigrationFoundUser, 0, len(usersSeen))
-	for uid, uname := range usersSeen {
-		foundUsers = append(foundUsers, MigrationFoundUser{UserId: uid, UserName: uname})
+	foundUsers := make([]UserCharacterMapEntry, 0, len(usersSeen))
+	for uid := range usersSeen {
+		foundUsers = append(foundUsers, charMap[uid])
 	}
 
 	c.JSON(http.StatusOK, ProcessingResultResponse{
@@ -330,10 +422,56 @@ func UserDataProcessingPublish(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	// Pre-resolve every unique character_id -> user_id so we can validate upfront
-	userIdByCharacter := make(map[int]int)
+	// Validate: current user must be participating in the target topic (via character, mask, or as author)
+	var userParticipates int
+	_ = db.QueryRow(`
+		SELECT COUNT(*) FROM topics t
+		LEFT JOIN episode_base eb ON eb.topic_id = t.id
+		WHERE t.id = ?
+		  AND (
+		    t.author_user_id = ?
+		    OR EXISTS (
+		      SELECT 1 FROM episode_character ec
+		      JOIN character_base cb ON cb.id = ec.character_id
+		      WHERE ec.episode_id = eb.id AND cb.user_id = ?
+		    )
+		    OR EXISTS (
+		      SELECT 1 FROM episode_mask em
+		      JOIN character_profile_base cpb ON cpb.id = em.mask_id
+		      WHERE em.episode_id = eb.id AND cpb.user_id = ?
+		    )
+		  )`,
+		req.TopicId, userID, userID, userID,
+	).Scan(&userParticipates)
+	if userParticipates == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You are not participating in this topic"})
+		c.Abort()
+		return
+	}
+
+	// Validate: all mapped characters must be in the episode character list
 	for _, charID := range req.UserMap {
-		if _, resolved := userIdByCharacter[charID]; resolved {
+		var charParticipates int
+		_ = db.QueryRow(`
+			SELECT COUNT(*) FROM episode_character ec
+			JOIN episode_base eb ON eb.id = ec.episode_id
+			WHERE eb.topic_id = ? AND ec.character_id = ?`,
+			req.TopicId, charID,
+		).Scan(&charParticipates)
+		if charParticipates == 0 {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: fmt.Sprintf("Character %d is not participating in this topic", charID)})
+			c.Abort()
+			return
+		}
+	}
+
+	type charResolved struct {
+		userID    int
+		profileID int
+	}
+	resolvedChars := make(map[int]charResolved)
+	for _, charID := range req.UserMap {
+		if _, resolved := resolvedChars[charID]; resolved {
 			continue
 		}
 		var charUserID int
@@ -348,12 +486,19 @@ func UserDataProcessingPublish(c *gin.Context, db *sql.DB) {
 			c.Abort()
 			return
 		}
-		userIdByCharacter[charID] = charUserID
+		var profileID int
+		err = db.QueryRow("SELECT id FROM character_profile_base WHERE character_id = ? AND is_mask = false LIMIT 1", charID).Scan(&profileID)
+		if err != nil {
+			profileID = 0
+		}
+		resolvedChars[charID] = charResolved{userID: charUserID, profileID: profileID}
 	}
+
+	skipFirst := req.SkipFirstPost == nil || *req.SkipFirstPost
 
 	// Fetch all unpublished rows for this processing in original post order
 	rows, err := db.Query(`
-		SELECT id, original_user_id, COALESCE(post_content_bb_parsed, original_post_content_html, '')
+		SELECT id, original_post_id, original_user_id, COALESCE(post_content_bb_parsed, original_post_content_html, '')
 		FROM user_data_migration
 		WHERE processing_id = ? AND is_published = 0
 		ORDER BY CAST(original_post_id AS UNSIGNED) ASC`,
@@ -367,13 +512,14 @@ func UserDataProcessingPublish(c *gin.Context, db *sql.DB) {
 
 	type pendingRow struct {
 		migrationId    int
+		originalPostId string
 		originalUserId string
 		content        string
 	}
 	var pending []pendingRow
 	for rows.Next() {
 		var r pendingRow
-		if err := rows.Scan(&r.migrationId, &r.originalUserId, &r.content); err != nil {
+		if err := rows.Scan(&r.migrationId, &r.originalPostId, &r.originalUserId, &r.content); err != nil {
 			rows.Close()
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan migration row: " + err.Error()})
 			c.Abort()
@@ -385,14 +531,20 @@ func UserDataProcessingPublish(c *gin.Context, db *sql.DB) {
 
 	publishedCount := 0
 	skippedCount := 0
+	firstPost := true
 
 	for _, row := range pending {
+		if skipFirst && firstPost {
+			firstPost = false
+			continue
+		}
+		firstPost = false
 		charID, mapped := req.UserMap[row.originalUserId]
 		if !mapped {
 			skippedCount++
 			continue
 		}
-		authorUserID := userIdByCharacter[charID]
+		resolved := resolvedChars[charID]
 
 		tx, err := db.Begin()
 		if err != nil {
@@ -401,9 +553,16 @@ func UserDataProcessingPublish(c *gin.Context, db *sql.DB) {
 			return
 		}
 
+		useProfile := resolved.profileID != 0
+		var profileIDArg interface{}
+		if useProfile {
+			profileIDArg = resolved.profileID
+		} else {
+			profileIDArg = nil
+		}
 		res, err := tx.Exec(
-			"INSERT INTO posts (topic_id, author_user_id, content, date_created, use_character_profile, character_profile_id) VALUES (?, ?, ?, NOW(), false, NULL)",
-			req.TopicId, authorUserID, row.content,
+			"INSERT INTO posts (topic_id, author_user_id, content, date_created, use_character_profile, character_profile_id) VALUES (?, ?, ?, NOW(), ?, ?)",
+			req.TopicId, resolved.userID, row.content, useProfile, profileIDArg,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -424,7 +583,7 @@ func UserDataProcessingPublish(c *gin.Context, db *sql.DB) {
 			UPDATE user_data_migration
 			SET user_id = ?, character_id = ?, topic_id = ?, post_id = ?, is_published = 1, date_published = NOW()
 			WHERE id = ?`,
-			authorUserID, charID, req.TopicId, postID, row.migrationId,
+			resolved.userID, charID, req.TopicId, postID, row.migrationId,
 		)
 		if err != nil {
 			tx.Rollback()
@@ -454,12 +613,12 @@ func UserDataProcessingPublish(c *gin.Context, db *sql.DB) {
 			    date_last_post = NOW(),
 			    last_post_author_user_id = ?
 			WHERE id = ?`,
-			authorUserID, req.TopicId)
+			resolved.userID, req.TopicId)
 
 		// Subforum last-post metadata
 		if subforumID != 0 {
 			var username string
-			_ = db.QueryRow("SELECT username FROM users WHERE id = ?", authorUserID).Scan(&username)
+			_ = db.QueryRow("SELECT username FROM users WHERE id = ?", resolved.userID).Scan(&username)
 			_, _ = db.Exec(`
 				UPDATE subforums
 				SET post_number              = COALESCE(post_number, 0) + 1,
@@ -475,9 +634,9 @@ func UserDataProcessingPublish(c *gin.Context, db *sql.DB) {
 
 		// User post counter
 		if topicType == Entities.EpisodeTopic {
-			_, _ = db.Exec("UPDATE users SET total_posts = total_posts + 1 WHERE id = ?", authorUserID)
+			_, _ = db.Exec("UPDATE users SET total_posts = total_posts + 1 WHERE id = ?", resolved.userID)
 		} else {
-			_, _ = db.Exec("UPDATE users SET total_general_posts = total_general_posts + 1 WHERE id = ?", authorUserID)
+			_, _ = db.Exec("UPDATE users SET total_general_posts = total_general_posts + 1 WHERE id = ?", resolved.userID)
 		}
 
 		// Character post counter (episode topics only)
@@ -499,6 +658,87 @@ func UserDataProcessingPublish(c *gin.Context, db *sql.DB) {
 		"published_posts": publishedCount,
 		"skipped_posts":   skippedCount,
 	})
+}
+
+type UpdateUserCharacterMapRequest struct {
+	ProcessingId int            `json:"processing_id" binding:"required"`
+	UserMap      map[string]int `json:"user_map" binding:"required"`
+}
+
+func UpdateUserCharacterMap(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
+		c.Abort()
+		return
+	}
+
+	var req UpdateUserCharacterMapRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	var ownerID int
+	err := db.QueryRow("SELECT user_id FROM user_data_processing WHERE id = ?", req.ProcessingId).Scan(&ownerID)
+	if err == sql.ErrNoRows {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Processing record not found"})
+		c.Abort()
+		return
+	}
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to verify processing: " + err.Error()})
+		c.Abort()
+		return
+	}
+	if ownerID != userID {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "Access denied"})
+		c.Abort()
+		return
+	}
+
+	var existingMapJSON *string
+	_ = db.QueryRow("SELECT user_character_map FROM user_data_processing WHERE id = ?", req.ProcessingId).Scan(&existingMapJSON)
+	charMap := map[string]UserCharacterMapEntry{}
+	if existingMapJSON != nil {
+		_ = json.Unmarshal([]byte(*existingMapJSON), &charMap)
+	}
+
+	for uid, charID := range req.UserMap {
+		var charName string
+		var charUserID int
+		err := db.QueryRow("SELECT name, user_id FROM character_base WHERE id = ?", charID).Scan(&charName, &charUserID)
+		if err == sql.ErrNoRows {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: fmt.Sprintf("Character %d not found", charID)})
+			c.Abort()
+			return
+		}
+		if err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: fmt.Sprintf("Failed to resolve character %d: %s", charID, err.Error())})
+			c.Abort()
+			return
+		}
+		id := charID
+		existing := charMap[uid]
+		charMap[uid] = UserCharacterMapEntry{
+			OriginalUserId:   existing.OriginalUserId,
+			OriginalUserName: existing.OriginalUserName,
+			CharacterId:      &id,
+			CharacterName:    &charName,
+			UserId:           &charUserID,
+		}
+	}
+
+	charMapJSON, _ := json.Marshal(charMap)
+	_, err = db.Exec("UPDATE user_data_processing SET user_character_map = ? WHERE id = ?", charMapJSON, req.ProcessingId)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update character map: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"user_character_map": charMap})
 }
 
 func generateExtractionUrls(domain, topicId string, postCount int) []string {

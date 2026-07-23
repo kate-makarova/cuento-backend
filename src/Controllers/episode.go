@@ -1205,3 +1205,79 @@ func EpisodeFieldSchema(c *gin.Context, db *sql.DB) {
 
 	c.JSON(http.StatusOK, gin.H{"fields": result})
 }
+
+type EpisodeAutocompleteItem struct {
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+func GetEpisodeAutocomplete(c *gin.Context, db *sql.DB) {
+	term := c.Param("term")
+	isMine := c.Query("is_mine") == "true"
+
+	var rows *sql.Rows
+	var err error
+
+	if isMine {
+		userID := Services.GetUserIdFromContext(c)
+		if userID == 0 {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
+			c.Abort()
+			return
+		}
+		rows, err = db.Query(`
+			SELECT DISTINCT t.id, t.name
+			FROM topics t
+			LEFT JOIN episode_base eb ON eb.topic_id = t.id
+			WHERE t.type = ?
+			  AND t.status != ?
+			  AND t.name LIKE ?
+			  AND (
+			    t.author_user_id = ?
+			    OR EXISTS (
+			      SELECT 1 FROM episode_character ec
+			      JOIN character_base cb ON cb.id = ec.character_id
+			      WHERE ec.episode_id = eb.id AND cb.user_id = ?
+			    )
+			    OR EXISTS (
+			      SELECT 1 FROM episode_mask em
+			      JOIN character_profile_base cpb ON cpb.id = em.mask_id
+			      WHERE em.episode_id = eb.id AND cpb.user_id = ?
+			    )
+			  )
+			ORDER BY t.name ASC
+			LIMIT 10`,
+			Entities.EpisodeTopic, Entities.DeletedTopic, "%"+term+"%",
+			userID, userID, userID,
+		)
+	} else {
+		rows, err = db.Query(`
+			SELECT id, name
+			FROM topics
+			WHERE type = ? AND status != ? AND name LIKE ?
+			ORDER BY name ASC
+			LIMIT 10`,
+			Entities.EpisodeTopic, Entities.DeletedTopic, "%"+term+"%",
+		)
+	}
+
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get episodes: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	result := []EpisodeAutocompleteItem{}
+	for rows.Next() {
+		var item EpisodeAutocompleteItem
+		if err := rows.Scan(&item.Id, &item.Name); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan episode: " + err.Error()})
+			c.Abort()
+			return
+		}
+		result = append(result, item)
+	}
+
+	c.JSON(http.StatusOK, result)
+}
