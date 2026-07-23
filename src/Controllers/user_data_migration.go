@@ -24,8 +24,9 @@ type UserDataProcessingResponse struct {
 	DateCreated        time.Time `json:"date_created"`
 	UserId             int       `json:"user_id"`
 	Status             int       `json:"status"`
-	OriginalTopicId    *string   `json:"original_topic_id"`
-	OriginalTopicTitle *string   `json:"original_topic_title"`
+	OriginalTopicId    *string `json:"original_topic_id"`
+	OriginalTopicTitle *string `json:"original_topic_title"`
+	NewTopicId         *int    `json:"new_topic_id"`
 }
 
 type CreateUserDataProcessingRequest struct {
@@ -412,7 +413,10 @@ func UserDataProcessingPublish(c *gin.Context, db *sql.DB) {
 		publishedCount++
 	}
 
-	_, _ = db.Exec("UPDATE user_data_processing SET status = ? WHERE id = ?", UserDataProcessingStatusPublished, req.ProcessingId)
+	_, _ = db.Exec(
+		"UPDATE user_data_processing SET status = ?, new_topic_id = ? WHERE id = ?",
+		UserDataProcessingStatusPublished, req.TopicId, req.ProcessingId,
+	)
 
 	c.JSON(http.StatusOK, gin.H{
 		"published_posts": publishedCount,

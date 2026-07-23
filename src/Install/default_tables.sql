@@ -1022,6 +1022,7 @@ create table user_data_processing
     status               int          not null default 0,
     original_topic_id    varchar(64)  null,
     original_topic_title varchar(255) null,
+    new_topic_id         int          null,
     constraint fk_udp_user foreign key (user_id) references users (id) on delete cascade
 );
 
