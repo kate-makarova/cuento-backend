@@ -1970,11 +1970,51 @@ func CustomFieldList(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	// Whitelisted filters: query param key -> (JOIN clause, WHERE clause)
+	type filterSpec struct {
+		join  string
+		where string
+	}
+	allowedFilters := map[string]filterSpec{
+		"wanted_character.is_claimed": {
+			join:  "JOIN claim_record cr ON cr.character_id = cb.id JOIN character_claim cc ON cc.id = cr.claim_id JOIN wanted_character_base wcb ON wcb.character_claim_id = cc.id",
+			where: "wcb.is_claimed = ?",
+		},
+	}
+
+	joins := ""
+	wheres := ""
+	var filterArgs []interface{}
+	for key, spec := range allowedFilters {
+		val := c.Query(key)
+		if val == "" {
+			continue
+		}
+		joins += " " + spec.join
+		if wheres != "" {
+			wheres += " AND "
+		}
+		wheres += spec.where
+		switch val {
+		case "true":
+			filterArgs = append(filterArgs, true)
+		case "false":
+			filterArgs = append(filterArgs, false)
+		default:
+			filterArgs = append(filterArgs, val)
+		}
+	}
+
+	whereClause := fmt.Sprintf("cf.`%s` IS NOT NULL AND cf.`%s` != ''", machineName, machineName)
+	if wheres != "" {
+		whereClause += " AND " + wheres
+	}
+
 	query := fmt.Sprintf(
-		"SELECT cf.`%s`, cb.id, cb.name FROM character_flattened cf JOIN character_base cb ON cb.id = cf.entity_id WHERE cf.`%s` IS NOT NULL AND cf.`%s` != '' ORDER BY cf.`%s` ASC",
-		machineName, machineName, machineName, machineName,
+		"SELECT cf.`%s`, cb.id, cb.name FROM character_flattened cf JOIN character_base cb ON cb.id = cf.entity_id%s WHERE %s ORDER BY cf.`%s` ASC",
+		machineName, joins, whereClause, machineName,
 	)
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, filterArgs...)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to query field values: " + err.Error()})
 		c.Abort()
