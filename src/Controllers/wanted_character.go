@@ -1049,11 +1049,18 @@ func WantedCustomFieldList(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	whereClause := fmt.Sprintf("wf.`%s` IS NOT NULL AND wf.`%s` != ''", machineName, machineName)
+	var queryArgs []interface{}
+	if isClaimedStr := c.Query("is_claimed"); isClaimedStr != "" {
+		whereClause += " AND wb.is_claimed = ?"
+		queryArgs = append(queryArgs, isClaimedStr == "true")
+	}
+
 	query := fmt.Sprintf(
-		"SELECT wf.`%s`, wb.name, wb.topic_id FROM wanted_character_flattened wf JOIN wanted_character_base wb ON wb.id = wf.entity_id WHERE wf.`%s` IS NOT NULL AND wf.`%s` != '' ORDER BY wf.`%s` ASC",
-		machineName, machineName, machineName, machineName,
+		"SELECT wf.`%s`, wb.name, wb.topic_id FROM wanted_character_flattened wf JOIN wanted_character_base wb ON wb.id = wf.entity_id WHERE %s ORDER BY wf.`%s` ASC",
+		machineName, whereClause, machineName,
 	)
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, queryArgs...)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to query field values: " + err.Error()})
 		c.Abort()
