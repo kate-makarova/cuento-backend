@@ -1949,14 +1949,20 @@ func buildCustomFieldFilters(c *gin.Context, flatAlias, baseAlias string, allowe
 	for _, fc := range fieldConfigs {
 		customFieldNames[fc.MachineFieldName] = true
 	}
+	addFilter := func(col, val string) {
+		if val == "false" {
+			wheres = append(wheres, "("+col+" = false OR "+col+" IS NULL)")
+		} else {
+			wheres = append(wheres, col+" = ?")
+			args = append(args, coerceFilterValue(val))
+		}
+	}
 	for key, values := range c.Request.URL.Query() {
 		val := values[0]
 		if col, ok := allowedBaseFields[key]; ok {
-			wheres = append(wheres, col+" = ?")
-			args = append(args, coerceFilterValue(val))
+			addFilter(col, val)
 		} else if customFieldNames[key] {
-			wheres = append(wheres, fmt.Sprintf("%s.`%s` = ?", flatAlias, key))
-			args = append(args, coerceFilterValue(val))
+			addFilter(fmt.Sprintf("%s.`%s`", flatAlias, key), val)
 		}
 	}
 	clause := ""
