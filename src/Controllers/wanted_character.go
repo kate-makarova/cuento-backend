@@ -20,6 +20,7 @@ import (
 
 type GetWantedCharacterListRequest struct {
 	FactionIDs         []int             `json:"faction_ids"`
+	RelationIds        []int             `json:"relation_ids"`
 	Page               int               `json:"page"`
 	CustomFieldFilters map[string]string `json:"custom_field_filters"`
 }
@@ -67,6 +68,15 @@ func GetWantedCharacterList(c *gin.Context, db *sql.DB) {
 			args = append(args, id)
 		}
 		baseWhere += " AND wcb.character_claim_id IN (SELECT character_claim_id FROM character_claim_faction WHERE faction_id IN (" + strings.Join(placeholders, ",") + "))"
+	}
+
+	if len(req.RelationIds) > 0 {
+		placeholders := make([]string, len(req.RelationIds))
+		for i, id := range req.RelationIds {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		baseWhere += " AND wcb.id IN (SELECT wanted_character_id FROM wanted_character_relations WHERE relation_character_id IN (" + strings.Join(placeholders, ",") + "))"
 	}
 
 	if len(req.CustomFieldFilters) > 0 {
@@ -156,6 +166,7 @@ func GetWantedCharacterList(c *gin.Context, db *sql.DB) {
 			wc.Factions = []Entities.Faction{}
 		}
 		wc.UserInfo = fetchUserInfo(wc.AuthorUserId, db)
+		wc.Relations = fetchWantedCharacterRelations(wc.Id, db)
 	}
 
 	if list == nil {
