@@ -7,6 +7,7 @@ import (
 	"cuento-backend/src/Websockets"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -112,6 +113,41 @@ func RegisterTopicEventHandlers() {
 		}
 		for _, id := range event.SubforumIDs {
 			refreshSubforumStats(db, id)
+		}
+	})
+
+	// Subscriber: Notify page_changed to users on the affected viewforum and index pages
+	Events.Subscribe(Events.TopicCreated, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.TopicCreatedEvent)
+		if !ok {
+			return
+		}
+
+		subforumIDStr := strconv.Itoa(event.SubforumID)
+
+		viewforumUsers := Services.ActivityStorage.GetUsersOnPage("viewforum", subforumIDStr)
+		if len(viewforumUsers) > 0 {
+			viewforumUserIDs := make([]int, len(viewforumUsers))
+			for i, u := range viewforumUsers {
+				viewforumUserIDs[i] = u.UserID
+			}
+			subID := subforumIDStr
+			Websockets.MainHub.BroadcastToUsers(viewforumUserIDs, map[string]interface{}{
+				"type": "page_changed",
+				"data": Entities.NotificationPageChanged{PageType: "viewforum", Id: &subID},
+			})
+		}
+
+		indexUsers := Services.ActivityStorage.GetUsersOnPageType("index")
+		if len(indexUsers) > 0 {
+			indexUserIDs := make([]int, len(indexUsers))
+			for i, u := range indexUsers {
+				indexUserIDs[i] = u.UserID
+			}
+			Websockets.MainHub.BroadcastToUsers(indexUserIDs, map[string]interface{}{
+				"type": "page_changed",
+				"data": Entities.NotificationPageChanged{PageType: "index"},
+			})
 		}
 	})
 
