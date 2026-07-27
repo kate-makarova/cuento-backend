@@ -28,6 +28,7 @@ type UpdateWantedCharacterRequest struct {
 	Name         string                 `json:"name" binding:"required"`
 	CustomFields map[string]interface{} `json:"custom_fields"`
 	Factions     []Entities.Faction     `json:"factions"`
+	RelationIds  []int                  `json:"relations"`
 }
 
 type CreateWantedCharacterRequest struct {
@@ -36,6 +37,7 @@ type CreateWantedCharacterRequest struct {
 	CharacterClaimId *int                   `json:"character_claim_id"`
 	CustomFields     map[string]interface{} `json:"custom_fields"`
 	Factions         []Entities.Faction     `json:"factions"`
+	RelationIds      []int                  `json:"relations"`
 }
 
 func GetWantedCharacterList(c *gin.Context, db *sql.DB) {
@@ -315,6 +317,8 @@ func GetWantedCharacter(c *gin.Context, db *sql.DB) {
 		} else {
 			wc.Factions = []Entities.Faction{}
 		}
+
+		wc.Relations = fetchWantedCharacterRelations(wc.Id, db)
 	}
 
 	c.JSON(http.StatusOK, entity)
@@ -413,6 +417,14 @@ func CreateWantedCharacter(c *gin.Context, db *sql.DB) {
 	for _, faction := range req.Factions {
 		if _, err := tx.Exec("INSERT INTO character_claim_faction (character_claim_id, faction_id) VALUES (?, ?)", claimID, faction.Id); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: fmt.Sprintf("Failed to insert faction %d into character claim: %s", faction.Id, err.Error())})
+			c.Abort()
+			return
+		}
+	}
+
+	for _, charID := range req.RelationIds {
+		if _, err := tx.Exec("INSERT INTO wanted_character_relations (wanted_character_id, relation_character_id) VALUES (?, ?)", wantedCharacterID, charID); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: fmt.Sprintf("Failed to insert relation %d: %s", charID, err.Error())})
 			c.Abort()
 			return
 		}
@@ -546,6 +558,21 @@ func UpdateWantedCharacter(c *gin.Context, db *sql.DB) {
 		for _, faction := range req.Factions {
 			if _, err = tx.Exec("INSERT INTO character_claim_faction (character_claim_id, faction_id) VALUES (?, ?)", claimID, faction.Id); err != nil {
 				_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: fmt.Sprintf("Failed to insert faction %d: %s", faction.Id, err.Error())})
+				c.Abort()
+				return
+			}
+		}
+	}
+
+	if req.RelationIds != nil {
+		if _, err = tx.Exec("DELETE FROM wanted_character_relations WHERE wanted_character_id = ?", wantedCharacterID); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to clear relations: " + err.Error()})
+			c.Abort()
+			return
+		}
+		for _, charID := range req.RelationIds {
+			if _, err = tx.Exec("INSERT INTO wanted_character_relations (wanted_character_id, relation_character_id) VALUES (?, ?)", wantedCharacterID, charID); err != nil {
+				_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: fmt.Sprintf("Failed to insert relation %d: %s", charID, err.Error())})
 				c.Abort()
 				return
 			}
@@ -749,6 +776,30 @@ func GetClaimAutocomplete(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 	c.JSON(http.StatusOK, scanClaimAutocompleteRows(c, rows, "Failed to scan claim: "))
+}
+
+func fetchWantedCharacterRelations(wantedCharacterID int, db *sql.DB) []Entities.ShortCharacter {
+	rows, err := db.Query(`
+		SELECT cb.id, cb.name, cb.avatar
+		FROM wanted_character_relations wcr
+		JOIN character_base cb ON cb.id = wcr.relation_character_id
+		WHERE wcr.wanted_character_id = ?
+	`, wantedCharacterID)
+	if err != nil {
+		return []Entities.ShortCharacter{}
+	}
+	defer rows.Close()
+	var result []Entities.ShortCharacter
+	for rows.Next() {
+		var sc Entities.ShortCharacter
+		if rows.Scan(&sc.Id, &sc.Name, &sc.Avatar) == nil {
+			result = append(result, sc)
+		}
+	}
+	if result == nil {
+		return []Entities.ShortCharacter{}
+	}
+	return result
 }
 
 func fetchUserInfo(userId int, db *sql.DB) *Entities.UserInfo {

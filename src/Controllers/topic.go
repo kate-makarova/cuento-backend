@@ -860,6 +860,7 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 					}
 				}
 				wc.UserInfo = fetchUserInfo(wc.AuthorUserId, db)
+				wc.Relations = fetchWantedCharacterRelations(wc.Id, db)
 				topic.WantedCharacter = wc
 			}
 		}
