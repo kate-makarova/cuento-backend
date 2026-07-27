@@ -151,6 +151,78 @@ func RegisterTopicEventHandlers() {
 		}
 	})
 
+	// Subscriber: Notify page_changed on topics moved
+	Events.Subscribe(Events.TopicsMoved, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.TopicsMovedEvent)
+		if !ok {
+			return
+		}
+
+		for _, sfID := range event.SubforumIDs {
+			sfIDStr := strconv.Itoa(sfID)
+			users := Services.ActivityStorage.GetUsersOnPage("viewforum", sfIDStr)
+			if len(users) > 0 {
+				userIDs := make([]int, len(users))
+				for i, u := range users {
+					userIDs[i] = u.UserID
+				}
+				id := sfIDStr
+				Websockets.MainHub.BroadcastToUsers(userIDs, map[string]interface{}{
+					"type": "page_changed",
+					"data": Entities.NotificationPageChanged{PageType: "viewforum", Id: &id},
+				})
+			}
+		}
+
+		indexUsers := Services.ActivityStorage.GetUsersOnPageType("index")
+		if len(indexUsers) > 0 {
+			indexUserIDs := make([]int, len(indexUsers))
+			for i, u := range indexUsers {
+				indexUserIDs[i] = u.UserID
+			}
+			Websockets.MainHub.BroadcastToUsers(indexUserIDs, map[string]interface{}{
+				"type": "page_changed",
+				"data": Entities.NotificationPageChanged{PageType: "index"},
+			})
+		}
+	})
+
+	// Subscriber: Notify page_changed on topics deleted
+	Events.Subscribe(Events.TopicsDeleted, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.TopicsDeletedEvent)
+		if !ok {
+			return
+		}
+
+		for _, sfID := range event.SubforumIDs {
+			sfIDStr := strconv.Itoa(sfID)
+			users := Services.ActivityStorage.GetUsersOnPage("viewforum", sfIDStr)
+			if len(users) > 0 {
+				userIDs := make([]int, len(users))
+				for i, u := range users {
+					userIDs[i] = u.UserID
+				}
+				id := sfIDStr
+				Websockets.MainHub.BroadcastToUsers(userIDs, map[string]interface{}{
+					"type": "page_changed",
+					"data": Entities.NotificationPageChanged{PageType: "viewforum", Id: &id},
+				})
+			}
+		}
+
+		indexUsers := Services.ActivityStorage.GetUsersOnPageType("index")
+		if len(indexUsers) > 0 {
+			indexUserIDs := make([]int, len(indexUsers))
+			for i, u := range indexUsers {
+				indexUserIDs[i] = u.UserID
+			}
+			Websockets.MainHub.BroadcastToUsers(indexUserIDs, map[string]interface{}{
+				"type": "page_changed",
+				"data": Entities.NotificationPageChanged{PageType: "index"},
+			})
+		}
+	})
+
 	// Subscriber 4: Notify Topic Viewers
 	Events.Subscribe(Events.UserReadingTopic, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.UserReadingTopicEvent)
