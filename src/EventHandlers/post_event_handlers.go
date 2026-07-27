@@ -514,12 +514,8 @@ func RegisterPostEventHandlers() {
 
 		subforumIDStr := strconv.Itoa(event.SubforumID)
 
-		viewforumUsers := Services.ActivityStorage.GetUsersOnPage("viewforum", subforumIDStr)
-		if len(viewforumUsers) > 0 {
-			viewforumUserIDs := make([]int, len(viewforumUsers))
-			for i, u := range viewforumUsers {
-				viewforumUserIDs[i] = u.UserID
-			}
+		viewforumUserIDs := Websockets.MainHub.GetUserIDsOnPage("viewforum", subforumIDStr)
+		if len(viewforumUserIDs) > 0 {
 			subID := subforumIDStr
 			Websockets.MainHub.BroadcastToUsers(viewforumUserIDs, map[string]interface{}{
 				"type": "page_changed",
@@ -527,12 +523,8 @@ func RegisterPostEventHandlers() {
 			})
 		}
 
-		indexUsers := Services.ActivityStorage.GetUsersOnPageType("index")
-		if len(indexUsers) > 0 {
-			indexUserIDs := make([]int, len(indexUsers))
-			for i, u := range indexUsers {
-				indexUserIDs[i] = u.UserID
-			}
+		indexUserIDs := Websockets.MainHub.GetUserIDsOnPageType("index")
+		if len(indexUserIDs) > 0 {
 			Websockets.MainHub.BroadcastToUsers(indexUserIDs, map[string]interface{}{
 				"type": "page_changed",
 				"data": Entities.NotificationPageChanged{PageType: "index"},

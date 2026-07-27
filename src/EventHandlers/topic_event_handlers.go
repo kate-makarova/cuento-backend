@@ -125,12 +125,8 @@ func RegisterTopicEventHandlers() {
 
 		subforumIDStr := strconv.Itoa(event.SubforumID)
 
-		viewforumUsers := Services.ActivityStorage.GetUsersOnPage("viewforum", subforumIDStr)
-		if len(viewforumUsers) > 0 {
-			viewforumUserIDs := make([]int, len(viewforumUsers))
-			for i, u := range viewforumUsers {
-				viewforumUserIDs[i] = u.UserID
-			}
+		viewforumUserIDs := Websockets.MainHub.GetUserIDsOnPage("viewforum", subforumIDStr)
+		if len(viewforumUserIDs) > 0 {
 			subID := subforumIDStr
 			Websockets.MainHub.BroadcastToUsers(viewforumUserIDs, map[string]interface{}{
 				"type": "page_changed",
@@ -138,12 +134,8 @@ func RegisterTopicEventHandlers() {
 			})
 		}
 
-		indexUsers := Services.ActivityStorage.GetUsersOnPageType("index")
-		if len(indexUsers) > 0 {
-			indexUserIDs := make([]int, len(indexUsers))
-			for i, u := range indexUsers {
-				indexUserIDs[i] = u.UserID
-			}
+		indexUserIDs := Websockets.MainHub.GetUserIDsOnPageType("index")
+		if len(indexUserIDs) > 0 {
 			Websockets.MainHub.BroadcastToUsers(indexUserIDs, map[string]interface{}{
 				"type": "page_changed",
 				"data": Entities.NotificationPageChanged{PageType: "index"},
@@ -160,12 +152,8 @@ func RegisterTopicEventHandlers() {
 
 		for _, sfID := range event.SubforumIDs {
 			sfIDStr := strconv.Itoa(sfID)
-			users := Services.ActivityStorage.GetUsersOnPage("viewforum", sfIDStr)
-			if len(users) > 0 {
-				userIDs := make([]int, len(users))
-				for i, u := range users {
-					userIDs[i] = u.UserID
-				}
+			userIDs := Websockets.MainHub.GetUserIDsOnPage("viewforum", sfIDStr)
+			if len(userIDs) > 0 {
 				id := sfIDStr
 				Websockets.MainHub.BroadcastToUsers(userIDs, map[string]interface{}{
 					"type": "page_changed",
@@ -174,12 +162,8 @@ func RegisterTopicEventHandlers() {
 			}
 		}
 
-		indexUsers := Services.ActivityStorage.GetUsersOnPageType("index")
-		if len(indexUsers) > 0 {
-			indexUserIDs := make([]int, len(indexUsers))
-			for i, u := range indexUsers {
-				indexUserIDs[i] = u.UserID
-			}
+		indexUserIDs := Websockets.MainHub.GetUserIDsOnPageType("index")
+		if len(indexUserIDs) > 0 {
 			Websockets.MainHub.BroadcastToUsers(indexUserIDs, map[string]interface{}{
 				"type": "page_changed",
 				"data": Entities.NotificationPageChanged{PageType: "index"},
@@ -196,12 +180,8 @@ func RegisterTopicEventHandlers() {
 
 		for _, sfID := range event.SubforumIDs {
 			sfIDStr := strconv.Itoa(sfID)
-			users := Services.ActivityStorage.GetUsersOnPage("viewforum", sfIDStr)
-			if len(users) > 0 {
-				userIDs := make([]int, len(users))
-				for i, u := range users {
-					userIDs[i] = u.UserID
-				}
+			userIDs := Websockets.MainHub.GetUserIDsOnPage("viewforum", sfIDStr)
+			if len(userIDs) > 0 {
 				id := sfIDStr
 				Websockets.MainHub.BroadcastToUsers(userIDs, map[string]interface{}{
 					"type": "page_changed",
@@ -210,12 +190,8 @@ func RegisterTopicEventHandlers() {
 			}
 		}
 
-		indexUsers := Services.ActivityStorage.GetUsersOnPageType("index")
-		if len(indexUsers) > 0 {
-			indexUserIDs := make([]int, len(indexUsers))
-			for i, u := range indexUsers {
-				indexUserIDs[i] = u.UserID
-			}
+		indexUserIDs := Websockets.MainHub.GetUserIDsOnPageType("index")
+		if len(indexUserIDs) > 0 {
 			Websockets.MainHub.BroadcastToUsers(indexUserIDs, map[string]interface{}{
 				"type": "page_changed",
 				"data": Entities.NotificationPageChanged{PageType: "index"},
