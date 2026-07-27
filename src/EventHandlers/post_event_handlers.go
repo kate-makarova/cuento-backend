@@ -508,7 +508,7 @@ func RegisterPostEventHandlers() {
 	// Subscriber: Notify page_changed to users on the affected viewforum and index pages
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type != "post_created" {
+		if !ok || (event.Type != "post_created" && event.Type != "post_deleted") {
 			return
 		}
 
