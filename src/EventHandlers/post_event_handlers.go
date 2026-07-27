@@ -505,6 +505,41 @@ func RegisterPostEventHandlers() {
 		})
 	})
 
+	// Subscriber: Notify page_changed to users on the affected viewforum and index pages
+	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.PostCreatedEvent)
+		if !ok || event.Type != "post_created" {
+			return
+		}
+
+		subforumIDStr := strconv.Itoa(event.SubforumID)
+
+		viewforumUsers := Services.ActivityStorage.GetUsersOnPage("viewforum", subforumIDStr)
+		if len(viewforumUsers) > 0 {
+			viewforumUserIDs := make([]int, len(viewforumUsers))
+			for i, u := range viewforumUsers {
+				viewforumUserIDs[i] = u.UserID
+			}
+			subID := subforumIDStr
+			Websockets.MainHub.BroadcastToUsers(viewforumUserIDs, map[string]interface{}{
+				"type": "page_changed",
+				"data": Entities.NotificationPageChanged{PageType: "viewforum", Id: &subID},
+			})
+		}
+
+		indexUsers := Services.ActivityStorage.GetUsersOnPageType("index")
+		if len(indexUsers) > 0 {
+			indexUserIDs := make([]int, len(indexUsers))
+			for i, u := range indexUsers {
+				indexUserIDs[i] = u.UserID
+			}
+			Websockets.MainHub.BroadcastToUsers(indexUserIDs, map[string]interface{}{
+				"type": "page_changed",
+				"data": Entities.NotificationPageChanged{PageType: "index"},
+			})
+		}
+	})
+
 	// Subscriber: Award currency for mask post
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
