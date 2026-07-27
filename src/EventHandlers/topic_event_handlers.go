@@ -92,6 +92,8 @@ func RegisterTopicEventHandlers() {
 		if err != nil {
 			fmt.Printf("Error updating subforum stats: %v\n", err)
 		}
+
+		Events.Publish(db, Events.SubforumUpdated, Events.SubforumUpdatedEvent{SubforumID: event.SubforumID})
 	})
 
 	// Subscriber 3: Refresh subforum stats when topics are moved
@@ -102,6 +104,7 @@ func RegisterTopicEventHandlers() {
 		}
 		for _, id := range event.SubforumIDs {
 			refreshSubforumStats(db, id)
+			Events.Publish(db, Events.SubforumUpdated, Events.SubforumUpdatedEvent{SubforumID: id})
 		}
 	})
 
@@ -113,81 +116,25 @@ func RegisterTopicEventHandlers() {
 		}
 		for _, id := range event.SubforumIDs {
 			refreshSubforumStats(db, id)
+			Events.Publish(db, Events.SubforumUpdated, Events.SubforumUpdatedEvent{SubforumID: id})
 		}
 	})
 
-	// Subscriber: Notify page_changed to users on the affected viewforum and index pages
-	Events.Subscribe(Events.TopicCreated, func(db *sql.DB, data Events.EventData) {
-		event, ok := data.(Events.TopicCreatedEvent)
+	// Subscriber: Notify page_changed on subforum updated
+	Events.Subscribe(Events.SubforumUpdated, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.SubforumUpdatedEvent)
 		if !ok {
 			return
 		}
 
-		subforumIDStr := strconv.Itoa(event.SubforumID)
+		sfIDStr := strconv.Itoa(event.SubforumID)
 
-		viewforumUserIDs := Websockets.MainHub.GetUserIDsOnPage("viewforum", subforumIDStr)
+		viewforumUserIDs := Websockets.MainHub.GetUserIDsOnPage("viewforum", sfIDStr)
 		if len(viewforumUserIDs) > 0 {
-			subID := subforumIDStr
 			Websockets.MainHub.BroadcastToUsers(viewforumUserIDs, map[string]interface{}{
 				"type": "page_changed",
-				"data": Entities.NotificationPageChanged{PageType: "viewforum", Id: &subID},
+				"data": Entities.NotificationPageChanged{PageType: "viewforum", Id: &sfIDStr},
 			})
-		}
-
-		indexUserIDs := Websockets.MainHub.GetUserIDsOnPageType("index")
-		if len(indexUserIDs) > 0 {
-			Websockets.MainHub.BroadcastToUsers(indexUserIDs, map[string]interface{}{
-				"type": "page_changed",
-				"data": Entities.NotificationPageChanged{PageType: "index"},
-			})
-		}
-	})
-
-	// Subscriber: Notify page_changed on topics moved
-	Events.Subscribe(Events.TopicsMoved, func(db *sql.DB, data Events.EventData) {
-		event, ok := data.(Events.TopicsMovedEvent)
-		if !ok {
-			return
-		}
-
-		for _, sfID := range event.SubforumIDs {
-			sfIDStr := strconv.Itoa(sfID)
-			userIDs := Websockets.MainHub.GetUserIDsOnPage("viewforum", sfIDStr)
-			if len(userIDs) > 0 {
-				id := sfIDStr
-				Websockets.MainHub.BroadcastToUsers(userIDs, map[string]interface{}{
-					"type": "page_changed",
-					"data": Entities.NotificationPageChanged{PageType: "viewforum", Id: &id},
-				})
-			}
-		}
-
-		indexUserIDs := Websockets.MainHub.GetUserIDsOnPageType("index")
-		if len(indexUserIDs) > 0 {
-			Websockets.MainHub.BroadcastToUsers(indexUserIDs, map[string]interface{}{
-				"type": "page_changed",
-				"data": Entities.NotificationPageChanged{PageType: "index"},
-			})
-		}
-	})
-
-	// Subscriber: Notify page_changed on topics deleted
-	Events.Subscribe(Events.TopicsDeleted, func(db *sql.DB, data Events.EventData) {
-		event, ok := data.(Events.TopicsDeletedEvent)
-		if !ok {
-			return
-		}
-
-		for _, sfID := range event.SubforumIDs {
-			sfIDStr := strconv.Itoa(sfID)
-			userIDs := Websockets.MainHub.GetUserIDsOnPage("viewforum", sfIDStr)
-			if len(userIDs) > 0 {
-				id := sfIDStr
-				Websockets.MainHub.BroadcastToUsers(userIDs, map[string]interface{}{
-					"type": "page_changed",
-					"data": Entities.NotificationPageChanged{PageType: "viewforum", Id: &id},
-				})
-			}
 		}
 
 		indexUserIDs := Websockets.MainHub.GetUserIDsOnPageType("index")

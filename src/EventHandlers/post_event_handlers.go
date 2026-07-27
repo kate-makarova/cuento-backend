@@ -114,6 +114,8 @@ func RegisterPostEventHandlers() {
 		if err != nil {
 			fmt.Printf("Error updating subforum stats: %v\n", err)
 		}
+
+		Events.Publish(db, Events.SubforumUpdated, Events.SubforumUpdatedEvent{SubforumID: event.SubforumID})
 	})
 
 	// Subscriber: Update character stats on episode post created
@@ -371,6 +373,7 @@ func RegisterPostEventHandlers() {
 
 		// 4. Recalculate subforum stats (post count + last post).
 		refreshSubforumStats(db, event.SubforumID)
+		Events.Publish(db, Events.SubforumUpdated, Events.SubforumUpdatedEvent{SubforumID: event.SubforumID})
 
 		// 5. Decrement author's post count.
 		if topicType == Entities.EpisodeTopic {
@@ -503,33 +506,6 @@ func RegisterPostEventHandlers() {
 				TopicId:       int(event.TopicID),
 			},
 		})
-	})
-
-	// Subscriber: Notify page_changed to users on the affected viewforum and index pages
-	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
-		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || (event.Type != "post_created" && event.Type != "post_deleted" && event.Type != "post_updated") {
-			return
-		}
-
-		subforumIDStr := strconv.Itoa(event.SubforumID)
-
-		viewforumUserIDs := Websockets.MainHub.GetUserIDsOnPage("viewforum", subforumIDStr)
-		if len(viewforumUserIDs) > 0 {
-			subID := subforumIDStr
-			Websockets.MainHub.BroadcastToUsers(viewforumUserIDs, map[string]interface{}{
-				"type": "page_changed",
-				"data": Entities.NotificationPageChanged{PageType: "viewforum", Id: &subID},
-			})
-		}
-
-		indexUserIDs := Websockets.MainHub.GetUserIDsOnPageType("index")
-		if len(indexUserIDs) > 0 {
-			Websockets.MainHub.BroadcastToUsers(indexUserIDs, map[string]interface{}{
-				"type": "page_changed",
-				"data": Entities.NotificationPageChanged{PageType: "index"},
-			})
-		}
 	})
 
 	// Subscriber: Award currency for mask post
