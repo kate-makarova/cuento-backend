@@ -180,16 +180,23 @@ func WidgetRandomEntities(config map[string]interface{}, db *sql.DB) (string, er
 		}
 	}
 
-	baseColumns := make(map[string]bool)
-	if colRows, err := db.Query("SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?", entityType+"_base"); err == nil {
-		defer colRows.Close()
-		for colRows.Next() {
+	knownColumns := func(table string) map[string]bool {
+		m := make(map[string]bool)
+		r, err := db.Query("SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ?", table)
+		if err != nil {
+			return m
+		}
+		defer r.Close()
+		for r.Next() {
 			var col string
-			if err := colRows.Scan(&col); err == nil {
-				baseColumns[col] = true
+			if r.Scan(&col) == nil {
+				m[col] = true
 			}
 		}
+		return m
 	}
+	baseColumns := knownColumns(entityType + "_base")
+	flattenedColumns := knownColumns(entityType + "_flattened")
 
 	var filterClauses []string
 	var filterArgs []interface{}
@@ -217,18 +224,23 @@ func WidgetRandomEntities(config map[string]interface{}, db *sql.DB) (string, er
 			}
 			placeholders := strings.Repeat("?,", len(vals))
 			placeholders = placeholders[:len(placeholders)-1]
-			tableAlias := "b"
-			if !baseColumns[fieldName] {
-				tableAlias = "f"
+			var clause string
+			if fieldName == "status_active" {
+				clause = fmt.Sprintf("b.%s_status IN (%s)", entityType, placeholders)
+			} else if baseColumns[fieldName] {
+				clause = fmt.Sprintf("b.%s IN (%s)", fieldName, placeholders)
+			} else if flattenedColumns[fieldName] {
+				clause = fmt.Sprintf("f.%s IN (%s)", fieldName, placeholders)
 				needsFlattened = true
+			} else {
+				continue // field doesn't exist in either table — skip
 			}
-			filterClauses = append(filterClauses, fmt.Sprintf("%s.%s IN (%s)", tableAlias, fieldName, placeholders))
+			filterClauses = append(filterClauses, clause)
 			filterArgs = append(filterArgs, vals...)
 		}
 	}
 
-	statusColumn := entityType + "_status"
-	whereClause := fmt.Sprintf("b.%s = 0", statusColumn)
+	whereClause := "1=1"
 	if len(filterClauses) > 0 {
 		whereClause += " AND " + strings.Join(filterClauses, " AND ")
 	}
