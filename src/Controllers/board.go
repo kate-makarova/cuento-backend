@@ -29,6 +29,8 @@ type BoardInfo struct {
 	SiteMaxRating                  string              `json:"site_max_rating"`
 	UseImageUploading              string              `json:"use_image_uploading"`
 	UseImageProxy                  string              `json:"use_image_proxy"`
+	UserAvatarWidth                int                 `json:"user_avatar_width"`
+	UserAvatarHeight               int                 `json:"user_avatar_height"`
 	Features                       map[string]int      `json:"features"`
 }
 
@@ -43,7 +45,7 @@ func GetBoard(c *gin.Context, db *sql.DB) {
 		LastRegisteredUser:     nil,
 	}
 
-	rows, err := db.Query("SELECT setting_name, setting_value FROM global_settings WHERE setting_name IN ('site_name', 'domain', 'posts_per_page', 'visual_navlinks_after_header_panel', 'auto_archiving_show_page_link', 'auto_archiving_enabled', 'auto_archiving_days', 'use_rating_system', 'site_max_rating', 'use_image_uploading', 'use_image_proxy')")
+	rows, err := db.Query("SELECT setting_name, setting_value FROM global_settings WHERE setting_name IN ('site_name', 'domain', 'posts_per_page', 'visual_navlinks_after_header_panel', 'auto_archiving_show_page_link', 'auto_archiving_enabled', 'auto_archiving_days', 'use_rating_system', 'site_max_rating', 'use_image_uploading', 'use_image_proxy', 'user_avatar_width', 'user_avatar_height')")
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get global settings: " + err.Error()})
 		c.Abort()
@@ -83,6 +85,10 @@ func GetBoard(c *gin.Context, db *sql.DB) {
 			boardInfo.UseImageUploading = value
 		case "use_image_proxy":
 			boardInfo.UseImageProxy = value
+		case "user_avatar_width":
+			boardInfo.UserAvatarWidth, _ = strconv.Atoi(value)
+		case "user_avatar_height":
+			boardInfo.UserAvatarHeight, _ = strconv.Atoi(value)
 		}
 	}
 
