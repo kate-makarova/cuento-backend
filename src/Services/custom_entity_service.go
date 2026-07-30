@@ -136,15 +136,17 @@ func GetEntity(id int64, className string, db DBExecutor) (interface{}, error) {
 		return nil, er
 	}
 
+	useProxy := GetUseImageProxy(db)
+
 	// 3. Fill struct
-	if err := fillEntity(entity, data, config); err != nil {
+	if err := fillEntity(entity, data, config, useProxy); err != nil {
 		return nil, err
 	}
 
 	return entity, nil
 }
 
-func fillEntity(entity interface{}, data map[string]interface{}, config []Entities.CustomFieldConfig) error {
+func fillEntity(entity interface{}, data map[string]interface{}, config []Entities.CustomFieldConfig, useProxy bool) error {
 	v := reflect.ValueOf(entity).Elem()
 	t := v.Type()
 
@@ -187,7 +189,11 @@ func fillEntity(entity interface{}, data map[string]interface{}, config []Entiti
 				if conf, ok := configMap[key]; ok {
 					if conf.FieldType == "text" {
 						if s, ok := val.(string); ok {
-							cfValue.ContentHtml = ParseBBCode(s)
+							cfValue.ContentHtml = ApplyImageProxyToHTML(ParseBBCode(s), useProxy)
+						}
+					} else if useProxy && (conf.ContentFieldType == "image" || conf.ContentFieldType == "cropped_image") {
+						if s, ok := val.(string); ok {
+							cfValue.Content = WrapImageURL(s)
 						}
 					} else if conf.FieldType == "select" {
 						if conf.Options != nil {
