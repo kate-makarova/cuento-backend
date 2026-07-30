@@ -158,6 +158,12 @@ VALUES ('use_image_proxy', 'n');
 INSERT INTO global_settings (setting_name, setting_value)
 VALUES ('proxy_cache_size', '0');
 
+INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('user_avatar_width', '0');
+
+INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('user_avatar_height', '0');
+
 CREATE TABLE categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NULL,
