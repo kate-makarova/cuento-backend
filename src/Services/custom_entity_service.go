@@ -96,14 +96,15 @@ func GetEntity(id int64, className string, db DBExecutor) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
 	if !rows.Next() {
+		rows.Close()
 		return nil, sql.ErrNoRows
 	}
 
 	cols, err := rows.Columns()
 	if err != nil {
+		rows.Close()
 		return nil, err
 	}
 
@@ -113,6 +114,7 @@ func GetEntity(id int64, className string, db DBExecutor) (interface{}, error) {
 	}
 
 	if err := rows.Scan(vals...); err != nil {
+		rows.Close()
 		return nil, err
 	}
 
@@ -129,6 +131,7 @@ func GetEntity(id int64, className string, db DBExecutor) (interface{}, error) {
 			data[colName] = string(*val)
 		}
 	}
+	rows.Close() // close before issuing further queries on the same connection
 
 	// 2. Instantiate struct
 	var entity, er = IdentifyBaseEntity(className)
