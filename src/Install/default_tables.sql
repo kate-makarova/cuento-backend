@@ -75,6 +75,9 @@ INSERT INTO global_settings (setting_name, setting_value)
 VALUES ('site_name', 'Site Name');
 
 INSERT INTO global_settings (setting_name, setting_value)
+VALUES ('domain', '');
+
+INSERT INTO global_settings (setting_name, setting_value)
 VALUES ('posts_per_page', '20');
 
 INSERT INTO global_settings (setting_name, setting_value)

@@ -263,6 +263,7 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 
 	currentUserID := Services.GetUserIdFromContext(c)
 	useProxy := Services.GetUseImageProxy(db)
+	domain, _ := Services.GetGlobalSetting("domain", db)
 
 	var subforumIDCheck int
 	if err := db.QueryRow("SELECT subforum_id FROM topics WHERE id = ? AND status != ?", topicID, Entities.DeletedTopic).Scan(&subforumIDCheck); err != nil {
@@ -436,7 +437,7 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 		post.DateCreated = dateCreated
 		post.DateCreatedLocalized = Services.LocalizeTime(post.DateCreated, userTimezone)
 		post.Content = rowMap["content"].(string)
-		post.ContentHtml = Services.ApplyImageProxyToHTML(Services.ParseBBCode(post.Content), useProxy)
+		post.ContentHtml = Services.ApplyImageProxyToHTML(Services.LinkifyURLs(Services.ParseBBCode(post.Content), domain, db), useProxy)
 		post.UseCharacterProfile, _ = strconv.ParseBool(rowMap["use_character_profile"].(string))
 		subforumID, _ = strconv.Atoi(rowMap["subforum_id"].(string))
 		topicTypeInt, _ := strconv.Atoi(rowMap["topic_type"].(string))
@@ -506,7 +507,7 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 			}
 			if sig, ok := rowMap["character_signature"]; ok {
 				sigStr := sig.(string)
-				sigHtml := Services.ApplyImageProxyToHTML(Services.ParseBBCode(sigStr), useProxy)
+				sigHtml := Services.ApplyImageProxyToHTML(Services.LinkifyURLs(Services.ParseBBCode(sigStr), domain, db), useProxy)
 				charProfile.Signature = &sigStr
 				charProfile.SignatureHtml = &sigHtml
 			}
@@ -561,7 +562,7 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 			}
 			if sig, ok := rowMap["user_signature"]; ok {
 				sigStr := sig.(string)
-				sigHtml := Services.ApplyImageProxyToHTML(Services.ParseBBCode(sigStr), useProxy)
+				sigHtml := Services.ApplyImageProxyToHTML(Services.LinkifyURLs(Services.ParseBBCode(sigStr), domain, db), useProxy)
 				userProfile.Signature = &sigStr
 				userProfile.SignatureHtml = &sigHtml
 			}
@@ -1113,7 +1114,8 @@ func PreviewPost(c *gin.Context, db *sql.DB) {
 	post.TopicId = req.TopicID
 	post.AuthorUserId = userID
 	post.Content = req.Content
-	post.ContentHtml = Services.ParseBBCode(req.Content)
+	previewDomain, _ := Services.GetGlobalSetting("domain", db)
+	post.ContentHtml = Services.LinkifyURLs(Services.ParseBBCode(req.Content), previewDomain, db)
 	post.UseCharacterProfile = req.UseCharacterProfile
 	post.GuestName = req.GuestName
 

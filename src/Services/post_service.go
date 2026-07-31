@@ -106,6 +106,7 @@ func GetPostById(id int, db *sql.DB, currencyActive bool) (*Entities.Post, error
 	}
 
 	useProxy := GetUseImageProxy(db)
+	domain, _ := GetGlobalSetting("domain", db)
 
 	var post Entities.Post
 	if val, ok := rowMap["id"]; ok {
@@ -123,7 +124,7 @@ func GetPostById(id int, db *sql.DB, currencyActive bool) (*Entities.Post, error
 	post.DateCreated = dateCreated
 	if val, ok := rowMap["content"]; ok {
 		post.Content = val.(string)
-		post.ContentHtml = ApplyImageProxyToHTML(ParseBBCode(post.Content), useProxy)
+		post.ContentHtml = ApplyImageProxyToHTML(LinkifyURLs(ParseBBCode(post.Content), domain, db), useProxy)
 	}
 	if val, ok := rowMap["use_character_profile"]; ok {
 		post.UseCharacterProfile, _ = strconv.ParseBool(val.(string))
@@ -155,7 +156,7 @@ func GetPostById(id int, db *sql.DB, currencyActive bool) (*Entities.Post, error
 		}
 		if sig, ok := rowMap["character_signature"]; ok {
 			sigStr := sig.(string)
-			sigHtml := ApplyImageProxyToHTML(ParseBBCode(sigStr), useProxy)
+			sigHtml := ApplyImageProxyToHTML(LinkifyURLs(ParseBBCode(sigStr), domain, db), useProxy)
 			charProfile.Signature = &sigStr
 			charProfile.SignatureHtml = &sigHtml
 		}
@@ -224,7 +225,7 @@ func GetPostById(id int, db *sql.DB, currencyActive bool) (*Entities.Post, error
 		}
 		if sig, ok := rowMap["user_signature"]; ok {
 			sigStr := sig.(string)
-			sigHtml := ApplyImageProxyToHTML(ParseBBCode(sigStr), useProxy)
+			sigHtml := ApplyImageProxyToHTML(LinkifyURLs(ParseBBCode(sigStr), domain, db), useProxy)
 			userProfile.Signature = &sigStr
 			userProfile.SignatureHtml = &sigHtml
 		}
