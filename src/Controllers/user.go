@@ -1638,6 +1638,9 @@ func AdminUpdateUser(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	if req.Username != nil {
+		Services.ActivityStorage.UpdateUsername(userID, *req.Username)
+	}
 	Services.NotifyUserRefresh(userID, db)
 	c.JSON(http.StatusOK, gin.H{"message": "User updated successfully"})
 }
