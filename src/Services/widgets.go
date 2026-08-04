@@ -359,6 +359,15 @@ func WidgetRandomEntities(config map[string]interface{}, db *sql.DB) (string, er
 					continue
 				}
 				renderType := fieldRenderType[fieldName]
+				if renderType == "cropped_image" {
+					if dims, ok := fieldSizes[fieldName]; ok && (dims.width > 0 || dims.height > 0) {
+						if s, ok := value.(string); ok && s != "" {
+							if resized, err := GetResizedImageURL(s, dims.width, dims.height, db); err == nil {
+								value = resized
+							}
+						}
+					}
+				}
 				fieldsByEntity[entityID] = append(fieldsByEntity[entityID], customField{
 					FieldName:  fieldName,
 					Value:      value,

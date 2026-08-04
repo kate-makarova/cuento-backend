@@ -1081,3 +1081,13 @@ create table user_data_migration
     processing_id              int          not null,
     constraint fk_udm_processing foreign key (processing_id) references user_data_processing (id) on delete cascade
 );
+
+create table resized_image_cache
+(
+    id           int           auto_increment primary key,
+    original_url varchar(2048) not null,
+    width        int           not null,
+    height       int           not null,
+    resized_url  varchar(2048) not null,
+    unique key uq_resized (original_url(191), width, height)
+);
