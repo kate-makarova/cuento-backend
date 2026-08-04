@@ -559,8 +559,6 @@ func GetUserProfile(c *gin.Context, db *sql.DB) {
 		}
 	}
 
-	profile.Avatar = Services.WrapImageURLPtr(profile.Avatar, Services.GetUseImageProxy(db))
-
 	c.JSON(http.StatusOK, profile)
 }
 

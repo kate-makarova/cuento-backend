@@ -36,10 +36,6 @@ func main() {
 	// Start archiving warning notifier (checks daily, sends notifications at 10/5/3/2/1 days before archiving)
 	Services.StartArchivingNotifier(Services.DB)
 
-	if err := Services.InitImageProxyCache(); err != nil {
-		panic("failed to initialize image proxy cache: " + err.Error())
-	}
-
 	// Start WebSocket Hub
 	go Websockets.MainHub.Run()
 
@@ -615,10 +611,7 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	protectedRouter.POST("/image/upload", "Upload an image to imgbb", func(c *gin.Context) {
 		Controllers.UploadImage(c, Services.DB)
 	})
-	publicRouter.GET("/image/proxy", "Fetch, resize, and cache-proxy an image", func(c *gin.Context) {
-		Controllers.ProxyImage(c, Services.DB)
-	})
-	protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Context) {
+protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Context) {
 		Controllers.CreateCategory(c, Services.DB)
 	})
 	protectedRouter.POST("/category/update/:id", "Update category by ID", func(c *gin.Context) {
