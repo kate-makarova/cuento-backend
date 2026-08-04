@@ -14,7 +14,6 @@ import (
 
 	"github.com/disintegration/imaging"
 	"github.com/gabriel-vasile/mimetype"
-	"github.com/google/uuid"
 	_ "golang.org/x/image/webp"
 )
 
@@ -35,23 +34,23 @@ var allowedAvatarMIMEs = map[string]bool{
 	"image/webp": true,
 }
 
-func SaveUserAvatar(data []byte, db *sql.DB) (string, error) {
+func SaveUserAvatar(data []byte, userID int, db *sql.DB) (string, error) {
 	wStr, _ := GetGlobalSetting("user_avatar_width", db)
 	hStr, _ := GetGlobalSetting("user_avatar_height", db)
 	w, _ := strconv.Atoi(wStr)
 	h, _ := strconv.Atoi(hStr)
-	return saveAvatar(data, "user", w, h)
+	return saveAvatar(data, "user", userID, w, h)
 }
 
-func SaveCharacterAvatar(data []byte, db *sql.DB) (string, error) {
+func SaveCharacterAvatar(data []byte, characterID int, db *sql.DB) (string, error) {
 	wStr, _ := GetGlobalSetting("character_avatar_width", db)
 	hStr, _ := GetGlobalSetting("character_avatar_height", db)
 	w, _ := strconv.Atoi(wStr)
 	h, _ := strconv.Atoi(hStr)
-	return saveAvatar(data, "character", w, h)
+	return saveAvatar(data, "character", characterID, w, h)
 }
 
-func saveAvatar(data []byte, subdir string, width, height int) (string, error) {
+func saveAvatar(data []byte, subdir string, id int, width, height int) (string, error) {
 	if len(data) > maxAvatarInputBytes {
 		return "", errors.New("image exceeds maximum allowed size of 10 MB")
 	}
@@ -85,7 +84,7 @@ func saveAvatar(data []byte, subdir string, width, height int) (string, error) {
 		return "", fmt.Errorf("failed to create storage directory: %w", err)
 	}
 
-	filename := uuid.New().String() + ".jpg"
+	filename := strconv.Itoa(id) + ".jpg"
 	path := filepath.Join(dir, filename)
 	if err := os.WriteFile(path, buf.Bytes(), 0664); err != nil {
 		return "", fmt.Errorf("failed to write image: %w", err)
