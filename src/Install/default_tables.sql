@@ -156,12 +156,6 @@ INSERT INTO global_settings (setting_name, setting_value)
 VALUES ('image_hosting', '');
 
 INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('use_image_proxy', 'n');
-
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('proxy_cache_size', '0');
-
-INSERT INTO global_settings (setting_name, setting_value)
 VALUES ('user_avatar_width', '0');
 
 INSERT INTO global_settings (setting_name, setting_value)
