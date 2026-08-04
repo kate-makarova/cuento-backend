@@ -355,6 +355,9 @@ func main() {
 	protectedRouter.POST("/character/update/:id", "Update character by ID", func(c *gin.Context) {
 		Controllers.UpdateCharacter(c, Services.DB)
 	})
+	protectedRouter.POST("/character/:id/avatar", "Upload and save a character's avatar", func(c *gin.Context) {
+		Controllers.UploadCharacterAvatar(c, Services.DB)
+	})
 	protectedRouter.GET("/user/characters", "Get current user's characters", func(c *gin.Context) {
 		Controllers.GetUserCharacters(c, Services.DB)
 	})
@@ -437,6 +440,9 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	protectedRouter.POST("/character-profile/update/:id", "Update character profile by ID", func(c *gin.Context) {
 		Controllers.CharacterProfileUpdate(c, Services.DB)
 	})
+	protectedRouter.POST("/character-profile/:id/avatar", "Upload and save a character profile's avatar", func(c *gin.Context) {
+		Controllers.UploadCharacterProfileAvatar(c, Services.DB)
+	})
 	protectedRouter.POST("/topic/create", "Create topic", func(c *gin.Context) {
 		Controllers.CreateTopic(c, Services.DB)
 	})
@@ -517,6 +523,9 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	})
 	protectedRouter.POST("/wanted-character/activate/:id", "Activate a wanted character", func(c *gin.Context) {
 		Controllers.ActivateWantedCharacter(c, Services.DB)
+	})
+	protectedRouter.POST("/user/avatar", "Upload and save the current user's avatar", func(c *gin.Context) {
+		Controllers.UploadUserAvatar(c, Services.DB)
 	})
 	protectedRouter.POST("/user/settings/update", "Update user settings", func(c *gin.Context) {
 		Controllers.UpdateSettings(c, Services.DB)

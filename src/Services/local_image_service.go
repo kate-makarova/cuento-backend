@@ -50,6 +50,14 @@ func SaveCharacterAvatar(data []byte, characterID int, db *sql.DB) (string, erro
 	return saveAvatar(data, "character", characterID, w, h)
 }
 
+func SaveCharacterProfileAvatar(data []byte, profileID int, db *sql.DB) (string, error) {
+	wStr, _ := GetGlobalSetting("user_avatar_width", db)
+	hStr, _ := GetGlobalSetting("user_avatar_height", db)
+	w, _ := strconv.Atoi(wStr)
+	h, _ := strconv.Atoi(hStr)
+	return saveAvatar(data, "character_profile", profileID, w, h)
+}
+
 func saveAvatar(data []byte, subdir string, id int, width, height int) (string, error) {
 	if len(data) > maxAvatarInputBytes {
 		return "", errors.New("image exceeds maximum allowed size of 10 MB")
