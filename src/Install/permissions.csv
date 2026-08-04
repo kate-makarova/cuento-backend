@@ -46,7 +46,6 @@ role_id,type,permission
 2,0,/post/preview
 2,0,/post/delete/:id
 2,0,/post/update/:id
-2,0,/post/change-profile/:id
 2,0,/template/:type/get
 2,0,/topic/create
 2,0,/topic/update/:id

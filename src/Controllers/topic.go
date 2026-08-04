@@ -58,7 +58,9 @@ type CreatePostRequest struct {
 }
 
 type UpdatePostRequest struct {
-	Content string `json:"content" binding:"required"`
+	Content             string `json:"content" binding:"required"`
+	UseCharacterProfile *bool  `json:"use_character_profile"`
+	CharacterProfileID  *int   `json:"character_profile_id"`
 }
 
 type UpdateTopicRequest struct {
@@ -1214,15 +1216,18 @@ func UpdatePost(c *gin.Context, db *sql.DB) {
 	}
 
 	// 1. Fetch post details to check ownership and subforum
-	var authorUserID int
-	var subforumID int
-	query := `
-		SELECT p.author_user_id, t.subforum_id 
-		FROM posts p 
-		JOIN topics t ON p.topic_id = t.id 
-		WHERE p.id = ?
-	`
-	err = db.QueryRow(query, postID).Scan(&authorUserID, &subforumID)
+	var authorUserID, subforumID int
+	var topicIDForUpdate int64
+	var topicTypeForUpdate int
+	var oldCharacterProfileID sql.NullInt64
+	var postDateCreated time.Time
+	err = db.QueryRow(`
+		SELECT p.author_user_id, p.character_profile_id, p.date_created,
+		       t.id, t.subforum_id, t.type
+		FROM posts p
+		JOIN topics t ON t.id = p.topic_id
+		WHERE p.id = ? AND COALESCE(p.is_deleted, 0) != 1
+	`, postID).Scan(&authorUserID, &oldCharacterProfileID, &postDateCreated, &topicIDForUpdate, &subforumID, &topicTypeForUpdate)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Post not found"})
@@ -1263,185 +1268,107 @@ func UpdatePost(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	// 4. Fetch updated post and emit event
-	updatedPost, err := Services.GetPostById(postID, db, Services.IsFeatureEnabled("currency", c))
-	if err == nil {
-		// We need topicID and subforumID for the event
-		var topicID int64
-		err = db.QueryRow("SELECT topic_id FROM posts WHERE id = ?", postID).Scan(&topicID)
-		if err == nil {
-			Events.Publish(db, Events.PostCreated, Events.PostCreatedEvent{ // Reusing PostCreatedEvent for broadcast
-				Type:       "post_updated",
-				TopicID:    topicID,
-				SubforumID: subforumID,
-				Post:       *updatedPost,
-			})
-		}
-	}
+	// 4. Handle profile change if requested
+	if req.UseCharacterProfile != nil {
+		var newCharacterID *int
 
-	c.JSON(http.StatusOK, updatedPost)
-}
+		if *req.UseCharacterProfile && req.CharacterProfileID != nil {
+			// Validate: profile must belong to the post's original author
+			var profileOwnerUserID int
+			var characterID sql.NullInt64
+			var isMask sql.NullBool
+			err = db.QueryRow(`
+				SELECT cb.user_id, cpb.character_id, cpb.is_mask
+				FROM character_profile_base cpb
+				JOIN character_base cb ON cb.id = cpb.character_id
+				WHERE cpb.id = ?
+			`, *req.CharacterProfileID).Scan(&profileOwnerUserID, &characterID, &isMask)
+			if err != nil {
+				_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Character profile not found"})
+				c.Abort()
+				return
+			}
+			if profileOwnerUserID != authorUserID {
+				_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "This character profile does not belong to the post author"})
+				c.Abort()
+				return
+			}
 
-type ChangePostProfileRequest struct {
-	CharacterProfileID *int `json:"character_profile_id"`
-}
+			// For episode topics verify the character/mask is a participant
+			if Entities.TopicType(topicTypeForUpdate) == Entities.EpisodeTopic {
+				var openToEveryone bool
+				_ = db.QueryRow("SELECT open_to_everyone FROM episode_base WHERE topic_id = ?", topicIDForUpdate).Scan(&openToEveryone)
 
-func ChangePostProfile(c *gin.Context, db *sql.DB) {
-	postID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid post ID"})
-		c.Abort()
-		return
-	}
-
-	userID := Services.GetUserIdFromContext(c)
-	if userID == 0 {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
-		c.Abort()
-		return
-	}
-
-	var req ChangePostProfileRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
-		c.Abort()
-		return
-	}
-
-	// 1. Fetch post, topic, and subforum details
-	var authorUserID, subforumID int
-	var topicID int64
-	var topicType int
-	var oldCharacterProfileID sql.NullInt64
-	var postDateCreated time.Time
-	err = db.QueryRow(`
-		SELECT p.author_user_id, p.character_profile_id, p.date_created,
-		       t.id, t.subforum_id, t.type
-		FROM posts p
-		JOIN topics t ON t.id = p.topic_id
-		WHERE p.id = ? AND COALESCE(p.is_deleted, 0) != 1
-	`, postID).Scan(&authorUserID, &oldCharacterProfileID, &postDateCreated, &topicID, &subforumID, &topicType)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Post not found"})
-		} else {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch post: " + err.Error()})
-		}
-		c.Abort()
-		return
-	}
-
-	// 2. Permission check — same rules as UpdatePost
-	canEdit := false
-	if userID == authorUserID {
-		perm := fmt.Sprintf("subforum_edit_own_post:%d", subforumID)
-		if ok, _ := Services.HasPermission(userID, perm, db); ok {
-			canEdit = true
-		}
-	} else {
-		perm := fmt.Sprintf("subforum_edit_others_post:%d", subforumID)
-		if ok, _ := Services.HasPermission(userID, perm, db); ok {
-			canEdit = true
-		}
-	}
-	if !canEdit {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You do not have permission to edit this post"})
-		c.Abort()
-		return
-	}
-
-	// 3. Validate the new character profile (if provided)
-	var newCharacterID *int
-	if req.CharacterProfileID != nil {
-		// Profile must belong to the post's original author
-		var profileOwnerUserID int
-		var characterID sql.NullInt64
-		var isMask sql.NullBool
-		err = db.QueryRow(`
-			SELECT cb.user_id, cpb.character_id, cpb.is_mask
-			FROM character_profile_base cpb
-			JOIN character_base cb ON cb.id = cpb.character_id
-			WHERE cpb.id = ?
-		`, *req.CharacterProfileID).Scan(&profileOwnerUserID, &characterID, &isMask)
-		if err != nil {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Character profile not found"})
-			c.Abort()
-			return
-		}
-		if profileOwnerUserID != authorUserID {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "This character profile does not belong to the post author"})
-			c.Abort()
-			return
-		}
-
-		// For episode topics, also check that this character/mask is a participant
-		if Entities.TopicType(topicType) == Entities.EpisodeTopic {
-			var openToEveryone bool
-			_ = db.QueryRow("SELECT open_to_everyone FROM episode_base WHERE topic_id = ?", topicID).Scan(&openToEveryone)
-
-			if !openToEveryone {
-				var episodeID int
-				if err := db.QueryRow("SELECT id FROM episode_base WHERE topic_id = ?", topicID).Scan(&episodeID); err != nil {
-					_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to resolve episode"})
-					c.Abort()
-					return
+				if !openToEveryone {
+					var episodeID int
+					if err := db.QueryRow("SELECT id FROM episode_base WHERE topic_id = ?", topicIDForUpdate).Scan(&episodeID); err != nil {
+						_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to resolve episode"})
+						c.Abort()
+						return
+					}
+					var memberCount int
+					if isMask.Valid && isMask.Bool {
+						_ = db.QueryRow("SELECT COUNT(*) FROM episode_mask WHERE episode_id = ? AND mask_id = ?",
+							episodeID, *req.CharacterProfileID).Scan(&memberCount)
+					} else if characterID.Valid {
+						_ = db.QueryRow("SELECT COUNT(*) FROM episode_character WHERE episode_id = ? AND character_id = ?",
+							episodeID, characterID.Int64).Scan(&memberCount)
+					}
+					if memberCount == 0 {
+						_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "This character is not a participant in this episode"})
+						c.Abort()
+						return
+					}
 				}
+			}
 
-				var memberCount int
-				if isMask.Valid && isMask.Bool {
-					_ = db.QueryRow("SELECT COUNT(*) FROM episode_mask WHERE episode_id = ? AND mask_id = ?",
-						episodeID, *req.CharacterProfileID).Scan(&memberCount)
-				} else if characterID.Valid {
-					_ = db.QueryRow("SELECT COUNT(*) FROM episode_character WHERE episode_id = ? AND character_id = ?",
-						episodeID, characterID.Int64).Scan(&memberCount)
-				}
-				if memberCount == 0 {
-					_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "This character is not a participant in this episode"})
-					c.Abort()
-					return
-				}
+			if characterID.Valid {
+				id := int(characterID.Int64)
+				newCharacterID = &id
 			}
 		}
 
-		if characterID.Valid {
-			id := int(characterID.Int64)
-			newCharacterID = &id
+		// Resolve old character ID before overwriting
+		var oldCharacterID *int
+		if oldCharacterProfileID.Valid {
+			var cid int
+			if err := db.QueryRow("SELECT character_id FROM character_profile_base WHERE id = ?", oldCharacterProfileID.Int64).Scan(&cid); err == nil {
+				oldCharacterID = &cid
+			}
 		}
-	}
 
-	// 4. Resolve old character ID for the event
-	var oldCharacterID *int
-	if oldCharacterProfileID.Valid {
-		var cid int
-		if err := db.QueryRow("SELECT character_id FROM character_profile_base WHERE id = ?", oldCharacterProfileID.Int64).Scan(&cid); err == nil {
-			oldCharacterID = &cid
+		newProfileID := req.CharacterProfileID
+		if !*req.UseCharacterProfile {
+			newProfileID = nil
 		}
+		_, _ = db.Exec(
+			"UPDATE posts SET character_profile_id = ?, use_character_profile = ? WHERE id = ?",
+			newProfileID, *req.UseCharacterProfile, postID,
+		)
+
+		Events.Publish(db, Events.PostProfileChanged, Events.PostProfileChangedEvent{
+			PostID:          postID,
+			TopicID:         topicIDForUpdate,
+			PostDateCreated: postDateCreated,
+			OldCharacterID:  oldCharacterID,
+			NewCharacterID:  newCharacterID,
+		})
 	}
 
-	// 5. Update the post
-	useCharacterProfile := req.CharacterProfileID != nil
-	_, err = db.Exec(
-		"UPDATE posts SET character_profile_id = ?, use_character_profile = ? WHERE id = ?",
-		req.CharacterProfileID, useCharacterProfile, postID,
-	)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update post profile: " + err.Error()})
-		c.Abort()
-		return
+	// 5. Fetch updated post and emit event
+	updatedPost, err := Services.GetPostById(postID, db, Services.IsFeatureEnabled("currency", c))
+	if err == nil {
+		Events.Publish(db, Events.PostCreated, Events.PostCreatedEvent{
+			Type:       "post_updated",
+			TopicID:    topicIDForUpdate,
+			SubforumID: subforumID,
+			Post:       *updatedPost,
+		})
 	}
 
-	// 6. Emit event so character stats are adjusted
-	Events.Publish(db, Events.PostProfileChanged, Events.PostProfileChangedEvent{
-		PostID:          postID,
-		TopicID:         topicID,
-		PostDateCreated: postDateCreated,
-		OldCharacterID:  oldCharacterID,
-		NewCharacterID:  newCharacterID,
-	})
-
-	updatedPost, _ := Services.GetPostById(postID, db, Services.IsFeatureEnabled("currency", c))
 	c.JSON(http.StatusOK, updatedPost)
 }
+
 
 func DeletePost(c *gin.Context, db *sql.DB) {
 	postID, err := strconv.Atoi(c.Param("id"))
