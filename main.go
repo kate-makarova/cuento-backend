@@ -102,9 +102,6 @@ func main() {
 	publicRouter.POST("/refresh", "Refresh access token", func(c *gin.Context) {
 		Controllers.RefreshToken(c, Services.DB)
 	})
-	publicRouter.GET("/global-settings", "Get all global settings", func(c *gin.Context) {
-		Controllers.GetGlobalSettings(c, Services.DB)
-	})
 	publicRouter.GET("/currency/settings", "Get currency settings", func(c *gin.Context) {
 		Features.GetCurrencySettingsHandler(c, Services.DB)
 	})
@@ -181,6 +178,9 @@ func main() {
 	optionalAuthGroup := r.Group("/")
 	optionalAuthGroup.Use(Middlewares.OptionalAuthMiddleware())
 	optionalAuthRouter := Router.NewProtectedCustomRouter(optionalAuthGroup)
+	optionalAuthRouter.GET("/global-settings", "Get all global settings", func(c *gin.Context) {
+		Controllers.GetGlobalSettings(c, Services.DB)
+	})
 	optionalAuthRouter.GET("/categories/home", "Get home page categories", func(c *gin.Context) {
 		Controllers.GetHomeCategories(c, Services.DB)
 	})
