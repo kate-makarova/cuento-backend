@@ -72,7 +72,14 @@ type SaveAchievementRequest struct {
 }
 
 func GetPuzzles(c *gin.Context, db *sql.DB) {
-	rows, err := db.Query("SELECT id, title, iframe_code, date_created, is_public, is_active FROM puzzles WHERE is_public = 1 AND is_active = 1 ORDER BY date_created DESC")
+	var query string
+	if Services.GetUserIdFromContext(c) != 0 {
+		query = "SELECT id, title, iframe_code, date_created, is_public, is_active FROM puzzles WHERE is_active = 1 ORDER BY date_created DESC"
+	} else {
+		query = "SELECT id, title, iframe_code, date_created, is_public, is_active FROM puzzles WHERE is_public = 1 AND is_active = 1 ORDER BY date_created DESC"
+	}
+
+	rows, err := db.Query(query)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get puzzles: " + err.Error()})
 		c.Abort()
