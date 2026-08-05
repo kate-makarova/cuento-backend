@@ -301,6 +301,40 @@ func SavePuzzleAchievement(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, a)
 }
 
+func DeletePuzzleAchievement(c *gin.Context, db *sql.DB) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid achievement ID"})
+		c.Abort()
+		return
+	}
+
+	userID := Services.GetUserIdFromContext(c)
+
+	var ownerID int
+	err = db.QueryRow("SELECT user_id FROM puzzle_achievements WHERE id = ?", id).Scan(&ownerID)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Achievement not found"})
+		c.Abort()
+		return
+	}
+
+	if ownerID != userID {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You can only delete your own achievements"})
+		c.Abort()
+		return
+	}
+
+	_, err = db.Exec("DELETE FROM puzzle_achievements WHERE id = ?", id)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to delete achievement: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Achievement deleted"})
+}
+
 func GetUserPuzzleAchievements(c *gin.Context, db *sql.DB) {
 	userID, err := strconv.Atoi(c.Param("user_id"))
 	if err != nil {

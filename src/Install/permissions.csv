@@ -75,6 +75,7 @@ role_id,type,permission
 2,0,/wanted-character/deactivate/:id
 2,0,/wanted-character/update/:id
 2,0,/puzzle/:id/achievement
+2,0,/puzzle/achievement/:id
 3,0,/admin/puzzle/list
 3,0,/admin/puzzle/:id
 3,0,/admin/puzzle/create
