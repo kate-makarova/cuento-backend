@@ -74,6 +74,11 @@ role_id,type,permission
 2,0,/wanted-character/create
 2,0,/wanted-character/deactivate/:id
 2,0,/wanted-character/update/:id
+2,0,/puzzle/:id/achievement
+3,0,/admin/puzzle/list
+3,0,/admin/puzzle/:id
+3,0,/admin/puzzle/create
+3,0,/admin/puzzle/update/:id
 3,0,/admin/additional-navlink/create
 3,0,/admin/additional-navlink/list
 3,0,/admin/additional-navlink/update/:id

@@ -1092,3 +1092,23 @@ create table resized_image_cache
     resized_url  varchar(2048) not null,
     unique key uq_resized (original_url(191), width, height)
 );
+create table puzzles
+(
+    id           int          auto_increment primary key,
+    title        varchar(255) not null,
+    iframe_code  text         not null,
+    date_created datetime     not null default current_timestamp,
+    is_public    tinyint(1)   not null default 0,
+    is_active    tinyint(1)   not null default 1
+);
+
+create table puzzle_achievements
+(
+    id             int          auto_increment primary key,
+    puzzle_id      int          not null,
+    user_id        int          not null,
+    date           datetime     not null default current_timestamp,
+    screenshot_url varchar(2048) not null,
+    constraint fk_puzzle_achievements_puzzle foreign key (puzzle_id) references puzzles (id) on delete cascade,
+    constraint fk_puzzle_achievements_user   foreign key (user_id)   references users (id)   on delete cascade
+);
