@@ -414,7 +414,8 @@ create table free_format_date_settings
 (
     id               int          auto_increment primary key,
     name             varchar(255) not null,
-    free_format_date json         not null
+    free_format_date json         not null,
+    constraint free_format_date_settings_name_unique unique (name)
 );
 
 INSERT IGNORE INTO free_format_date_settings (name, free_format_date) VALUES (
@@ -721,7 +722,8 @@ create table widget_types
     id              int auto_increment primary key,
     name            varchar(255) not null,
     config_template text         null,
-    func            varchar(255) not null
+    func            varchar(255) not null,
+    constraint widget_types_name_unique unique (name)
 );
 
 INSERT IGNORE INTO widget_types (name, config_template, func) VALUES ('last_post', '{"topic_id": {"type": "int"}}', 'WidgetLastPost');
@@ -817,11 +819,13 @@ INSERT IGNORE INTO currency_spend_types (`key`, amount, is_active) VALUES ('curr
 
 CREATE TABLE currency_settings
 (
+    id            int          not null default 1,
     currency_name varchar(255) null,
-    icon_url      varchar(255) null
+    icon_url      varchar(255) null,
+    primary key (id)
 );
 
-INSERT IGNORE INTO currency_settings (currency_name, icon_url) VALUES (null, null);
+INSERT IGNORE INTO currency_settings (id, currency_name, icon_url) VALUES (1, null, null);
 
 CREATE TABLE currency_user_account
 (
