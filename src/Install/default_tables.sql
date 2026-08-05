@@ -66,106 +66,107 @@ VALUES ('wanted_character', '[]')
 
 CREATE TABLE global_settings
 (
-    setting_name  VARCHAR(255) NOT NULL,
-    setting_value VARCHAR(255),
+    setting_name    VARCHAR(255) NOT NULL,
+    setting_value   VARCHAR(255),
+    needs_superuser TINYINT(1)   NOT NULL DEFAULT 0,
     PRIMARY KEY (setting_name)
 );
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('site_name', 'Site Name');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('site_name', 'Site Name', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('domain', '');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('domain', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('posts_per_page', '20');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('posts_per_page', '20', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('use_image_uploading', 'n');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('use_image_uploading', 'n', 1);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('allow_add_faction', 'y');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('allow_add_faction', 'y', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('allow_wanted_for_claims', 'moderated');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('allow_wanted_for_claims', 'moderated', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('allow_users_create_factions', 'y');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('allow_users_create_factions', 'y', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('allow_guests_create_factions', 'y');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('allow_guests_create_factions', 'y', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('allow_users_create_claims', 'y');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('allow_users_create_claims', 'y', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('allow_guests_create_claims', 'y');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('allow_guests_create_claims', 'y', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('visual_navlinks_after_header_panel', 'n');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('visual_navlinks_after_header_panel', 'n', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('auto_archiving_enabled', 'n');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('auto_archiving_enabled', 'n', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('auto_archiving_show_page_link', 'n');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('auto_archiving_show_page_link', 'n', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('auto_archiving_days', '20');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('auto_archiving_days', '20', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('absence_max_days', '30');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('absence_max_days', '30', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('absence_cooldown_days', '7');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('absence_cooldown_days', '7', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('ai_api_key', '');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('ai_api_key', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('ai_name', '');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('ai_name', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('ai_model', '');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('ai_model', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('github_token', '');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('github_token', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('github_owner', '');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('github_owner', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('github_repo', '');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('github_repo', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('github_branch', '');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('github_branch', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('use_rating_system', 'y');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('use_rating_system', 'y', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('site_max_rating', 'L1V1S1');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('site_max_rating', 'L1V1S1', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('global_free_format_date_id', NULL);
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('global_free_format_date_id', NULL, 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('imgbb_api_key', '');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('imgbb_api_key', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('image_hosting', '');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('image_hosting', '', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('user_avatar_width', '0');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('user_avatar_width', '0', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('user_avatar_height', '0');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('user_avatar_height', '0', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('character_avatar_width', '0');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('character_avatar_width', '0', 0);
 
-INSERT INTO global_settings (setting_name, setting_value)
-VALUES ('character_avatar_height', '0');
+INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('character_avatar_height', '0', 0);
 
 CREATE TABLE categories (
     id INT AUTO_INCREMENT PRIMARY KEY,

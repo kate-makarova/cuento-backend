@@ -11,28 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// superuserOnlySettings is the hardcoded set of settings only the superuser may
-// read or write. Keeping this in code (not the DB) means a compromised database
-// cannot expose or unlock these settings for other users.
-var superuserOnlySettings = map[string]bool{
-	// Site domain
-	"domain": true,
-	// Image uploading
-	"use_image_uploading": true,
-	"imgbb_api_key":       true,
-	// AI
-	"ai_api_key": true,
-	"ai_name":    true,
-	"ai_model":   true,
-	// GitHub
-	"github_token":  true,
-	"github_owner":  true,
-	"github_repo":   true,
-	"github_branch": true,
-}
-
 func GetGlobalSettings(c *gin.Context, db *sql.DB) {
-	rows, err := db.Query("SELECT setting_name, setting_value FROM global_settings")
+	rows, err := db.Query("SELECT setting_name, setting_value, needs_superuser FROM global_settings")
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get settings: " + err.Error()})
 		c.Abort()
@@ -45,12 +25,13 @@ func GetGlobalSettings(c *gin.Context, db *sql.DB) {
 	for rows.Next() {
 		var s Entities.Setting
 		var value sql.NullString
-		if err := rows.Scan(&s.SettingName, &value); err != nil {
+		var needsSuperuser bool
+		if err := rows.Scan(&s.SettingName, &value, &needsSuperuser); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan setting: " + err.Error()})
 			c.Abort()
 			return
 		}
-		if superuserOnlySettings[s.SettingName] && !isSuperuser {
+		if needsSuperuser && !isSuperuser {
 			continue
 		}
 		s.SettingValue = value.String
@@ -73,9 +54,26 @@ func UpdateGlobalSettings(c *gin.Context, db *sql.DB) {
 	}
 
 	isSuperuser := Services.IsSuperuser(c)
-	for _, s := range req {
-		if superuserOnlySettings[s.SettingName] && !isSuperuser {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You do not have permission to change setting: " + s.SettingName})
+	if !isSuperuser {
+		// Check whether any requested setting requires superuser
+		names := make([]interface{}, len(req))
+		for i, s := range req {
+			names[i] = s.SettingName
+		}
+		placeholders := ""
+		for i := range names {
+			if i > 0 {
+				placeholders += ","
+			}
+			placeholders += "?"
+		}
+		var restricted string
+		err := db.QueryRow(
+			"SELECT setting_name FROM global_settings WHERE needs_superuser = 1 AND setting_name IN ("+placeholders+") LIMIT 1",
+			names...,
+		).Scan(&restricted)
+		if err == nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You do not have permission to change setting: " + restricted})
 			c.Abort()
 			return
 		}
