@@ -4,12 +4,37 @@ import (
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
 	"database/sql"
+	"errors"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+var (
+	iframeTagRe    = regexp.MustCompile(`(?i)^\s*<iframe(\s[^>]*)?\s*(?:/>|>\s*</iframe>)\s*$`)
+	jsProtocolRe   = regexp.MustCompile(`(?i)javascript\s*:`)
+	eventHandlerRe = regexp.MustCompile(`(?i)\bon\w+\s*=`)
+	scriptTagRe    = regexp.MustCompile(`(?i)<\s*script`)
+)
+
+func validateIframeCode(code string) error {
+	if !iframeTagRe.MatchString(code) {
+		return errors.New("iframe code must contain only a single <iframe> tag")
+	}
+	if jsProtocolRe.MatchString(code) {
+		return errors.New("iframe code must not contain javascript: protocol")
+	}
+	if eventHandlerRe.MatchString(code) {
+		return errors.New("iframe code must not contain event handlers")
+	}
+	if scriptTagRe.MatchString(code) {
+		return errors.New("iframe code must not contain script tags")
+	}
+	return nil
+}
 
 type PuzzleResponse struct {
 	ID          int       `json:"id"`
@@ -104,6 +129,12 @@ func AdminCreatePuzzle(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	if err := validateIframeCode(req.IframeCode); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: err.Error()})
+		c.Abort()
+		return
+	}
+
 	res, err := db.Exec(
 		"INSERT INTO puzzles (title, iframe_code, is_public, is_active) VALUES (?, ?, ?, ?)",
 		req.Title, req.IframeCode, req.IsPublic, req.IsActive,
@@ -142,6 +173,11 @@ func AdminUpdatePuzzle(c *gin.Context, db *sql.DB) {
 		db.Exec("UPDATE puzzles SET title = ? WHERE id = ?", *req.Title, id)
 	}
 	if req.IframeCode != nil {
+		if err := validateIframeCode(*req.IframeCode); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: err.Error()})
+			c.Abort()
+			return
+		}
 		db.Exec("UPDATE puzzles SET iframe_code = ? WHERE id = ?", *req.IframeCode, id)
 	}
 	if req.IsPublic != nil {
