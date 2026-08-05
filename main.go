@@ -887,8 +887,8 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	optionalAuthRouter.GET("/puzzle/:id", "Get a single puzzle by ID", func(c *gin.Context) {
 		Controllers.GetPuzzle(c, Services.DB)
 	})
-	optionalAuthRouter.GET("/puzzle/:id/achievements", "Get achievements for a puzzle", func(c *gin.Context) {
-		Controllers.GetPuzzleAchievements(c, Services.DB)
+	optionalAuthRouter.GET("/user/:user_id/puzzle-achievements", "Get puzzle achievements for a user", func(c *gin.Context) {
+		Controllers.GetUserPuzzleAchievements(c, Services.DB)
 	})
 	protectedRouter.POST("/puzzle/:id/achievement", "Save a puzzle achievement", func(c *gin.Context) {
 		Controllers.SavePuzzleAchievement(c, Services.DB)

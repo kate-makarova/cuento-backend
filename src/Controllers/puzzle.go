@@ -78,9 +78,16 @@ func GetPuzzle(c *gin.Context, db *sql.DB) {
 	}
 
 	var p PuzzleResponse
-	err = db.QueryRow("SELECT id, title, iframe_code, date_created, is_public, is_active FROM puzzles WHERE id = ? AND is_public = 1 AND is_active = 1", id).
+	err = db.QueryRow("SELECT id, title, iframe_code, date_created, is_public, is_active FROM puzzles WHERE id = ? AND is_active = 1", id).
 		Scan(&p.ID, &p.Title, &p.IframeCode, &p.DateCreated, &p.IsPublic, &p.IsActive)
 	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Puzzle not found"})
+		c.Abort()
+		return
+	}
+
+	// Guests can only access public puzzles
+	if !p.IsPublic && Services.GetUserIdFromContext(c) == 0 {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Puzzle not found"})
 		c.Abort()
 		return
@@ -251,17 +258,17 @@ func SavePuzzleAchievement(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, a)
 }
 
-func GetPuzzleAchievements(c *gin.Context, db *sql.DB) {
-	puzzleID, err := strconv.Atoi(c.Param("id"))
+func GetUserPuzzleAchievements(c *gin.Context, db *sql.DB) {
+	userID, err := strconv.Atoi(c.Param("user_id"))
 	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid puzzle ID"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid user ID"})
 		c.Abort()
 		return
 	}
 
 	rows, err := db.Query(
-		"SELECT id, puzzle_id, user_id, date, screenshot_url FROM puzzle_achievements WHERE puzzle_id = ? ORDER BY date DESC",
-		puzzleID,
+		"SELECT id, puzzle_id, user_id, date, screenshot_url FROM puzzle_achievements WHERE user_id = ? ORDER BY date DESC",
+		userID,
 	)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get achievements: " + err.Error()})
