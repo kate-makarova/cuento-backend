@@ -21,11 +21,11 @@ create table users
         unique (username)
 );
 
-INSERT INTO users (username, password, date_registered, avatar, date_last_visit, interface_language, interface_timezone, user_status, interface_font_size) VALUES ('guest', null, null, null, null, null, null, 0, 1.00);
+INSERT IGNORE INTO users (username, password, date_registered, avatar, date_last_visit, interface_language, interface_timezone, user_status, interface_font_size) VALUES ('guest', null, null, null, null, null, null, 0, 1.00);
 UPDATE users SET id = 0 WHERE username = 'guest';
 ALTER TABLE users AUTO_INCREMENT = 1;
 
-INSERT INTO users (id, username, password, date_registered, avatar, date_last_visit, interface_language, interface_timezone, user_status, interface_font_size) VALUES (1, 'The Nameless One', null, null, null, null, null, null, 0, 1.00);
+INSERT IGNORE INTO users (id, username, password, date_registered, avatar, date_last_visit, interface_language, interface_timezone, user_status, interface_font_size) VALUES (1, 'The Nameless One', null, null, null, null, null, null, 0, 1.00);
 ALTER TABLE users AUTO_INCREMENT = 2;
 
 create table user_role
@@ -47,19 +47,19 @@ CREATE TABLE custom_field_config
 CREATE INDEX custom_field_config_entity_type_index
     ON custom_field_config (entity_type);
 
-INSERT INTO custom_field_config (entity_type, config)
+INSERT IGNORE INTO custom_field_config (entity_type, config)
 VALUES ('character', '[]')
     ON DUPLICATE KEY UPDATE config = '[]';
 
-INSERT INTO custom_field_config (entity_type, config)
+INSERT IGNORE INTO custom_field_config (entity_type, config)
 VALUES ('episode', '[]')
     ON DUPLICATE KEY UPDATE config = '[]';
 
-INSERT INTO custom_field_config (entity_type, config)
+INSERT IGNORE INTO custom_field_config (entity_type, config)
 VALUES ('character_profile', '[]')
     ON DUPLICATE KEY UPDATE config = '[]';
 
-INSERT INTO custom_field_config (entity_type, config)
+INSERT IGNORE INTO custom_field_config (entity_type, config)
 VALUES ('wanted_character', '[]')
     ON DUPLICATE KEY UPDATE config = '[]';
 
@@ -72,100 +72,100 @@ CREATE TABLE global_settings
     PRIMARY KEY (setting_name)
 );
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('site_name', 'Site Name', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('domain', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('posts_per_page', '20', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('use_image_uploading', 'n', 1);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('allow_add_faction', 'y', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('allow_wanted_for_claims', 'moderated', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('allow_users_create_factions', 'y', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('allow_guests_create_factions', 'y', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('allow_users_create_claims', 'y', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('allow_guests_create_claims', 'y', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('visual_navlinks_after_header_panel', 'n', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('auto_archiving_enabled', 'n', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('auto_archiving_show_page_link', 'n', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('auto_archiving_days', '20', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('absence_max_days', '30', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('absence_cooldown_days', '7', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('ai_api_key', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('ai_name', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('ai_model', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('github_token', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('github_owner', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('github_repo', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('github_branch', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('use_rating_system', 'y', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('site_max_rating', 'L1V1S1', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('global_free_format_date_id', NULL, 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('imgbb_api_key', '', 1);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('image_hosting', '', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('user_avatar_width', '0', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('user_avatar_height', '0', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('character_avatar_width', '0', 0);
 
-INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('character_avatar_height', '0', 0);
 
 CREATE TABLE categories (
@@ -362,7 +362,7 @@ create table user_episode_warnings_consent
     foreign key (user_id) references users (id)
 );
 
-INSERT INTO standard_warnings (id, locale, name, description, rating_language, rating_violence, rating_sex) VALUES
+INSERT IGNORE INTO standard_warnings (id, locale, name, description, rating_language, rating_violence, rating_sex) VALUES
 ( 1, 'en', 'Cannibalism',       'Consumption of the flesh or organs of the same species, whether ritualistic, survival-based, or monstrous.',                                                 0, 2, 0),
 ( 2, 'en', 'Torture',           'Intentional, prolonged infliction of severe physical or psychological pain on a captive character.',                                                         0, 2, 0),
 ( 3, 'en', 'Body Horror',       'Severe, unsettling violations of normal anatomy (e.g., parasitic infestation, rapid mutation, skin-crawling transformations).',                              0, 1, 0),
@@ -380,7 +380,7 @@ INSERT INTO standard_warnings (id, locale, name, description, rating_language, r
 (15, 'en', 'Thalassophobia',    'Deep ocean environments, fear of the abyss, drowning, or massive underwater leviathans.',                                                                   0, 0, 0),
 (16, 'en', 'Emetophobia',       'Detailed, sensory descriptions of characters vomiting, nausea, or severe gastrointestinal sickness.',                                                       0, 1, 0);
 
-INSERT INTO standard_warnings (id, locale, name, description, rating_language, rating_violence, rating_sex) VALUES
+INSERT IGNORE INTO standard_warnings (id, locale, name, description, rating_language, rating_violence, rating_sex) VALUES
 ( 1, 'ru', 'Каннибализм',                      'Поедание плоти или органов существ своего же вида (ритуальное, ради выживания или чудовищами).',                                                                         0, 2, 0),
 ( 2, 'ru', 'Пытки',                            'Умышленное, затяжное причинение сильной физической или психологической боли плененному персонажу.',                                                                      0, 2, 0),
 ( 3, 'ru', 'Боди-хоррор',                      'Серьезные, пугающие нарушения нормальной анатомии (например, заражение паразитами, стремительные мутации, жуткие трансформации плоти).',                                0, 1, 0),
@@ -406,13 +406,13 @@ create table global_stats
     stat_secondary varchar(255) null
 );
 
-INSERT INTO global_stats (stat_name, stat_value) VALUES ('total_user_number', 0);
-INSERT INTO global_stats (stat_name, stat_value) VALUES ('total_character_number', 0);
-INSERT INTO global_stats (stat_name, stat_value) VALUES ('total_episode_number', 0);
-INSERT INTO global_stats (stat_name, stat_value) VALUES ('total_topic_number', 0);
-INSERT INTO global_stats (stat_name, stat_value) VALUES ('total_post_number', 0);
-INSERT INTO global_stats (stat_name, stat_value) VALUES ('total_episode_post_number', 0);
-INSERT INTO global_stats (stat_name, stat_value, stat_secondary) VALUES ('last_user', 0, '');
+INSERT IGNORE INTO global_stats (stat_name, stat_value) VALUES ('total_user_number', 0);
+INSERT IGNORE INTO global_stats (stat_name, stat_value) VALUES ('total_character_number', 0);
+INSERT IGNORE INTO global_stats (stat_name, stat_value) VALUES ('total_episode_number', 0);
+INSERT IGNORE INTO global_stats (stat_name, stat_value) VALUES ('total_topic_number', 0);
+INSERT IGNORE INTO global_stats (stat_name, stat_value) VALUES ('total_post_number', 0);
+INSERT IGNORE INTO global_stats (stat_name, stat_value) VALUES ('total_episode_post_number', 0);
+INSERT IGNORE INTO global_stats (stat_name, stat_value, stat_secondary) VALUES ('last_user', 0, '');
 
 create table free_format_date_settings
 (
@@ -421,17 +421,17 @@ create table free_format_date_settings
     free_format_date json         not null
 );
 
-INSERT INTO free_format_date_settings (name, free_format_date) VALUES (
+INSERT IGNORE INTO free_format_date_settings (name, free_format_date) VALUES (
     'Gregorian Calendar',
     '{"format_strings":["$1 $2, $0"],"placeholders":[{"type":"number","name":"year","position":0,"is_nullable":false,"min_value":-9999,"max_value":9999},{"type":"list","name":"month","position":1,"is_nullable":false,"value_list":["January","February","March","April","May","June","July","August","September","October","November","December"]},{"type":"number","name":"day","position":2,"is_nullable":true,"min_value":1,"max_value":31}]}'
 );
 
-INSERT INTO free_format_date_settings (name, free_format_date) VALUES (
+INSERT IGNORE INTO free_format_date_settings (name, free_format_date) VALUES (
     'Dragon Age',
     '{"format_strings":["$0 Ancient, $5 of $4","$0 Ancient, $4","$1:$2 $3, $5 of $4","$1:$2 $3, $4"],"placeholders":[{"type":"number","name":"ancient_year","position":0,"is_nullable":true,"min_value":-9999,"max_value":-1},{"type":"number","name":"age_number","position":1,"is_nullable":true,"min_value":1,"max_value":9},{"type":"number","name":"year","position":2,"is_nullable":true,"min_value":0,"max_value":99},{"type":"list","name":"month_and_holidays","position":4,"is_nullable":false,"value_list":["First Day","Wintermarch (Verimensis)","Wintersend","Guardian (Pluitanis)","Drakonis (Nubulis)","Cloudreach (Eluviesta)","Summerday","Bloomingtide (Molioris)","Justinian (Ferventis)","Solace (Solis)","All Soul''s Day","August (Matrinalis)","Kingsway (Parvulis)","Harvestmere (Frumentum)","Satinalia","Firstfall (Umbralis)","Haring (Cassus)"]},{"type":"number","name":"day","position":5,"is_nullable":true,"min_value":1,"max_value":30},{"type":"list","name":"age_name","position":3,"is_nullable":true,"value_list":["Divine","Glory","Towers","Black","Exalted","Steel","Storm","Blessed","Dragon"]}]}'
 );
 
-INSERT INTO free_format_date_settings (name, free_format_date) VALUES (
+INSERT IGNORE INTO free_format_date_settings (name, free_format_date) VALUES (
     'Forgotten Realms (Dale Reckoning)',
     '{"format_strings":["$1 DR, $2 $3","$1 DR, $2"],"placeholders":[{"type":"number","name":"year","position":1,"is_nullable":false,"min_value":-9999,"max_value":9999},{"type":"list","name":"month_or_holiday","position":2,"is_nullable":false,"value_list":["Hammer","Midwinter","Alturiak","Ches","Tarsakh","Greengrass","Mirtul","Kythorn","Flamerule","Midsummer","Shieldmeet","Eleasis","Eleint","Highharvestide","Marpenoth","Uktar","Feast of the Moon ","Nightal"]},{"type":"number","name":"day","position":3,"is_nullable":true,"min_value":1,"max_value":30}]}'
 );
@@ -484,11 +484,11 @@ create table roles
     name varchar(255) null
 );
 
-INSERT INTO roles (id, name) VALUES (1, 'guest');
+INSERT IGNORE INTO roles (id, name) VALUES (1, 'guest');
 
-INSERT INTO roles (id, name) VALUES (2, 'user');
+INSERT IGNORE INTO roles (id, name) VALUES (2, 'user');
 
-INSERT INTO roles (id, name) VALUES (3, 'admin');
+INSERT IGNORE INTO roles (id, name) VALUES (3, 'admin');
 
 create table role_permission
 (
@@ -502,14 +502,14 @@ create table role_permission
 );
 
 -- Default permissions for 'user' role (ID 2)
-INSERT INTO role_permission (type, role_id, permission) VALUES (0, 2, '/notifications/unread');
-INSERT INTO role_permission (type, role_id, permission) VALUES (0, 2, '/notifications/dismiss/:id');
+INSERT IGNORE INTO role_permission (type, role_id, permission) VALUES (0, 2, '/notifications/unread');
+INSERT IGNORE INTO role_permission (type, role_id, permission) VALUES (0, 2, '/notifications/dismiss/:id');
 
 -- Default permissions for 'admin' role (ID 3)
-INSERT INTO role_permission (type, role_id, permission) VALUES (0, 3, '/permission-matrix/get');
-INSERT INTO role_permission (type, role_id, permission) VALUES (0, 3, '/permission-matrix/update');
-INSERT INTO role_permission (type, role_id, permission) VALUES (0, 3, '/template/:type/update');
-INSERT INTO role_permission (type, role_id, permission) VALUES (0, 3, '/character/accept/:id');
+INSERT IGNORE INTO role_permission (type, role_id, permission) VALUES (0, 3, '/permission-matrix/get');
+INSERT IGNORE INTO role_permission (type, role_id, permission) VALUES (0, 3, '/permission-matrix/update');
+INSERT IGNORE INTO role_permission (type, role_id, permission) VALUES (0, 3, '/template/:type/update');
+INSERT IGNORE INTO role_permission (type, role_id, permission) VALUES (0, 3, '/character/accept/:id');
 
 CREATE TABLE notifications (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -728,8 +728,8 @@ create table widget_types
     func            varchar(255) not null
 );
 
-INSERT INTO widget_types (name, config_template, func) VALUES ('last_post', '{"topic_id": {"type": "int"}}', 'WidgetLastPost');
-INSERT INTO widget_types (name, config_template, func) VALUES ('random_entities', '{"number": {"type": "int"}, "entity_type": {"type": "string", "values": ["wanted_character", "character"]}, "entity_field_1": {"type": "string", "endpoint": "entity/fields/:entity_type", "can_empty": true}, "entity_field_1_width": {"type": "int", "can_empty": true}, "entity_field_1_height": {"type": "int", "can_empty": true}, "entity_field_2": {"type": "string", "endpoint": "entity/fields/:entity_type", "can_empty": true}, "entity_field_2_width": {"type": "int", "can_empty": true}, "entity_field_2_height": {"type": "int", "can_empty": true}, "filters": {"type": "filters", "can_empty": true}}', 'WidgetRandomEntities');
+INSERT IGNORE INTO widget_types (name, config_template, func) VALUES ('last_post', '{"topic_id": {"type": "int"}}', 'WidgetLastPost');
+INSERT IGNORE INTO widget_types (name, config_template, func) VALUES ('random_entities', '{"number": {"type": "int"}, "entity_type": {"type": "string", "values": ["wanted_character", "character"]}, "entity_field_1": {"type": "string", "endpoint": "entity/fields/:entity_type", "can_empty": true}, "entity_field_1_width": {"type": "int", "can_empty": true}, "entity_field_1_height": {"type": "int", "can_empty": true}, "entity_field_2": {"type": "string", "endpoint": "entity/fields/:entity_type", "can_empty": true}, "entity_field_2_width": {"type": "int", "can_empty": true}, "entity_field_2_height": {"type": "int", "can_empty": true}, "filters": {"type": "filters", "can_empty": true}}', 'WidgetRandomEntities');
 
 create table widgets
 (
@@ -748,8 +748,8 @@ create table widget_panels
     is_hidden boolean      not null default false
 );
 
-INSERT INTO widget_panels (`key`, content, is_hidden) VALUES ('header', NULL, false);
-INSERT INTO widget_panels (`key`, content, is_hidden) VALUES ('footer', NULL, false);
+INSERT IGNORE INTO widget_panels (`key`, content, is_hidden) VALUES ('header', NULL, false);
+INSERT IGNORE INTO widget_panels (`key`, content, is_hidden) VALUES ('footer', NULL, false);
 
 CREATE TABLE static_files
 (
@@ -758,9 +758,9 @@ CREATE TABLE static_files
     file_type         varchar(255) null
 );
 
-INSERT INTO static_files (file_name, file_created_date, file_type) VALUES ('favicon.ico', '2026-03-01 00:00:00', 'favicon.ico');
-INSERT INTO static_files (file_name, file_created_date, file_type) VALUES ('custom_style.css', '2026-03-31 00:00:00', 'custom_style.css');
-INSERT INTO static_files (file_name, file_created_date, file_type) VALUES ('main_style.css', '2026-03-01 00:00:00', 'main_style.css');
+INSERT IGNORE INTO static_files (file_name, file_created_date, file_type) VALUES ('favicon.ico', '2026-03-01 00:00:00', 'favicon.ico');
+INSERT IGNORE INTO static_files (file_name, file_created_date, file_type) VALUES ('custom_style.css', '2026-03-31 00:00:00', 'custom_style.css');
+INSERT IGNORE INTO static_files (file_name, file_created_date, file_type) VALUES ('main_style.css', '2026-03-01 00:00:00', 'main_style.css');
 
 CREATE TABLE design_variations
 (
@@ -790,8 +790,8 @@ CREATE TABLE features
     is_active boolean      not null default false
 );
 
-INSERT INTO features (`key`, is_active) VALUES ('currency', false);
-INSERT INTO features (`key`, is_active) VALUES ('post_top', false);
+INSERT IGNORE INTO features (`key`, is_active) VALUES ('currency', false);
+INSERT IGNORE INTO features (`key`, is_active) VALUES ('post_top', false);
 
 CREATE TABLE currency_income_types
 (
@@ -800,15 +800,15 @@ CREATE TABLE currency_income_types
     is_active boolean      not null default false
 );
 
-INSERT INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_game_post', 1, false);
-INSERT INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_wanted_character', 1, false);
-INSERT INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_new_character', 1, false);
-INSERT INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_100_general_posts', 1, false);
-INSERT INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_500_general_posts', 1, false);
-INSERT INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_1000_general_posts', 1, false);
-INSERT INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_100_game_posts', 1, false);
-INSERT INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_500_game_posts', 1, false);
-INSERT INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_1000_game_posts', 1, false);
+INSERT IGNORE INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_game_post', 1, false);
+INSERT IGNORE INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_wanted_character', 1, false);
+INSERT IGNORE INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_new_character', 1, false);
+INSERT IGNORE INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_100_general_posts', 1, false);
+INSERT IGNORE INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_500_general_posts', 1, false);
+INSERT IGNORE INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_1000_general_posts', 1, false);
+INSERT IGNORE INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_100_game_posts', 1, false);
+INSERT IGNORE INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_500_game_posts', 1, false);
+INSERT IGNORE INTO currency_income_types (`key`, amount, is_active) VALUES ('currency_income_1000_game_posts', 1, false);
 
 CREATE TABLE currency_spend_types
 (
@@ -817,7 +817,7 @@ CREATE TABLE currency_spend_types
     is_active boolean      not null default false
 );
 
-INSERT INTO currency_spend_types (`key`, amount, is_active) VALUES ('currency_spend_auto_archiving_immunity', 1, false);
+INSERT IGNORE INTO currency_spend_types (`key`, amount, is_active) VALUES ('currency_spend_auto_archiving_immunity', 1, false);
 
 CREATE TABLE currency_settings
 (
@@ -825,7 +825,7 @@ CREATE TABLE currency_settings
     icon_url      varchar(255) null
 );
 
-INSERT INTO currency_settings (currency_name, icon_url) VALUES (null, null);
+INSERT IGNORE INTO currency_settings (currency_name, icon_url) VALUES (null, null);
 
 CREATE TABLE currency_user_account
 (
