@@ -4,11 +4,32 @@ import (
 	"cuento-backend/src/Entities"
 	"cuento-backend/src/MCP"
 	"cuento-backend/src/Middlewares"
+	"cuento-backend/src/Services"
 	"database/sql"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
+
+// superuserOnlySettings is the hardcoded set of settings only the superuser may
+// read or write. Keeping this in code (not the DB) means a compromised database
+// cannot expose or unlock these settings for other users.
+var superuserOnlySettings = map[string]bool{
+	// Site domain
+	"domain": true,
+	// Image uploading
+	"use_image_uploading": true,
+	"imgbb_api_key":       true,
+	// AI
+	"ai_api_key": true,
+	"ai_name":    true,
+	"ai_model":   true,
+	// GitHub
+	"github_token":  true,
+	"github_owner":  true,
+	"github_repo":   true,
+	"github_branch": true,
+}
 
 func GetGlobalSettings(c *gin.Context, db *sql.DB) {
 	rows, err := db.Query("SELECT setting_name, setting_value FROM global_settings")
@@ -19,6 +40,7 @@ func GetGlobalSettings(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
+	isSuperuser := Services.IsSuperuser(c)
 	var settings []Entities.Setting
 	for rows.Next() {
 		var s Entities.Setting
@@ -27,6 +49,9 @@ func GetGlobalSettings(c *gin.Context, db *sql.DB) {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan setting: " + err.Error()})
 			c.Abort()
 			return
+		}
+		if superuserOnlySettings[s.SettingName] && !isSuperuser {
+			continue
 		}
 		s.SettingValue = value.String
 		settings = append(settings, s)
@@ -45,6 +70,15 @@ func UpdateGlobalSettings(c *gin.Context, db *sql.DB) {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
 		c.Abort()
 		return
+	}
+
+	isSuperuser := Services.IsSuperuser(c)
+	for _, s := range req {
+		if superuserOnlySettings[s.SettingName] && !isSuperuser {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You do not have permission to change setting: " + s.SettingName})
+			c.Abort()
+			return
+		}
 	}
 
 	tx, err := db.Begin()
