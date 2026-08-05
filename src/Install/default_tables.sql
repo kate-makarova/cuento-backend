@@ -48,20 +48,16 @@ CREATE INDEX custom_field_config_entity_type_index
     ON custom_field_config (entity_type);
 
 INSERT IGNORE INTO custom_field_config (entity_type, config)
-VALUES ('character', '[]')
-    ON DUPLICATE KEY UPDATE config = '[]';
+VALUES ('character', '[]');
 
 INSERT IGNORE INTO custom_field_config (entity_type, config)
-VALUES ('episode', '[]')
-    ON DUPLICATE KEY UPDATE config = '[]';
+VALUES ('episode', '[]');
 
 INSERT IGNORE INTO custom_field_config (entity_type, config)
-VALUES ('character_profile', '[]')
-    ON DUPLICATE KEY UPDATE config = '[]';
+VALUES ('character_profile', '[]');
 
 INSERT IGNORE INTO custom_field_config (entity_type, config)
-VALUES ('wanted_character', '[]')
-    ON DUPLICATE KEY UPDATE config = '[]';
+VALUES ('wanted_character', '[]');
 
 
 CREATE TABLE global_settings
