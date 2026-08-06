@@ -193,7 +193,7 @@ func GetBBCompiler() bbcode.Compiler {
 		}
 
 		value := node.GetOpeningTag().Value
-		if validFonts[value] {
+		if validFonts[strings.ToLower(value)] {
 			out.Attrs["style"] = fmt.Sprintf("font-family: %s;", value)
 		}
 
