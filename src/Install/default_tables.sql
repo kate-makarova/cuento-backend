@@ -17,6 +17,7 @@ create table users
     total_posts        int default 0 not null,
     total_general_posts int default 0 not null,
     signature          text         null,
+    editor_type        int          not null default 0,
     constraint users_pk_2
         unique (username)
 );
