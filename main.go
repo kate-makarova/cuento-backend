@@ -295,6 +295,18 @@ func main() {
 		Controllers.GetAdditionalNavlinkListByUser(c, Services.DB)
 	})
 
+	// Auth-only routes (JWT required, no per-route permission check — controller handles authorization)
+	authOnlyGroup := r.Group("/")
+	authOnlyGroup.Use(Middlewares.AuthMiddleware())
+	authOnlyRouter := Router.NewCustomRouter(authOnlyGroup)
+
+	authOnlyRouter.GET("/admin/backup", "Download a full SQL backup of the database", func(c *gin.Context) {
+		Controllers.BackupDB(c)
+	})
+	authOnlyRouter.POST("/admin/backup/restore", "Restore the database from an uploaded SQL file", func(c *gin.Context) {
+		Controllers.RestoreDB(c)
+	})
+
 	// Protected routes
 	protectedGroup := r.Group("/")
 	protectedGroup.Use(Middlewares.AuthMiddleware())

@@ -270,6 +270,9 @@ func Login(c *gin.Context, db *sql.DB) {
 		role.Permissions = Services.GetRoleFrontendPermissions(role.Id, db)
 		user.Roles = append(user.Roles, role)
 	}
+	if Services.IsSuperuserID(user.Id) {
+		user.Roles = append(user.Roles, Entities.Role{Id: 0, Name: "superadmin", Permissions: []string{"show_admin_backup"}})
+	}
 
 	// Check for errors during iteration
 	if err := rows.Err(); err != nil {
@@ -390,6 +393,9 @@ func RefreshToken(c *gin.Context, db *sql.DB) {
 				role.Permissions = Services.GetRoleFrontendPermissions(role.Id, db)
 				user.Roles = append(user.Roles, role)
 			}
+		}
+		if Services.IsSuperuser(c) {
+			user.Roles = append(user.Roles, Entities.Role{Id: 0, Name: "superadmin", Permissions: []string{"show_admin_backup"}})
 		}
 	}
 
@@ -697,6 +703,9 @@ func UpdateSettings(c *gin.Context, db *sql.DB) {
 				role.Permissions = Services.GetRoleFrontendPermissions(role.Id, db)
 				user.Roles = append(user.Roles, role)
 			}
+		}
+		if Services.IsSuperuser(c) {
+			user.Roles = append(user.Roles, Entities.Role{Id: 0, Name: "superadmin", Permissions: []string{"show_admin_backup"}})
 		}
 	}
 
