@@ -22,6 +22,8 @@ role_id,type,permission
 2,0,/direct-chat/:chatID/messages
 2,0,/direct-chat/:chatID/messages/:messageID/after
 2,0,/direct-chat/:chatID/messages/:messageID/before
+2,0,/direct-chat/:chatID/block
+2,0,/direct-chat/:chatID/unblock
 2,0,/direct-chat/create
 2,0,/direct-chat/message/create
 2,0,/direct-chats

@@ -27,12 +27,13 @@ func GetLastMessages(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	// Verify participation
+	// Verify participation and fetch block date
 	var count int
+	var blockedSince *time.Time
 	err = db.QueryRow(
-		"SELECT COUNT(*) FROM direct_chat_users WHERE direct_chat_id = ? AND user_id = ?",
+		"SELECT COUNT(*), MAX(chat_blocked_since_date) FROM direct_chat_users WHERE direct_chat_id = ? AND user_id = ?",
 		chatID, userID,
-	).Scan(&count)
+	).Scan(&count, &blockedSince)
 	if err != nil || count == 0 {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You are not a participant in this chat"})
 		c.Abort()
@@ -90,15 +91,26 @@ func GetLastMessages(c *gin.Context, db *sql.DB) {
 	var messages []Message
 
 	if messageIDStr == "" {
-		// Return first N messages
-		rows, err := db.Query(`
-			SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
-			FROM direct_chat_messages m
-			JOIN users u ON u.id = m.user_id
-			WHERE m.chat_id = ?
-			ORDER BY m.date_send ASC
-			LIMIT ?
-		`, chatID, n)
+		var rows *sql.Rows
+		if blockedSince != nil {
+			rows, err = db.Query(`
+				SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
+				FROM direct_chat_messages m
+				JOIN users u ON u.id = m.user_id
+				WHERE m.chat_id = ? AND m.date_send <= ?
+				ORDER BY m.date_send ASC
+				LIMIT ?
+			`, chatID, blockedSince, n)
+		} else {
+			rows, err = db.Query(`
+				SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
+				FROM direct_chat_messages m
+				JOIN users u ON u.id = m.user_id
+				WHERE m.chat_id = ?
+				ORDER BY m.date_send ASC
+				LIMIT ?
+			`, chatID, n)
+		}
 		if err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get messages: " + err.Error()})
 			c.Abort()
@@ -120,14 +132,26 @@ func GetLastMessages(c *gin.Context, db *sql.DB) {
 		}
 
 		// N messages before
-		beforeRows, err := db.Query(`
-			SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
-			FROM direct_chat_messages m
-			JOIN users u ON u.id = m.user_id
-			WHERE m.chat_id = ? AND m.id < ?
-			ORDER BY m.date_send DESC
-			LIMIT ?
-		`, chatID, messageID, n)
+		var beforeRows *sql.Rows
+		if blockedSince != nil {
+			beforeRows, err = db.Query(`
+				SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
+				FROM direct_chat_messages m
+				JOIN users u ON u.id = m.user_id
+				WHERE m.chat_id = ? AND m.id < ? AND m.date_send <= ?
+				ORDER BY m.date_send DESC
+				LIMIT ?
+			`, chatID, messageID, blockedSince, n)
+		} else {
+			beforeRows, err = db.Query(`
+				SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
+				FROM direct_chat_messages m
+				JOIN users u ON u.id = m.user_id
+				WHERE m.chat_id = ? AND m.id < ?
+				ORDER BY m.date_send DESC
+				LIMIT ?
+			`, chatID, messageID, n)
+		}
 		if err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get messages before: " + err.Error()})
 			c.Abort()
@@ -146,14 +170,26 @@ func GetLastMessages(c *gin.Context, db *sql.DB) {
 		}
 
 		// N messages after
-		afterRows, err := db.Query(`
-			SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
-			FROM direct_chat_messages m
-			JOIN users u ON u.id = m.user_id
-			WHERE m.chat_id = ? AND m.id > ?
-			ORDER BY m.date_send ASC
-			LIMIT ?
-		`, chatID, messageID, n)
+		var afterRows *sql.Rows
+		if blockedSince != nil {
+			afterRows, err = db.Query(`
+				SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
+				FROM direct_chat_messages m
+				JOIN users u ON u.id = m.user_id
+				WHERE m.chat_id = ? AND m.id > ? AND m.date_send <= ?
+				ORDER BY m.date_send ASC
+				LIMIT ?
+			`, chatID, messageID, blockedSince, n)
+		} else {
+			afterRows, err = db.Query(`
+				SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
+				FROM direct_chat_messages m
+				JOIN users u ON u.id = m.user_id
+				WHERE m.chat_id = ? AND m.id > ?
+				ORDER BY m.date_send ASC
+				LIMIT ?
+			`, chatID, messageID, n)
+		}
 		if err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get messages after: " + err.Error()})
 			c.Abort()
@@ -200,10 +236,11 @@ func GetMessagesBefore(c *gin.Context, db *sql.DB) {
 	}
 
 	var count int
+	var blockedSince *time.Time
 	err = db.QueryRow(
-		"SELECT COUNT(*) FROM direct_chat_users WHERE direct_chat_id = ? AND user_id = ?",
+		"SELECT COUNT(*), MAX(chat_blocked_since_date) FROM direct_chat_users WHERE direct_chat_id = ? AND user_id = ?",
 		chatID, userID,
-	).Scan(&count)
+	).Scan(&count, &blockedSince)
 	if err != nil || count == 0 {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You are not a participant in this chat"})
 		c.Abort()
@@ -233,14 +270,26 @@ func GetMessagesBefore(c *gin.Context, db *sql.DB) {
 
 	userTimezone := Services.GetUserTimezone(userID, db)
 
-	rows, err := db.Query(`
-		SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
-		FROM direct_chat_messages m
-		JOIN users u ON u.id = m.user_id
-		WHERE m.chat_id = ? AND m.id < ?
-		ORDER BY m.date_send DESC
-		LIMIT ?
-	`, chatID, messageID, n)
+	var rows *sql.Rows
+	if blockedSince != nil {
+		rows, err = db.Query(`
+			SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
+			FROM direct_chat_messages m
+			JOIN users u ON u.id = m.user_id
+			WHERE m.chat_id = ? AND m.id < ? AND m.date_send <= ?
+			ORDER BY m.date_send DESC
+			LIMIT ?
+		`, chatID, messageID, blockedSince, n)
+	} else {
+		rows, err = db.Query(`
+			SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
+			FROM direct_chat_messages m
+			JOIN users u ON u.id = m.user_id
+			WHERE m.chat_id = ? AND m.id < ?
+			ORDER BY m.date_send DESC
+			LIMIT ?
+		`, chatID, messageID, n)
+	}
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get messages: " + err.Error()})
 		c.Abort()
@@ -305,10 +354,11 @@ func GetMessagesAfter(c *gin.Context, db *sql.DB) {
 	}
 
 	var count int
+	var blockedSince *time.Time
 	err = db.QueryRow(
-		"SELECT COUNT(*) FROM direct_chat_users WHERE direct_chat_id = ? AND user_id = ?",
+		"SELECT COUNT(*), MAX(chat_blocked_since_date) FROM direct_chat_users WHERE direct_chat_id = ? AND user_id = ?",
 		chatID, userID,
-	).Scan(&count)
+	).Scan(&count, &blockedSince)
 	if err != nil || count == 0 {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You are not a participant in this chat"})
 		c.Abort()
@@ -338,14 +388,26 @@ func GetMessagesAfter(c *gin.Context, db *sql.DB) {
 
 	userTimezone := Services.GetUserTimezone(userID, db)
 
-	rows, err := db.Query(`
-		SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
-		FROM direct_chat_messages m
-		JOIN users u ON u.id = m.user_id
-		WHERE m.chat_id = ? AND m.id > ?
-		ORDER BY m.date_send ASC
-		LIMIT ?
-	`, chatID, messageID, n)
+	var rows *sql.Rows
+	if blockedSince != nil {
+		rows, err = db.Query(`
+			SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
+			FROM direct_chat_messages m
+			JOIN users u ON u.id = m.user_id
+			WHERE m.chat_id = ? AND m.id > ? AND m.date_send <= ?
+			ORDER BY m.date_send ASC
+			LIMIT ?
+		`, chatID, messageID, blockedSince, n)
+	} else {
+		rows, err = db.Query(`
+			SELECT m.id, m.user_id, u.username, u.avatar, m.date_send, m.date_received, m.ciphertext, m.iv, m.key_author, m.key_receiver
+			FROM direct_chat_messages m
+			JOIN users u ON u.id = m.user_id
+			WHERE m.chat_id = ? AND m.id > ?
+			ORDER BY m.date_send ASC
+			LIMIT ?
+		`, chatID, messageID, n)
+	}
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get messages: " + err.Error()})
 		c.Abort()
@@ -610,10 +672,11 @@ func CreateDirectChatMessage(c *gin.Context, db *sql.DB) {
 }
 
 type DirectChatListItem struct {
-	ChatID      int    `json:"chat_id"`
-	UserId      int    `json:"user_id"`
-	Username    string `json:"username"`
-	UnreadCount *int   `json:"unread_count"`
+	ChatID          int        `json:"chat_id"`
+	UserId          int        `json:"user_id"`
+	Username        string     `json:"username"`
+	UnreadCount     *int       `json:"unread_count"`
+	BlockedSinceDate *time.Time `json:"chat_blocked_since_date"`
 }
 
 func GetDirectChatList(c *gin.Context, db *sql.DB) {
@@ -625,7 +688,7 @@ func GetDirectChatList(c *gin.Context, db *sql.DB) {
 	}
 
 	rows, err := db.Query(`
-		SELECT dcu.direct_chat_id, u.id, u.username, dcu.unread_count
+		SELECT dcu.direct_chat_id, u.id, u.username, dcu.unread_count, dcu.chat_blocked_since_date
 		FROM direct_chat_users dcu
 		JOIN direct_chat_users dcu_other ON dcu_other.direct_chat_id = dcu.direct_chat_id AND dcu_other.user_id != dcu.user_id
 		JOIN users u ON u.id = dcu_other.user_id
@@ -641,11 +704,89 @@ func GetDirectChatList(c *gin.Context, db *sql.DB) {
 	chats := []DirectChatListItem{}
 	for rows.Next() {
 		var item DirectChatListItem
-		if err := rows.Scan(&item.ChatID, &item.UserId, &item.Username, &item.UnreadCount); err != nil {
+		if err := rows.Scan(&item.ChatID, &item.UserId, &item.Username, &item.UnreadCount, &item.BlockedSinceDate); err != nil {
 			continue
 		}
 		chats = append(chats, item)
 	}
 
 	c.JSON(http.StatusOK, chats)
+}
+
+func BlockDirectChat(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
+		c.Abort()
+		return
+	}
+
+	chatID, err := strconv.Atoi(c.Param("chatID"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid chat ID"})
+		c.Abort()
+		return
+	}
+
+	var count int
+	err = db.QueryRow(
+		"SELECT COUNT(*) FROM direct_chat_users WHERE direct_chat_id = ? AND user_id = ?",
+		chatID, userID,
+	).Scan(&count)
+	if err != nil || count == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You are not a participant in this chat"})
+		c.Abort()
+		return
+	}
+
+	_, err = db.Exec(
+		"UPDATE direct_chat_users SET chat_blocked_since_date = NOW() WHERE direct_chat_id = ? AND user_id = ? AND chat_blocked_since_date IS NULL",
+		chatID, userID,
+	)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to block chat: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Chat blocked"})
+}
+
+func UnblockDirectChat(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
+		c.Abort()
+		return
+	}
+
+	chatID, err := strconv.Atoi(c.Param("chatID"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid chat ID"})
+		c.Abort()
+		return
+	}
+
+	var count int
+	err = db.QueryRow(
+		"SELECT COUNT(*) FROM direct_chat_users WHERE direct_chat_id = ? AND user_id = ?",
+		chatID, userID,
+	).Scan(&count)
+	if err != nil || count == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You are not a participant in this chat"})
+		c.Abort()
+		return
+	}
+
+	_, err = db.Exec(
+		"UPDATE direct_chat_users SET chat_blocked_since_date = NULL WHERE direct_chat_id = ? AND user_id = ?",
+		chatID, userID,
+	)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to unblock chat: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Chat unblocked"})
 }

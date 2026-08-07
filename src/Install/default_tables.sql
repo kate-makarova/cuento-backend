@@ -566,10 +566,11 @@ create table direct_chats
 
 create table direct_chat_users
 (
-    direct_chat_id       int not null,
-    user_id              int not null,
-    last_read_message_id int null,
-    unread_count         int not null default 0,
+    direct_chat_id          int      not null,
+    user_id                 int      not null,
+    last_read_message_id    int      null,
+    unread_count            int      not null default 0,
+    chat_blocked_since_date datetime null,
     constraint direct_chat_users_pk primary key (direct_chat_id, user_id),
     constraint fk_direct_chat_users_chat foreign key (direct_chat_id) references direct_chats (id) on delete cascade,
     constraint fk_direct_chat_users_user foreign key (user_id) references users (id) on delete cascade

@@ -626,6 +626,12 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	protectedRouter.GET("/direct-chat/:chatID/messages/:messageID/after", "Get messages after a given message", func(c *gin.Context) {
 		Controllers.GetMessagesAfter(c, Services.DB)
 	})
+	protectedRouter.POST("/direct-chat/:chatID/block", "Block a direct chat", func(c *gin.Context) {
+		Controllers.BlockDirectChat(c, Services.DB)
+	})
+	protectedRouter.POST("/direct-chat/:chatID/unblock", "Unblock a direct chat", func(c *gin.Context) {
+		Controllers.UnblockDirectChat(c, Services.DB)
+	})
 	protectedRouter.GET("/direct-chats", "Get list of current user's direct chats", func(c *gin.Context) {
 		Controllers.GetDirectChatList(c, Services.DB)
 	})
