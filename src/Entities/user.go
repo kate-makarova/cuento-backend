@@ -20,6 +20,7 @@ type User struct {
 	TotalGeneralPosts    int                       `json:"total_general_posts"`
 	InterfaceDesign      *string                   `json:"interface_design"`
 	EditorType           int                       `json:"editor_type"`
+	DoNotBlur            bool                      `json:"do_not_blur"`
 	Signature            *string                   `json:"signature"`
 	Roles                []Role                    `json:"roles"`
 	NotificationSettings []UserNotificationSetting `json:"notification_settings"`

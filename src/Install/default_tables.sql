@@ -18,6 +18,7 @@ create table users
     total_general_posts int default 0 not null,
     signature          text         null,
     editor_type        int          not null default 0,
+    do_not_blur        tinyint(1)   not null default 0,
     constraint users_pk_2
         unique (username)
 );
@@ -142,7 +143,13 @@ INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser
 VALUES ('use_rating_system', 'y', 0);
 
 INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('show_content_warnings', 'y', 0);
+
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('site_max_rating', 'L1V1S1', 0);
+
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('blur_content_starting_from_rate', NULL, 0);
 
 INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('global_free_format_date_id', NULL, 0);

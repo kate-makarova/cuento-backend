@@ -539,6 +539,9 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	protectedRouter.POST("/user/avatar", "Upload and save the current user's avatar", func(c *gin.Context) {
 		Controllers.UploadUserAvatar(c, Services.DB)
 	})
+	protectedRouter.POST("/user/do-not-blur", "Set do-not-blur preference for the current user", func(c *gin.Context) {
+		Controllers.SetDoNotBlur(c, Services.DB)
+	})
 	protectedRouter.POST("/user/settings/update", "Update user settings", func(c *gin.Context) {
 		Controllers.UpdateSettings(c, Services.DB)
 	})

@@ -76,6 +76,7 @@ type UpdateSettingsRequest struct {
 	InterfaceDesign NullableString `json:"interface_design"`
 	Signature       NullableString `json:"signature"`
 	EditorType      *int           `json:"editor_type"`
+	DoNotBlur       *bool          `json:"do_not_blur"`
 }
 
 type CreateUserRequest struct {
@@ -221,8 +222,8 @@ func Login(c *gin.Context, db *sql.DB) {
 	}
 
 	var user Entities.User
-	query := "SELECT id, username, avatar, password, interface_language, interface_timezone, interface_font_size, user_status, interface_design, archive_reason, signature, editor_type FROM users WHERE username = ?"
-	err := db.QueryRow(query, creds.Username).Scan(&user.Id, &user.Username, &user.Avatar, &user.Password, &user.InterfaceLanguage, &user.InterfaceTimezone, &user.InterfaceFontSize, &user.UserStatus, &user.InterfaceDesign, &user.ArchiveReason, &user.Signature, &user.EditorType)
+	query := "SELECT id, username, avatar, password, interface_language, interface_timezone, interface_font_size, user_status, interface_design, archive_reason, signature, editor_type, do_not_blur FROM users WHERE username = ?"
+	err := db.QueryRow(query, creds.Username).Scan(&user.Id, &user.Username, &user.Avatar, &user.Password, &user.InterfaceLanguage, &user.InterfaceTimezone, &user.InterfaceFontSize, &user.UserStatus, &user.InterfaceDesign, &user.ArchiveReason, &user.Signature, &user.EditorType, &user.DoNotBlur)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Invalid credentials"})
@@ -363,8 +364,8 @@ func RefreshToken(c *gin.Context, db *sql.DB) {
 
 	// Fetch user details
 	var user Entities.User
-	query := "SELECT id, username, avatar, interface_language, interface_timezone, interface_font_size, user_status, total_posts, total_general_posts, interface_design, signature, editor_type FROM users WHERE id = ?"
-	err = db.QueryRow(query, claims.UserID).Scan(&user.Id, &user.Username, &user.Avatar, &user.InterfaceLanguage, &user.InterfaceTimezone, &user.InterfaceFontSize, &user.UserStatus, &user.TotalPosts, &user.TotalGeneralPosts, &user.InterfaceDesign, &user.Signature, &user.EditorType)
+	query := "SELECT id, username, avatar, interface_language, interface_timezone, interface_font_size, user_status, total_posts, total_general_posts, interface_design, signature, editor_type, do_not_blur FROM users WHERE id = ?"
+	err = db.QueryRow(query, claims.UserID).Scan(&user.Id, &user.Username, &user.Avatar, &user.InterfaceLanguage, &user.InterfaceTimezone, &user.InterfaceFontSize, &user.UserStatus, &user.TotalPosts, &user.TotalGeneralPosts, &user.InterfaceDesign, &user.Signature, &user.EditorType, &user.DoNotBlur)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch user details"})
 		c.Abort()
@@ -651,6 +652,10 @@ func UpdateSettings(c *gin.Context, db *sql.DB) {
 		updates = append(updates, "editor_type = ?")
 		args = append(args, *req.EditorType)
 	}
+	if req.DoNotBlur != nil {
+		updates = append(updates, "do_not_blur = ?")
+		args = append(args, *req.DoNotBlur)
+	}
 	if req.Password != nil {
 		// Hash the password before updating
 		dummyUser := Entities.User{}
@@ -680,7 +685,7 @@ func UpdateSettings(c *gin.Context, db *sql.DB) {
 
 	// Fetch updated user details
 	var user Entities.User
-	err = db.QueryRow("SELECT id, username, avatar, interface_language, interface_timezone, interface_font_size, user_status, total_posts, total_general_posts, interface_design, signature, editor_type FROM users WHERE id = ?", userID).Scan(&user.Id, &user.Username, &user.Avatar, &user.InterfaceLanguage, &user.InterfaceTimezone, &user.InterfaceFontSize, &user.UserStatus, &user.TotalPosts, &user.TotalGeneralPosts, &user.InterfaceDesign, &user.Signature, &user.EditorType)
+	err = db.QueryRow("SELECT id, username, avatar, interface_language, interface_timezone, interface_font_size, user_status, total_posts, total_general_posts, interface_design, signature, editor_type, do_not_blur FROM users WHERE id = ?", userID).Scan(&user.Id, &user.Username, &user.Avatar, &user.InterfaceLanguage, &user.InterfaceTimezone, &user.InterfaceFontSize, &user.UserStatus, &user.TotalPosts, &user.TotalGeneralPosts, &user.InterfaceDesign, &user.Signature, &user.EditorType, &user.DoNotBlur)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch updated user details"})
 		c.Abort()
@@ -713,6 +718,34 @@ func UpdateSettings(c *gin.Context, db *sql.DB) {
 		"message": "Settings updated successfully",
 		"user":    user,
 	})
+}
+
+type SetDoNotBlurRequest struct {
+	DoNotBlur bool `json:"do_not_blur"`
+}
+
+func SetDoNotBlur(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
+		c.Abort()
+		return
+	}
+
+	var req SetDoNotBlurRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	if _, err := db.Exec("UPDATE users SET do_not_blur = ? WHERE id = ?", req.DoNotBlur, userID); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update setting: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"do_not_blur": req.DoNotBlur})
 }
 
 type AdminUserListItem struct {
