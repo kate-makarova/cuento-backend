@@ -74,6 +74,7 @@ var templatePolicy = func() *bluemonday.Policy {
 		"ol",
 		"q",
 		"s", "samp", "section", "small", "source", "span", "strong", "sub", "summary", "sup",
+		"table", "tbody", "td", "tfoot", "th", "thead", "tr",
 		"u", "ul",
 		"var",
 		"wbr",
