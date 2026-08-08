@@ -14,7 +14,10 @@ var angularBooleanAttrs = []string{"app-ulinks", "appRouterLinks", "app-navlinks
 
 // angularAttrCasefix restores Angular attribute casing that bluemonday lowercases.
 var angularAttrCasefix = map[string]string{
-	"[innerhtml]": "[innerHTML]",
+	"[innerhtml]":  "[innerHTML]",
+	"routerlink":   "routerLink",
+	"[routerlink]": "[routerLink]",
+	"[queryparams]": "[queryParams]",
 }
 
 // angularCustomElements are Angular component tags that the HTML parser discards
@@ -92,7 +95,7 @@ var templatePolicy = func() *bluemonday.Policy {
 	p.AllowAttrs("class", "id", "style", "data-angular-placeholder").Globally()
 
 	// Angular structural/directive attributes
-	p.AllowAttrs("app-ulinks", "appRouterLinks", "app-navlinks", "[innerHTML]", "i18n").Globally()
+	p.AllowAttrs("app-ulinks", "appRouterLinks", "app-navlinks", "[innerHTML]", "i18n", "routerLink", "[routerLink]", "[queryParams]").Globally()
 
 	p.AllowStyles("color", "background-color", "background",
 		"font-size", "font-weight", "font-style", "font-family",
