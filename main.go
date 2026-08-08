@@ -750,6 +750,9 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	protectedRouter.POST("/admin/design-draft/update/:id", "Update a design draft by ID", func(c *gin.Context) {
 		Controllers.UpdateDesignDraft(c, Services.DB)
 	})
+	protectedRouter.DELETE("/admin/design-draft/delete/:id", "Delete a design draft by ID", func(c *gin.Context) {
+		Controllers.DeleteDesignDraft(c, Services.DB)
+	})
 	protectedRouter.POST("/admin/design-draft/publish/:id", "Publish a design draft to the live CSS files", func(c *gin.Context) {
 		Controllers.PublishDesignDraft(c, Services.DB)
 	})
