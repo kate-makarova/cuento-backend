@@ -91,11 +91,12 @@ var templatePolicy = func() *bluemonday.Policy {
 	p.AllowAttrs("datetime").OnElements("time", "del", "ins")
 	p.AllowAttrs("open").OnElements("details")
 	p.AllowAttrs("span", "width").OnElements("col", "colgroup")
+	p.AllowAttrs("cellspacing", "cellpadding", "border").OnElements("table")
 	p.AllowAttrs("colspan", "rowspan", "headers", "scope").OnElements("td", "th")
 	p.AllowAttrs("class", "id", "style", "data-angular-placeholder").Globally()
 
 	// Angular structural/directive attributes
-	p.AllowAttrs("app-ulinks", "appRouterLinks", "app-navlinks", "[innerHTML]", "i18n", "routerLink", "[routerLink]", "[queryParams]").Globally()
+	p.AllowAttrs("app-ulinks", "appRouterLinks", "app-navlinks", "[innerHTML]", "i18n", "routerLink", "[routerLink]", "[queryParams]", "[class.has-new-messages]").Globally()
 
 	p.AllowStyles("color", "background-color", "background",
 		"font-size", "font-weight", "font-style", "font-family",
