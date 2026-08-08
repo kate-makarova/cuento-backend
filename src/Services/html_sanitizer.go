@@ -14,10 +14,16 @@ var angularBooleanAttrs = []string{"app-ulinks", "appRouterLinks", "app-navlinks
 
 // angularAttrCasefix restores Angular attribute casing that bluemonday lowercases.
 var angularAttrCasefix = map[string]string{
-	"[innerhtml]":  "[innerHTML]",
-	"routerlink":   "routerLink",
-	"[routerlink]": "[routerLink]",
-	"[queryparams]": "[queryParams]",
+	"[innerhtml]":         "[innerHTML]",
+	"routerlink":          "routerLink",
+	"[routerlink]":        "[routerLink]",
+	"[queryparams]":       "[queryParams]",
+	"viewbox":             "viewBox",
+	"preserveaspectratio": "preserveAspectRatio",
+	"gradientunits":       "gradientUnits",
+	"gradienttransform":   "gradientTransform",
+	"clippathunits":       "clipPathUnits",
+	"patternunits":        "patternUnits",
 }
 
 // angularCustomElements are Angular component tags that the HTML parser discards
@@ -79,6 +85,9 @@ var templatePolicy = func() *bluemonday.Policy {
 		"q",
 		"p",
 		"s", "samp", "section", "small", "source", "span", "strong", "sub", "summary", "sup",
+		"svg", "path", "g", "circle", "ellipse", "rect", "line", "polyline", "polygon",
+		"text", "tspan", "defs", "use", "symbol", "desc",
+		"clippath", "mask", "lineargradient", "radialgradient", "stop",
 		"table", "tbody", "td", "tfoot", "th", "thead", "tr",
 		"u", "ul",
 		"var",
@@ -94,6 +103,20 @@ var templatePolicy = func() *bluemonday.Policy {
 	p.AllowAttrs("cellspacing", "cellpadding", "border").OnElements("table")
 	p.AllowAttrs("colspan", "rowspan", "headers", "scope").OnElements("td", "th")
 	p.AllowAttrs("class", "id", "style", "data-angular-placeholder").Globally()
+
+	// SVG presentation and structural attributes
+	p.AllowAttrs(
+		"xmlns", "viewBox", "preserveAspectRatio",
+		"fill", "fill-opacity", "fill-rule",
+		"stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-dasharray", "stroke-dashoffset", "stroke-opacity",
+		"d", "points",
+		"cx", "cy", "r", "rx", "ry",
+		"x", "y", "x1", "y1", "x2", "y2",
+		"transform", "clip-path", "opacity",
+		"offset", "stop-color", "stop-opacity",
+		"gradientUnits", "gradientTransform", "clipPathUnits", "patternUnits",
+		"aria-hidden", "aria-label", "role",
+	).Globally()
 
 	// Angular structural/directive attributes
 	p.AllowAttrs("app-ulinks", "appRouterLinks", "app-navlinks", "[innerHTML]", "i18n", "routerLink", "[routerLink]", "[queryParams]", "[class.has-new-messages]").Globally()
