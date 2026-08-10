@@ -42,6 +42,12 @@ var frontendComponentDefs = []frontendComponentDef{
 		DefaultTemplatePath: "src/app/components/category/category.component.html",
 		DescriptionKey:      "frontend_component.src_app_components_category.description",
 	},
+	{
+		Name:                "src/app/components/footer-statistics",
+		TemplatePath:        "src/app/components/footer-statistics/footer-statistics.custom.component.html",
+		DefaultTemplatePath: "src/app/components/footer-statistics/footer-statistics.component.html",
+		DescriptionKey:      "frontend_component.src_app_components_footer_statistics.description",
+	},
 }
 
 func findComponentDef(name string) (frontendComponentDef, bool) {
