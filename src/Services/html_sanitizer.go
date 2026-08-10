@@ -149,5 +149,8 @@ func SanitizeTemplate(html string) string {
 		result = strings.ReplaceAll(result, lower, correct)
 	}
 	result = strings.ReplaceAll(result, "&#39;", "'")
+	result = strings.ReplaceAll(result, "&amp;", "&")
+	result = strings.ReplaceAll(result, "&gt;", ">")
+	result = strings.ReplaceAll(result, "&lt;", "<")
 	return result
 }
