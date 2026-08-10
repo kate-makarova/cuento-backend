@@ -148,5 +148,6 @@ func SanitizeTemplate(html string) string {
 	for lower, correct := range angularAttrCasefix {
 		result = strings.ReplaceAll(result, lower, correct)
 	}
+	result = strings.ReplaceAll(result, "&#39;", "'")
 	return result
 }
