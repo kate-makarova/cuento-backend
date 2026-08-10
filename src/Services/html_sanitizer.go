@@ -69,7 +69,7 @@ var templatePolicy = func() *bluemonday.Policy {
 
 	p.AllowElements(
 		"acronym", "address", "article", "aside",
-		"b", "blockquote", "br",
+		"b", "blockquote", "br", "button",
 		"caption", "cite", "col", "colgroup",
 		"dd", "del", "details", "dfn", "div", "dl", "dt",
 		"em",
@@ -80,7 +80,7 @@ var templatePolicy = func() *bluemonday.Policy {
 		"kbd",
 		"li",
 		"main", "mark",
-		"nav",
+		"nav", "ng-container",
 		"ol",
 		"q",
 		"p",
@@ -95,6 +95,7 @@ var templatePolicy = func() *bluemonday.Policy {
 	)
 
 	p.AllowAttrs("href", "target", "rel").OnElements("a")
+	p.AllowAttrs("type").OnElements("button")
 	p.AllowAttrs("src", "alt", "width", "height").OnElements("img")
 	p.AllowAttrs("cite").OnElements("blockquote", "q", "del", "ins")
 	p.AllowAttrs("datetime").OnElements("time", "del", "ins")
@@ -119,7 +120,7 @@ var templatePolicy = func() *bluemonday.Policy {
 	).Globally()
 
 	// Angular structural/directive attributes
-	p.AllowAttrs("app-ulinks", "appRouterLinks", "app-navlinks", "[innerHTML]", "i18n", "routerLink", "[routerLink]", "[queryParams]", "[class.has-new-messages]").Globally()
+	p.AllowAttrs("app-ulinks", "appRouterLinks", "app-navlinks", "[innerHTML]", "i18n", "routerLink", "[routerLink]", "[queryParams]", "[class.has-new-messages]", "[class.active]", "(click)").Globally()
 
 	p.AllowStyles("color", "background-color", "background",
 		"font-size", "font-weight", "font-style", "font-family",
@@ -128,7 +129,7 @@ var templatePolicy = func() *bluemonday.Policy {
 		"padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
 		"border", "border-radius",
 		"width", "height", "max-width", "max-height",
-		"display", "flex-direction", "align-items", "justify-content", "gap",
+		"display", "flex-direction", "flex-shrink", "align-items", "justify-content", "gap",
 		"list-style", "list-style-type",
 	).Globally()
 
