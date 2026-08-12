@@ -17,6 +17,7 @@ var youtubeRegexp = regexp.MustCompile(`(?i)(?:youtube\.com/(?:watch\?(?:.*&)?v=
 // autoLinkRe matches either a full HTML tag (kept as-is) or a raw http(s) URL (linkified).
 // Matching tags first ensures URLs already inside href/src attributes are never touched.
 var autoLinkRe = regexp.MustCompile(`(?i)(<[^>]*>)|(https?://[^\s<>"']+)`)
+var preBlockRe = regexp.MustCompile(`(?is)<pre[^>]*>.*?</pre>`)
 
 var (
 	viewforumRe = regexp.MustCompile(`^/viewforum/(\d+)$`)
@@ -59,7 +60,16 @@ func resolveInternalLinkLabel(rawURL, domain string, db *sql.DB) string {
 }
 
 func LinkifyURLs(input, domain string, db *sql.DB) string {
-	return autoLinkRe.ReplaceAllStringFunc(input, func(match string) string {
+	placeholders := make(map[string]string)
+	i := 0
+	input = preBlockRe.ReplaceAllStringFunc(input, func(block string) string {
+		key := fmt.Sprintf("\x00pre%d\x00", i)
+		i++
+		placeholders[key] = block
+		return key
+	})
+
+	result := autoLinkRe.ReplaceAllStringFunc(input, func(match string) string {
 		if match[0] == '<' {
 			return match
 		}
@@ -71,6 +81,11 @@ func LinkifyURLs(input, domain string, db *sql.DB) string {
 		}
 		return `<a href="` + html.EscapeString(trimmed) + `">` + html.EscapeString(label) + `</a>` + suffix
 	})
+
+	for key, block := range placeholders {
+		result = strings.ReplaceAll(result, key, block)
+	}
+	return result
 }
 var audioExtRegexp = regexp.MustCompile(`(?i)\.(mp3|ogg|wav|flac|aac|m4a|opus|webm)(\?.*)?$`)
 
