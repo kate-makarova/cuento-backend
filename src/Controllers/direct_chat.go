@@ -98,7 +98,7 @@ func GetLastMessages(c *gin.Context, db *sql.DB) {
 				FROM direct_chat_messages m
 				JOIN users u ON u.id = m.user_id
 				WHERE m.chat_id = ? AND m.date_send <= ?
-				ORDER BY m.date_send ASC
+				ORDER BY m.date_send DESC
 				LIMIT ?
 			`, chatID, blockedSince, n)
 		} else {
@@ -107,7 +107,7 @@ func GetLastMessages(c *gin.Context, db *sql.DB) {
 				FROM direct_chat_messages m
 				JOIN users u ON u.id = m.user_id
 				WHERE m.chat_id = ?
-				ORDER BY m.date_send ASC
+				ORDER BY m.date_send DESC
 				LIMIT ?
 			`, chatID, n)
 		}
@@ -122,6 +122,9 @@ func GetLastMessages(c *gin.Context, db *sql.DB) {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan messages: " + err.Error()})
 			c.Abort()
 			return
+		}
+		for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+			messages[i], messages[j] = messages[j], messages[i]
 		}
 	} else {
 		messageID, err := strconv.Atoi(messageIDStr)

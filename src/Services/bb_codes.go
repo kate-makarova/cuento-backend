@@ -353,6 +353,20 @@ func GetBBCompiler() bbcode.Compiler {
 		return out, true
 	})
 
+	compiler.SetTag("code", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "pre"
+		for _, child := range node.Children {
+			out.AppendChild(bbcode.CompileRaw(child))
+		}
+		// Ensure closing </pre> is emitted even for empty blocks.
+		// HTMLTag.Compile only adds a closing tag when children are present.
+		if len(node.Children) == 0 {
+			out.AppendChild(bbcode.NewHTMLTag(""))
+		}
+		return out, false
+	})
+
 	compiler.SetTag("img", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
 		out := bbcode.NewHTMLTag("")
 		out.Name = "img"
