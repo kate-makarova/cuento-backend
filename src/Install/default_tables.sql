@@ -961,8 +961,8 @@ CREATE TABLE design_drafts
     session_key      VARCHAR(12)  NOT NULL,
     date_created     DATETIME     NOT NULL,
     date_last_changed DATETIME    NOT NULL,
-    main_css         TEXT         NULL,
-    custom_style_css TEXT         NULL,
+    main_css         MEDIUMTEXT   NULL,
+    custom_style_css MEDIUMTEXT   NULL,
     CONSTRAINT design_drafts_session_key_unique UNIQUE (session_key)
 );
 
