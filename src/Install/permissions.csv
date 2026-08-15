@@ -65,6 +65,7 @@ role_id,type,permission
 2,0,/user/public-key/:userID
 2,0,/user/save-keys
 2,0,/user/absence
+2,0,/user/absence/:id
 2,0,/character/immunity/buy
 2,0,/user/archive
 2,0,/user/avatar
