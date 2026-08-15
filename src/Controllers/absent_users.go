@@ -45,6 +45,7 @@ func grantPostAbsenceImmunity(userID int, absenceEnd time.Time, db *sql.DB) {
 }
 
 type AbsentUserItem struct {
+	Id               int                       `json:"id"`
 	UserId           int                       `json:"user_id"`
 	Username         string                    `json:"username"`
 	AbsenceStartDate time.Time                 `json:"absence_start_date"`
@@ -54,7 +55,7 @@ type AbsentUserItem struct {
 
 func GetAbsentUsers(c *gin.Context, db *sql.DB) {
 	rows, err := db.Query(`
-		SELECT au.user_id, u.username, au.absence_start_date, au.absence_end_date
+		SELECT au.id, au.user_id, u.username, au.absence_start_date, au.absence_end_date
 		FROM absent_users au
 		JOIN users u ON u.id = au.user_id
 		WHERE au.absence_start_date <= NOW() AND au.absence_end_date >= NOW() AND au.is_deleted = 0
@@ -70,7 +71,7 @@ func GetAbsentUsers(c *gin.Context, db *sql.DB) {
 	users := []AbsentUserItem{}
 	for rows.Next() {
 		var u AbsentUserItem
-		if err := rows.Scan(&u.UserId, &u.Username, &u.AbsenceStartDate, &u.AbsenceEndDate); err != nil {
+		if err := rows.Scan(&u.Id, &u.UserId, &u.Username, &u.AbsenceStartDate, &u.AbsenceEndDate); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan absent user: " + err.Error()})
 			c.Abort()
 			return
