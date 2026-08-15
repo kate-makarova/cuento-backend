@@ -548,6 +548,9 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	protectedRouter.POST("/user/absence", "Create an absence record for the current user", func(c *gin.Context) {
 		Controllers.CreateAbsence(c, Services.DB)
 	})
+	protectedRouter.DELETE("/user/absence/:id", "Delete (soft-delete) an absence record owned by the current user", func(c *gin.Context) {
+		Controllers.DeleteAbsence(c, Services.DB)
+	})
 	protectedRouter.POST("/admin/user/:user_id/absence", "Create an absence record for any user (admin)", func(c *gin.Context) {
 		Controllers.AdminCreateAbsence(c, Services.DB)
 	})

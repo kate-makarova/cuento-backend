@@ -57,7 +57,7 @@ func GetAbsentUsers(c *gin.Context, db *sql.DB) {
 		SELECT au.user_id, u.username, au.absence_start_date, au.absence_end_date
 		FROM absent_users au
 		JOIN users u ON u.id = au.user_id
-		WHERE au.absence_start_date <= NOW() AND au.absence_end_date >= NOW()
+		WHERE au.absence_start_date <= NOW() AND au.absence_end_date >= NOW() AND au.is_deleted = 0
 		ORDER BY au.absence_end_date ASC
 	`)
 	if err != nil {
@@ -164,7 +164,7 @@ func CreateAbsence(c *gin.Context, db *sql.DB) {
 	// Check for overlapping absence periods
 	var overlapCount int
 	err = db.QueryRow(
-		"SELECT COUNT(*) FROM absent_users WHERE user_id = ? AND absence_start_date <= ? AND absence_end_date >= ?",
+		"SELECT COUNT(*) FROM absent_users WHERE user_id = ? AND absence_start_date <= ? AND absence_end_date >= ? AND is_deleted = 0",
 		userID, end, start,
 	).Scan(&overlapCount)
 	if err != nil {
@@ -182,7 +182,7 @@ func CreateAbsence(c *gin.Context, db *sql.DB) {
 	cooldownDays := Services.GetAbsenceCooldownDays(db)
 	var lastEndDate time.Time
 	err = db.QueryRow(
-		"SELECT absence_end_date FROM absent_users WHERE user_id = ? ORDER BY absence_end_date DESC LIMIT 1",
+		"SELECT absence_end_date FROM absent_users WHERE user_id = ? AND is_deleted = 0 ORDER BY absence_end_date DESC LIMIT 1",
 		userID,
 	).Scan(&lastEndDate)
 	if err != nil && err != sql.ErrNoRows {
@@ -253,7 +253,7 @@ func AdminCreateAbsence(c *gin.Context, db *sql.DB) {
 
 	var overlapCount int
 	if err := db.QueryRow(
-		"SELECT COUNT(*) FROM absent_users WHERE user_id = ? AND absence_start_date <= ? AND absence_end_date >= ?",
+		"SELECT COUNT(*) FROM absent_users WHERE user_id = ? AND absence_start_date <= ? AND absence_end_date >= ? AND is_deleted = 0",
 		targetUserID, end, start,
 	).Scan(&overlapCount); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to check overlapping absences: " + err.Error()})
@@ -370,7 +370,7 @@ func GetCharacterProtectionHistory(c *gin.Context, db *sql.DB) {
 
 	// Absences (belong to the user, no reason field)
 	absenceRows, err := db.Query(
-		"SELECT absence_start_date, absence_end_date FROM absent_users WHERE user_id = ? ORDER BY absence_start_date DESC",
+		"SELECT absence_start_date, absence_end_date FROM absent_users WHERE user_id = ? AND is_deleted = 0 ORDER BY absence_start_date DESC",
 		userID,
 	)
 	if err != nil {
@@ -419,6 +419,35 @@ func GetCharacterProtectionHistory(c *gin.Context, db *sql.DB) {
 	})
 
 	c.JSON(http.StatusOK, items)
+}
+
+func DeleteAbsence(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+
+	absenceID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid absence ID"})
+		c.Abort()
+		return
+	}
+
+	res, err := db.Exec(
+		"UPDATE absent_users SET is_deleted = 1 WHERE id = ? AND user_id = ? AND is_deleted = 0",
+		absenceID, userID,
+	)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to delete absence: " + err.Error()})
+		c.Abort()
+		return
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Absence not found"})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 func BuyAutoArchivingImmunity(c *gin.Context, db *sql.DB) {

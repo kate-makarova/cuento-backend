@@ -45,7 +45,7 @@ func runAutoArchiving(db *sql.DB) {
 		JOIN topics t ON t.id = cb.topic_id
 		JOIN users u ON u.id = cb.user_id
 		LEFT JOIN absent_users au ON au.user_id = cb.user_id
-			AND au.absence_start_date <= NOW() AND au.absence_end_date >= NOW()
+			AND au.absence_start_date <= NOW() AND au.absence_end_date >= NOW() AND au.is_deleted = 0
 		LEFT JOIN auto_archiving_immunity aai ON aai.character_id = cb.id
 			AND aai.start_date <= NOW() AND aai.end_date >= NOW()
 		WHERE cb.character_status = ?
@@ -123,7 +123,7 @@ func runArchivingNotifications(db *sql.DB) {
 				GROUP BY character_id
 			) aai_exp ON aai_exp.character_id = cb.id
 			LEFT JOIN absent_users au ON au.user_id = cb.user_id
-				AND au.absence_start_date <= NOW() AND au.absence_end_date >= NOW()
+				AND au.absence_start_date <= NOW() AND au.absence_end_date >= NOW() AND au.is_deleted = 0
 			WHERE cb.character_status = ?
 			AND u.user_status = ?
 			AND DATEDIFF(aai_exp.end_date, NOW()) = ?
@@ -195,7 +195,7 @@ func runArchivingNotifications(db *sql.DB) {
 			JOIN topics t ON t.id = cb.topic_id
 			JOIN users u ON u.id = cb.user_id
 			LEFT JOIN absent_users au ON au.user_id = cb.user_id
-				AND au.absence_start_date <= NOW() AND au.absence_end_date >= NOW()
+				AND au.absence_start_date <= NOW() AND au.absence_end_date >= NOW() AND au.is_deleted = 0
 			LEFT JOIN auto_archiving_immunity aai ON aai.character_id = cb.id
 				AND aai.start_date <= NOW() AND aai.end_date >= NOW()
 			WHERE cb.character_status = ?
