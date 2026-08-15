@@ -89,6 +89,41 @@ func LinkifyURLs(input, domain string, db *sql.DB) string {
 }
 var audioExtRegexp = regexp.MustCompile(`(?i)\.(mp3|ogg|wav|flac|aac|m4a|opus|webm)(\?.*)?$`)
 
+// getRawArg extracts a named arg directly from the raw tag string, bypassing
+// the bbcode library's quoted-value parser which corrupts multi-byte UTF-8.
+func getRawArg(node *bbcode.BBCodeNode, key string) (string, bool) {
+	raw := node.GetOpeningTag().Raw
+	search := key + "="
+	idx := strings.Index(strings.ToLower(raw), search)
+	if idx < 0 {
+		return "", false
+	}
+	rest := raw[idx+len(search):]
+	if len(rest) == 0 {
+		return "", false
+	}
+	var val string
+	if rest[0] == '"' || rest[0] == '\'' {
+		quoteChar := rest[0]
+		end := strings.IndexByte(rest[1:], quoteChar)
+		if end < 0 {
+			return "", false
+		}
+		val = rest[1 : end+1]
+	} else {
+		end := strings.IndexAny(rest, " \t]")
+		if end < 0 {
+			val = rest
+		} else {
+			val = rest[:end]
+		}
+	}
+	if val == "" {
+		return "", false
+	}
+	return val, true
+}
+
 func getArg(node *bbcode.BBCodeNode, key string) (string, bool) {
 	val, ok := node.GetOpeningTag().Args[key]
 	if !ok || val == "" {
@@ -382,7 +417,7 @@ func GetBBCompiler() bbcode.Compiler {
 				out.Attrs["title"] = text
 			}
 		}
-		if title, ok := getArg(node, "title"); ok {
+		if title, ok := getRawArg(node, "title"); ok {
 			out.Attrs["title"] = title
 		}
 		out.Attrs["loading"] = "lazy"
