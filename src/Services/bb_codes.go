@@ -382,6 +382,9 @@ func GetBBCompiler() bbcode.Compiler {
 				out.Attrs["title"] = text
 			}
 		}
+		if title, ok := getArg(node, "title"); ok {
+			out.Attrs["title"] = title
+		}
 		out.Attrs["loading"] = "lazy"
 		out.Attrs["referrerpolicy"] = "no-referrer"
 
