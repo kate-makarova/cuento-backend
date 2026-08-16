@@ -59,7 +59,7 @@ func scanCategoryRows(rows *sql.Rows, userTimezone *string) ([]Entities.Category
 		sub.TopicNumber = int(topicNumber.Int64)
 		sub.PostNumber = int(postNumber.Int64)
 		if dateLastPost != nil {
-			raw := dateLastPost.UTC().Format("2006-01-02 15:04:05")
+			raw := dateLastPost.Format(time.RFC3339)
 			sub.DateLastPost = &raw
 			localized := Services.LocalizeTime(*dateLastPost, userTimezone)
 			sub.DateLastPostLocalized = &localized
@@ -101,16 +101,19 @@ func GetHomeCategories(c *gin.Context, db *sql.DB) {
 			subforums.last_post_topic_id,
 			subforums.last_post_topic_name,
 			subforums.last_post_id,
-			COALESCE(subforums.date_last_post, t_ref.date_created) as date_last_post,
-			COALESCE(subforums.last_post_author_user_name, u_ref.username) as last_post_author_user_name,
+			COALESCE(subforums.date_last_post,
+				(SELECT MAX(COALESCE(t.date_last_post, t.date_created))
+				 FROM topics t WHERE t.subforum_id = subforums.id AND t.status != 3)) as date_last_post,
+			COALESCE(subforums.last_post_author_user_name,
+				(SELECT u.username FROM topics t JOIN users u ON u.id = t.author_user_id
+				 WHERE t.subforum_id = subforums.id AND t.status != 3
+				 ORDER BY COALESCE(t.date_last_post, t.date_created) DESC LIMIT 1)) as last_post_author_user_name,
 			subforums.show_last_topic,
 			categories.id,
 			categories.name,
 			categories.position
 		FROM categories
 		JOIN subforums ON subforums.category_id = categories.id AND subforums.id IN (%s)
-		LEFT JOIN topics t_ref ON t_ref.id = subforums.last_post_topic_id
-		LEFT JOIN users u_ref ON u_ref.id = t_ref.author_user_id
 		ORDER BY categories.position, subforums.position`, placeholders)
 
 	args := make([]interface{}, len(visibleSubforumIDs))
@@ -189,16 +192,19 @@ func GetAdminHomeCategories(c *gin.Context, db *sql.DB) {
 			subforums.last_post_topic_id,
 			subforums.last_post_topic_name,
 			subforums.last_post_id,
-			COALESCE(subforums.date_last_post, t_ref.date_created) as date_last_post,
-			COALESCE(subforums.last_post_author_user_name, u_ref.username) as last_post_author_user_name,
+			COALESCE(subforums.date_last_post,
+				(SELECT MAX(COALESCE(t.date_last_post, t.date_created))
+				 FROM topics t WHERE t.subforum_id = subforums.id AND t.status != 3)) as date_last_post,
+			COALESCE(subforums.last_post_author_user_name,
+				(SELECT u.username FROM topics t JOIN users u ON u.id = t.author_user_id
+				 WHERE t.subforum_id = subforums.id AND t.status != 3
+				 ORDER BY COALESCE(t.date_last_post, t.date_created) DESC LIMIT 1)) as last_post_author_user_name,
 			subforums.show_last_topic,
 			categories.id,
 			categories.name,
 			categories.position
 		FROM categories
 		LEFT JOIN subforums ON subforums.category_id = categories.id
-		LEFT JOIN topics t_ref ON t_ref.id = subforums.last_post_topic_id
-		LEFT JOIN users u_ref ON u_ref.id = t_ref.author_user_id
 		ORDER BY categories.position, subforums.position`
 
 	rows, err := db.Query(query)
