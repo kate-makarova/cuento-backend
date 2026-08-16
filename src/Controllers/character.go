@@ -301,10 +301,11 @@ func CreateCharacter(c *gin.Context, db *sql.DB) {
 
 	// Emit CharacterCreated event
 	Events.Publish(db, Events.CharacterCreated, Events.CharacterCreatedEvent{
-		CharacterID: characterID,
-		SubforumID:  req.SubforumID,
-		TopicID:     topicID,
-		TopicName:   req.Name,
+		CharacterID:  characterID,
+		SubforumID:   req.SubforumID,
+		TopicID:      topicID,
+		TopicName:    req.Name,
+		AuthorUserID: userID,
 	})
 
 	c.JSON(http.StatusCreated, createdEntity)

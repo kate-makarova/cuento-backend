@@ -101,13 +101,8 @@ func GetHomeCategories(c *gin.Context, db *sql.DB) {
 			subforums.last_post_topic_id,
 			subforums.last_post_topic_name,
 			subforums.last_post_id,
-			COALESCE(subforums.date_last_post,
-				(SELECT MAX(COALESCE(t.date_last_post, t.date_created))
-				 FROM topics t WHERE t.subforum_id = subforums.id AND t.status != 3)) as date_last_post,
-			COALESCE(subforums.last_post_author_user_name,
-				(SELECT u.username FROM topics t JOIN users u ON u.id = t.author_user_id
-				 WHERE t.subforum_id = subforums.id AND t.status != 3
-				 ORDER BY COALESCE(t.date_last_post, t.date_created) DESC LIMIT 1)) as last_post_author_user_name,
+			subforums.date_last_post,
+			subforums.last_post_author_user_name,
 			subforums.show_last_topic,
 			categories.id,
 			categories.name,
@@ -192,13 +187,8 @@ func GetAdminHomeCategories(c *gin.Context, db *sql.DB) {
 			subforums.last_post_topic_id,
 			subforums.last_post_topic_name,
 			subforums.last_post_id,
-			COALESCE(subforums.date_last_post,
-				(SELECT MAX(COALESCE(t.date_last_post, t.date_created))
-				 FROM topics t WHERE t.subforum_id = subforums.id AND t.status != 3)) as date_last_post,
-			COALESCE(subforums.last_post_author_user_name,
-				(SELECT u.username FROM topics t JOIN users u ON u.id = t.author_user_id
-				 WHERE t.subforum_id = subforums.id AND t.status != 3
-				 ORDER BY COALESCE(t.date_last_post, t.date_created) DESC LIMIT 1)) as last_post_author_user_name,
+			subforums.date_last_post,
+			subforums.last_post_author_user_name,
 			subforums.show_last_topic,
 			categories.id,
 			categories.name,

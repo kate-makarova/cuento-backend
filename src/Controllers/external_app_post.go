@@ -244,18 +244,16 @@ func ExternalAppGetActiveTopics(c *gin.Context, db *sql.DB) {
 
 	placeholders := strings.Repeat("?,", len(subforumIDs)-1) + "?"
 	query := fmt.Sprintf(`
-		SELECT t.id, t.status, t.name, t.type,
-		       COALESCE(t.date_last_post, t.date_created) as date_last_post, t.post_number,
+		SELECT t.id, t.status, t.name, t.type, t.date_last_post, t.post_number,
 		       t.author_user_id, u.username,
-		       COALESCE(t.last_post_author_user_id, t.author_user_id) as last_post_author_user_id,
-		       COALESCE(u2.username, u.username) as last_post_author_username,
+		       t.last_post_author_user_id, u2.username,
 		       COALESCE(t.last_post_id, (SELECT MAX(id) FROM posts WHERE topic_id = t.id))
 		FROM topics t
 		JOIN users u ON t.author_user_id = u.id
 		LEFT JOIN users u2 ON t.last_post_author_user_id = u2.id
 		WHERE t.subforum_id IN (%s)
 		  AND t.status = ?
-		ORDER BY COALESCE(t.date_last_post, t.date_created) DESC
+		ORDER BY t.date_last_post DESC
 		LIMIT ? OFFSET ?
 	`, placeholders)
 
