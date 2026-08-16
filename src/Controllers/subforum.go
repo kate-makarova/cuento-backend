@@ -99,14 +99,16 @@ func GetHomeCategories(c *gin.Context, db *sql.DB) {
 			subforums.last_post_topic_id,
 			subforums.last_post_topic_name,
 			subforums.last_post_id,
-			subforums.date_last_post,
-			subforums.last_post_author_user_name,
+			COALESCE(subforums.date_last_post, t_ref.date_created) as date_last_post,
+			COALESCE(subforums.last_post_author_user_name, u_ref.username) as last_post_author_user_name,
 			subforums.show_last_topic,
 			categories.id,
 			categories.name,
 			categories.position
 		FROM categories
 		JOIN subforums ON subforums.category_id = categories.id AND subforums.id IN (%s)
+		LEFT JOIN topics t_ref ON t_ref.id = subforums.last_post_topic_id
+		LEFT JOIN users u_ref ON u_ref.id = t_ref.author_user_id
 		ORDER BY categories.position, subforums.position`, placeholders)
 
 	args := make([]interface{}, len(visibleSubforumIDs))
@@ -185,14 +187,16 @@ func GetAdminHomeCategories(c *gin.Context, db *sql.DB) {
 			subforums.last_post_topic_id,
 			subforums.last_post_topic_name,
 			subforums.last_post_id,
-			subforums.date_last_post,
-			subforums.last_post_author_user_name,
+			COALESCE(subforums.date_last_post, t_ref.date_created) as date_last_post,
+			COALESCE(subforums.last_post_author_user_name, u_ref.username) as last_post_author_user_name,
 			subforums.show_last_topic,
 			categories.id,
 			categories.name,
 			categories.position
 		FROM categories
 		LEFT JOIN subforums ON subforums.category_id = categories.id
+		LEFT JOIN topics t_ref ON t_ref.id = subforums.last_post_topic_id
+		LEFT JOIN users u_ref ON u_ref.id = t_ref.author_user_id
 		ORDER BY categories.position, subforums.position`
 
 	rows, err := db.Query(query)
