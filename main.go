@@ -942,6 +942,12 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	publicRouter.GET("/external-app/topic-first-post", "Get the first post content of a topic (authenticated via X-Api-Key header)", func(c *gin.Context) {
 		Controllers.ExternalAppGetTopicFirstPost(c, Services.DB)
 	})
+	publicRouter.GET("/external-app/get-post/:id", "Get a post by ID (authenticated via X-Api-Key header)", func(c *gin.Context) {
+		Controllers.ExternalAppGetPost(c, Services.DB)
+	})
+	publicRouter.POST("/external-app/update-post/:id", "Update a post by ID (authenticated via X-Api-Key header)", func(c *gin.Context) {
+		Controllers.ExternalAppUpdatePost(c, Services.DB)
+	})
 
 	// External apps routes
 	protectedRouter.GET("/admin/external-app/list", "Get list of all external apps", func(c *gin.Context) {
