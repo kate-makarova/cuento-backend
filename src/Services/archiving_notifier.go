@@ -119,7 +119,7 @@ func runArchivingNotifications(db *sql.DB) {
 			JOIN (
 				SELECT character_id, MAX(end_date) AS end_date
 				FROM auto_archiving_immunity
-				WHERE start_date <= NOW() AND end_date >= NOW()
+				WHERE end_date >= NOW()
 				GROUP BY character_id
 			) aai_exp ON aai_exp.character_id = cb.id
 			LEFT JOIN absent_users au ON au.user_id = cb.user_id
