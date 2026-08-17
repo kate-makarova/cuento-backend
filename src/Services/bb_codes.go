@@ -88,6 +88,7 @@ func LinkifyURLs(input, domain string, db *sql.DB) string {
 	return result
 }
 var audioExtRegexp = regexp.MustCompile(`(?i)\.(mp3|ogg|wav|flac|aac|m4a|opus|webm)(\?.*)?$`)
+var cssDimensionRe = regexp.MustCompile(`^[a-zA-Z0-9.%\-]+$`)
 
 // getRawArg extracts a named arg directly from the raw tag string, bypassing
 // the bbcode library's quoted-value parser which corrupts multi-byte UTF-8.
@@ -400,6 +401,34 @@ func GetBBCompiler() bbcode.Compiler {
 			out.AppendChild(bbcode.NewHTMLTag(""))
 		}
 		return out, false
+	})
+
+	compiler.SetTag("table", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "table"
+		out.Attrs["style"] = "border-collapse: collapse;"
+		return out, true
+	})
+
+	compiler.SetTag("tr", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "tr"
+		return out, true
+	})
+
+	compiler.SetTag("td", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "td"
+		if width, ok := getRawArg(node, "width"); ok && cssDimensionRe.MatchString(width) {
+			out.Attrs["style"] = fmt.Sprintf("width: %s;", width)
+		}
+		if colspan, ok := getArgInt(node, "colspan", 1, 100); ok {
+			out.Attrs["colspan"] = strconv.Itoa(colspan)
+		}
+		if rowspan, ok := getArgInt(node, "rowspan", 1, 100); ok {
+			out.Attrs["rowspan"] = strconv.Itoa(rowspan)
+		}
+		return out, true
 	})
 
 	compiler.SetTag("img", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
