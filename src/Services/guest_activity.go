@@ -10,6 +10,11 @@ import (
 
 const GuestActivityWindow = 10 * time.Minute
 
+type GuestEntry struct {
+	ShortID    string    // last 6 chars of fingerprint hash
+	LastActive time.Time
+}
+
 type GuestActivityStorage struct {
 	mu     sync.Mutex
 	guests map[string]time.Time // fingerprint hash -> last seen
@@ -37,6 +42,22 @@ func (s *GuestActivityStorage) Track(fingerprint string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.guests[fingerprint] = time.Now()
+}
+
+func (s *GuestActivityStorage) GetActiveGuests() []GuestEntry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cutoff := time.Now().Add(-GuestActivityWindow)
+	entries := make([]GuestEntry, 0)
+	for fp, t := range s.guests {
+		if t.After(cutoff) {
+			entries = append(entries, GuestEntry{
+				ShortID:    fp[len(fp)-6:],
+				LastActive: t,
+			})
+		}
+	}
+	return entries
 }
 
 func (s *GuestActivityStorage) Count() int {

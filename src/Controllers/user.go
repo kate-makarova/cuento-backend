@@ -1249,6 +1249,7 @@ func PrivateKeyCheck(c *gin.Context, db *sql.DB) {
 type ActiveUserInfo struct {
 	UserID              int     `json:"user_id"`
 	Username            string  `json:"username"`
+	IsGuest             bool    `json:"is_guest,omitempty"`
 	CurrentPageType     string  `json:"current_page_type"`
 	CurrentPageId       *string `json:"current_page_id"`
 	CurrentPageName     *string `json:"current_page_name"`
@@ -1290,6 +1291,14 @@ func buildActiveUserActivity(forUserID int, db *sql.DB) []ActiveUserInfo {
 		}
 
 		result = append(result, info)
+	}
+
+	for _, g := range Services.GuestActivity.GetActiveGuests() {
+		result = append(result, ActiveUserInfo{
+			IsGuest:             true,
+			Username:            "Guest#" + g.ShortID,
+			LastActiveLocalized: Services.LocalizeTime(g.LastActive, timezone),
+		})
 	}
 
 	return result
