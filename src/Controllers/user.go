@@ -1294,11 +1294,24 @@ func buildActiveUserActivity(forUserID int, db *sql.DB) []ActiveUserInfo {
 	}
 
 	for _, g := range Services.GuestActivity.GetActiveGuests() {
-		result = append(result, ActiveUserInfo{
+		info := ActiveUserInfo{
 			IsGuest:             true,
 			Username:            "Guest#" + g.ShortID,
+			CurrentPageType:     g.CurrentPageType,
 			LastActiveLocalized: Services.LocalizeTime(g.LastActive, timezone),
-		})
+		}
+		if g.CurrentPageType == "topic" && g.CurrentPageId != "" {
+			var subforumID int
+			var topicName string
+			err := db.QueryRow("SELECT subforum_id, name FROM topics WHERE id = ?", g.CurrentPageId).Scan(&subforumID, &topicName)
+			if err == nil && visibleSubforumSet[subforumID] {
+				info.CurrentPageId = &g.CurrentPageId
+				info.CurrentPageName = &topicName
+			}
+		} else if g.CurrentPageType != "" && g.CurrentPageId != "" {
+			info.CurrentPageId = &g.CurrentPageId
+		}
+		result = append(result, info)
 	}
 
 	return result
@@ -1320,6 +1333,21 @@ func BroadcastActiveUserActivity(db *sql.DB) {
 func GetActiveUserActivity(c *gin.Context, db *sql.DB) {
 	currentUserID := Services.GetUserIdFromContext(c)
 	c.JSON(http.StatusOK, buildActiveUserActivity(currentUserID, db))
+}
+
+func UpdateGuestLocation(c *gin.Context) {
+	var req struct {
+		PageType string `json:"page_type" binding:"required"`
+		PageId   string `json:"page_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	fingerprint := Services.GuestFingerprint(c.Request)
+	Services.GuestActivity.UpdateLocation(fingerprint, req.PageType, req.PageId)
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 func GetUserRoles(c *gin.Context, db *sql.DB) {
