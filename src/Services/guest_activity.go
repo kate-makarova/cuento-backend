@@ -20,12 +20,13 @@ var GuestActivity = &GuestActivityStorage{
 }
 
 func GuestFingerprint(r *http.Request) string {
-	raw := fmt.Sprintf("%s|%s|%s|%s|%s|%s",
+	raw := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%s",
 		r.Header.Get("User-Agent"),
 		r.Header.Get("Accept-Language"),
 		r.Header.Get("Accept"),
 		r.Header.Get("Accept-Encoding"),
 		r.Header.Get("X-Screen-Resolution"),
+		r.Header.Get("X-Color-Depth"),
 		r.Header.Get("Sec-CH-UA"),
 	)
 	h := sha256.Sum256([]byte(raw))
