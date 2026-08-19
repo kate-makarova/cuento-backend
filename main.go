@@ -1012,6 +1012,32 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 		Controllers.UpdateUserCharacterMap(c, Services.DB)
 	})
 
+	// AI Agent routes (admin only)
+	protectedRouter.GET("/admin/ai-agent/list", "Get list of all AI agents", func(c *gin.Context) {
+		Controllers.AdminListAiAgents(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/ai-agent/:id", "Get a single AI agent by ID", func(c *gin.Context) {
+		Controllers.AdminGetAiAgent(c, Services.DB)
+	})
+protectedRouter.GET("/admin/ai-agent-implementation/list", "Get list of all AI agent implementations", func(c *gin.Context) {
+		Controllers.AdminListAiAgentImplementations(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/ai-agent-implementation/:id", "Get a single AI agent implementation by ID", func(c *gin.Context) {
+		Controllers.AdminGetAiAgentImplementation(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/ai-agent-implementation/create", "Create a new AI agent implementation", func(c *gin.Context) {
+		Controllers.AdminCreateAiAgentImplementation(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/ai-agent-implementation/update/:id", "Update an AI agent implementation", func(c *gin.Context) {
+		Controllers.AdminUpdateAiAgentImplementation(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/ai-agent-implementation/delete/:id", "Delete an AI agent implementation", func(c *gin.Context) {
+		Controllers.AdminDeleteAiAgentImplementation(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/ai-agent-implementation/:id/call", "Trigger an AI agent implementation", func(c *gin.Context) {
+		Controllers.AdminCallAiAgentImplementation(c, Services.DB)
+	})
+
 	// WebSocket route with special authentication
 	wsGroup := r.Group("/")
 	wsGroup.Use(Middlewares.WebSocketAuthMiddleware())
