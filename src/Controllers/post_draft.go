@@ -126,8 +126,7 @@ func GetLatestPostDraft(c *gin.Context, db *sql.DB) {
 		topicID, userID,
 	).Scan(&latestDraftID)
 	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "No unpublished draft found for this topic"})
-		c.Abort()
+		c.JSON(http.StatusOK, []PostDraftListResponse{})
 		return
 	}
 
