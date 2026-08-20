@@ -240,3 +240,10 @@ role_id,type,permission
 3,0,/admin/ai-agent-implementation/update/:id
 3,0,/admin/ai-agent-implementation/delete/:id
 3,0,/admin/ai-agent-implementation/:id/call
+2,0,/post-draft/topic/:topic_id/latest
+2,0,/post-draft/list/:draft_id
+2,0,/post-draft/:id
+2,0,/post-draft/create
+2,0,/post-draft/update/:id
+2,0,/post-draft/delete/:id
+2,0,/post-draft/delete-group/:draft_id

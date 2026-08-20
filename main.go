@@ -74,7 +74,7 @@ func main() {
 	r := gin.Default()
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true
-	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "X-Screen-Resolution", "Sec-CH-UA"}
+	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "X-Screen-Resolution", "Sec-CH-UA", "X-Color-Depth"}
 	r.Use(cors.New(config))
 
 	// Apply error middleware globally
@@ -451,6 +451,27 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	})
 	protectedRouter.POST("/post/delete/:id", "Soft-delete a post by ID", func(c *gin.Context) {
 		Controllers.DeletePost(c, Services.DB)
+	})
+	protectedRouter.GET("/post-draft/topic/:topic_id/latest", "Get the latest unpublished draft for a topic", func(c *gin.Context) {
+		Controllers.GetLatestPostDraft(c, Services.DB)
+	})
+	protectedRouter.GET("/post-draft/list/:draft_id", "List all versions of a draft", func(c *gin.Context) {
+		Controllers.ListPostDrafts(c, Services.DB)
+	})
+	protectedRouter.GET("/post-draft/:id", "Get a single draft version by ID", func(c *gin.Context) {
+		Controllers.GetPostDraft(c, Services.DB)
+	})
+	protectedRouter.POST("/post-draft/create", "Create a new draft version", func(c *gin.Context) {
+		Controllers.CreatePostDraft(c, Services.DB)
+	})
+	protectedRouter.POST("/post-draft/update/:id", "Update a draft version", func(c *gin.Context) {
+		Controllers.UpdatePostDraft(c, Services.DB)
+	})
+	protectedRouter.GET("/post-draft/delete/:id", "Delete a single draft version", func(c *gin.Context) {
+		Controllers.DeletePostDraft(c, Services.DB)
+	})
+	protectedRouter.GET("/post-draft/delete-group/:draft_id", "Delete all versions of a draft", func(c *gin.Context) {
+		Controllers.DeletePostDraftGroup(c, Services.DB)
 	})
 	protectedRouter.POST("/character-profile/update/:id", "Update character profile by ID", func(c *gin.Context) {
 		Controllers.CharacterProfileUpdate(c, Services.DB)

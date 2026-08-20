@@ -1158,3 +1158,21 @@ INSERT IGNORE INTO ai_agents (id, title, short_description, handler) VALUES (
     'Creates a summary of game events for the given period of time',
     'GameDigest'
 );
+
+create table post_drafts
+(
+    id           int             auto_increment primary key,
+    draft_id     varchar(36)     not null,
+    user_id      int             not null,
+    character_id bigint unsigned  null,
+    topic_id     bigint unsigned null,
+    date_created datetime        not null default current_timestamp,
+    is_manual    tinyint(1)      not null default 0,
+    is_published tinyint(1)      not null default 0,
+    post_id      bigint unsigned null,
+    content      text            null,
+    index idx_post_drafts_draft_id (draft_id),
+    index idx_post_drafts_user_id (user_id),
+    constraint fk_post_drafts_user      foreign key (user_id)      references users (id) on delete cascade,
+    constraint fk_post_drafts_character foreign key (character_id) references character_base (id) on delete set null
+);
