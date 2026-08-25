@@ -286,6 +286,7 @@ CREATE TABLE posts (
                        character_profile_id BIGINT UNSIGNED,
                        use_character_profile BOOLEAN DEFAULT FALSE,
                        is_deleted TINYINT NULL,
+                       is_gm_post TINYINT NULL,
                        CONSTRAINT fk_posts_topic
                            FOREIGN KEY (topic_id) REFERENCES topics (id) ON DELETE CASCADE,
                        CONSTRAINT fk_posts_user
