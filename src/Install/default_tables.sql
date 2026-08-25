@@ -1216,6 +1216,17 @@ create table npc_character_base
     constraint fk_npc_character_campaign foreign key (campaign_id) references campaigns (id) on delete set null
 );
 
+create table npc_character_posts
+(
+    npc_character_id int             not null,
+    post_id          bigint unsigned not null,
+    topic_id         bigint unsigned not null,
+    primary key (npc_character_id, post_id),
+    constraint fk_npc_character_posts_npc   foreign key (npc_character_id) references npc_character_base (id) on delete cascade,
+    constraint fk_npc_character_posts_post  foreign key (post_id)          references posts (id) on delete cascade,
+    constraint fk_npc_character_posts_topic foreign key (topic_id)         references topics (id) on delete cascade
+);
+
 create table npc_character_main
 (
     entity_id                 int            null,

@@ -47,6 +47,44 @@ func checkNpcEditPermission(userID int, npc *Entities.NpcCharacter, db *sql.DB) 
 	return Services.HasPermission(userID, "npc_character_edit", db)
 }
 
+func loadNpcTopics(npcID int, db *sql.DB) []Entities.NpcCharacterTopic {
+	rows, err := db.Query(`
+		SELECT ncp.topic_id, t.name, ncp.post_id
+		FROM npc_character_posts ncp
+		JOIN topics t ON t.id = ncp.topic_id
+		WHERE ncp.npc_character_id = ?
+		ORDER BY ncp.topic_id ASC, ncp.post_id ASC
+	`, npcID)
+	if err != nil {
+		return []Entities.NpcCharacterTopic{}
+	}
+	defer rows.Close()
+
+	topicIdx := map[int]int{}
+	var topics []Entities.NpcCharacterTopic
+	for rows.Next() {
+		var topicID, postID int
+		var topicTitle string
+		if rows.Scan(&topicID, &topicTitle, &postID) != nil {
+			continue
+		}
+		if idx, ok := topicIdx[topicID]; ok {
+			topics[idx].PostIds = append(topics[idx].PostIds, postID)
+		} else {
+			topicIdx[topicID] = len(topics)
+			topics = append(topics, Entities.NpcCharacterTopic{
+				TopicId:    topicID,
+				TopicTitle: topicTitle,
+				PostIds:    []int{postID},
+			})
+		}
+	}
+	if topics == nil {
+		return []Entities.NpcCharacterTopic{}
+	}
+	return topics
+}
+
 func GetNpcCharacterList(c *gin.Context, db *sql.DB) {
 	query := "SELECT id, name, avatar, campaign_id FROM npc_character_base"
 	var args []interface{}
@@ -109,6 +147,8 @@ func GetNpcCharacter(c *gin.Context, db *sql.DB) {
 		c.Abort()
 		return
 	}
+
+	npc.Topics = loadNpcTopics(id, db)
 
 	c.JSON(http.StatusOK, npc)
 }
