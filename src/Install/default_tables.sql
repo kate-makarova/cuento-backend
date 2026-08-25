@@ -1170,6 +1170,24 @@ create table campaigns
     end_date     datetime     null
 );
 
+create table campaign_characters
+(
+    campaign_id  int             not null,
+    character_id bigint unsigned not null,
+    primary key (campaign_id, character_id),
+    constraint fk_campaign_characters_campaign   foreign key (campaign_id)  references campaigns (id) on delete cascade,
+    constraint fk_campaign_characters_character  foreign key (character_id) references character_base (id) on delete cascade
+);
+
+create table campaign_episodes
+(
+    campaign_id int not null,
+    episode_id  int not null,
+    primary key (campaign_id, episode_id),
+    constraint fk_campaign_episodes_campaign foreign key (campaign_id) references campaigns (id) on delete cascade,
+    constraint fk_campaign_episodes_episode  foreign key (episode_id)  references episode_base (id) on delete cascade
+);
+
 create table post_drafts
 (
     id           int             auto_increment primary key,

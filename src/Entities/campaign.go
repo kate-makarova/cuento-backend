@@ -19,4 +19,6 @@ type Campaign struct {
 	DateCreated time.Time      `json:"date_created" db:"date_created"`
 	StartDate   *time.Time     `json:"start_date" db:"start_date"`
 	EndDate     *time.Time     `json:"end_date" db:"end_date"`
+	Characters  []ShortCharacter `json:"characters" db:"-"`
+	Episodes    []Episode        `json:"episodes" db:"-"`
 }
