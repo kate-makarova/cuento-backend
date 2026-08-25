@@ -1188,6 +1188,32 @@ create table campaign_episodes
     constraint fk_campaign_episodes_episode  foreign key (episode_id)  references episode_base (id) on delete cascade
 );
 
+create table npc_character_base
+(
+    id     int          auto_increment primary key,
+    name   varchar(255) not null,
+    avatar varchar(255) null
+);
+
+create table npc_character_main
+(
+    entity_id                 int            null,
+    field_machine_name        varchar(255)   null,
+    field_type                varchar(50)    null,
+    value_int                 int            null,
+    value_decimal             decimal(10, 2) null,
+    value_string              varchar(255)   null,
+    value_text                text           null,
+    value_date                varchar(255)   null,
+    value_free_formatted_date json           null,
+    sort_free_formatted_date  bigint         null
+);
+
+create table npc_character_flattened
+(
+    entity_id int primary key
+);
+
 create table post_drafts
 (
     id           int             auto_increment primary key,
