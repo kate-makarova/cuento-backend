@@ -22,4 +22,5 @@ type Campaign struct {
 	Characters    []ShortCharacter `json:"characters" db:"-"`
 	Episodes      []Episode        `json:"episodes" db:"-"`
 	NpcCharacters []NpcCharacter   `json:"npc_characters" db:"-"`
+	GameMasters   []ShortUser      `json:"game_masters" db:"-"`
 }
