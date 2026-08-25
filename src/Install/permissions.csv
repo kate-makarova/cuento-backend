@@ -252,3 +252,9 @@ role_id,type,permission
 2,0,/campaign/create
 2,0,/campaign/update/:id
 2,0,/campaign/delete/:id
+2,0,/npc-character/list
+2,0,/npc-character/:id
+2,0,/npc-character/create
+2,0,/npc-character/update/:id
+2,0,/npc-character/delete/:id
+3,0,npc_character_edit

@@ -783,6 +783,21 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	protectedRouter.POST("/admin/design-draft/publish/:id", "Publish a design draft to the live CSS files", func(c *gin.Context) {
 		Controllers.PublishDesignDraft(c, Services.DB)
 	})
+	protectedRouter.GET("/npc-character/list", "Get list of NPC characters", func(c *gin.Context) {
+		Controllers.GetNpcCharacterList(c, Services.DB)
+	})
+	protectedRouter.GET("/npc-character/:id", "Get an NPC character by ID", func(c *gin.Context) {
+		Controllers.GetNpcCharacter(c, Services.DB)
+	})
+	protectedRouter.POST("/npc-character/create", "Create an NPC character", func(c *gin.Context) {
+		Controllers.CreateNpcCharacter(c, Services.DB)
+	})
+	protectedRouter.POST("/npc-character/update/:id", "Update an NPC character by ID", func(c *gin.Context) {
+		Controllers.UpdateNpcCharacter(c, Services.DB)
+	})
+	protectedRouter.POST("/npc-character/delete/:id", "Delete an NPC character by ID", func(c *gin.Context) {
+		Controllers.DeleteNpcCharacter(c, Services.DB)
+	})
 	protectedRouter.GET("/campaign/:id", "Get a campaign by ID", func(c *gin.Context) {
 		Controllers.GetCampaign(c, Services.DB)
 	})
