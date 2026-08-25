@@ -348,7 +348,7 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 	// 3. Construct the main query
 	baseQuery := fmt.Sprintf(`
 		SELECT
-			p.id, p.author_user_id, p.date_created, p.content, p.use_character_profile,
+			p.id, p.author_user_id, p.date_created, p.content, p.use_character_profile, p.is_gm_post,
 			u.username, u.avatar, u.total_posts, u.total_general_posts, p.guest_name,
 			cp.id as character_profile_id, cp.character_id, cb.name as character_name, cp.avatar as character_avatar, cp.mask_name, cp.is_mask, cp.signature as character_signature,
 			u.signature as user_signature,
@@ -441,6 +441,10 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 		post.Content = rowMap["content"].(string)
 		post.ContentHtml = Services.LinkifyURLs(Services.ParseBBCode(post.Content), domain, db)
 		post.UseCharacterProfile, _ = strconv.ParseBool(rowMap["use_character_profile"].(string))
+		if v, ok := rowMap["is_gm_post"]; ok {
+			isGmPost := v.(string) == "1"
+			post.IsGmPost = &isGmPost
+		}
 		subforumID, _ = strconv.Atoi(rowMap["subforum_id"].(string))
 		topicTypeInt, _ := strconv.Atoi(rowMap["topic_type"].(string))
 		if Entities.TopicType(topicTypeInt) != Entities.EpisodeTopic {
