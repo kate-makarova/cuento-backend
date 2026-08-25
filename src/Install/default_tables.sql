@@ -1159,6 +1159,17 @@ INSERT IGNORE INTO ai_agents (id, title, short_description, handler) VALUES (
     'GameDigest'
 );
 
+create table campaigns
+(
+    id           int          auto_increment primary key,
+    title        varchar(255) not null,
+    summary      text         not null,
+    status       tinyint      not null default 0,
+    date_created datetime     not null default current_timestamp,
+    start_date   datetime     null,
+    end_date     datetime     null
+);
+
 create table post_drafts
 (
     id           int             auto_increment primary key,
