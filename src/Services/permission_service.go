@@ -9,6 +9,15 @@ import (
 	"strings"
 )
 
+func IsGameMasterOfCampaign(userID, campaignID int, db *sql.DB) (bool, error) {
+	var count int
+	err := db.QueryRow(
+		"SELECT COUNT(*) FROM campaign_game_masters WHERE campaign_id = ? AND user_id = ?",
+		campaignID, userID,
+	).Scan(&count)
+	return count > 0, err
+}
+
 type PermissionType int
 
 const (

@@ -1209,9 +1209,11 @@ create table campaign_npc_characters
 
 create table npc_character_base
 (
-    id     int          auto_increment primary key,
-    name   varchar(255) not null,
-    avatar varchar(255) null
+    id          int          auto_increment primary key,
+    name        varchar(255) not null,
+    avatar      varchar(255) null,
+    campaign_id int          null,
+    constraint fk_npc_character_campaign foreign key (campaign_id) references campaigns (id) on delete set null
 );
 
 create table npc_character_main
