@@ -247,3 +247,8 @@ role_id,type,permission
 2,0,/post-draft/update/:id
 2,0,/post-draft/delete/:id
 2,0,/post-draft/delete-group/:draft_id
+2,0,/campaign/:id
+2,0,/campaign/list
+3,0,/admin/campaign/create
+3,0,/admin/campaign/update/:id
+3,0,/admin/campaign/delete/:id

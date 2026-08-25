@@ -783,6 +783,21 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	protectedRouter.POST("/admin/design-draft/publish/:id", "Publish a design draft to the live CSS files", func(c *gin.Context) {
 		Controllers.PublishDesignDraft(c, Services.DB)
 	})
+	protectedRouter.GET("/campaign/:id", "Get a campaign by ID", func(c *gin.Context) {
+		Controllers.GetCampaign(c, Services.DB)
+	})
+	protectedRouter.GET("/campaign/list", "Get list of all campaigns", func(c *gin.Context) {
+		Controllers.GetCampaignList(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/campaign/create", "Create a new campaign", func(c *gin.Context) {
+		Controllers.CreateCampaign(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/campaign/update/:id", "Update a campaign by ID", func(c *gin.Context) {
+		Controllers.UpdateCampaign(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/campaign/delete/:id", "Delete a campaign by ID", func(c *gin.Context) {
+		Controllers.DeleteCampaign(c, Services.DB)
+	})
 	protectedRouter.POST("/admin/additional-navlink/create", "Create a new additional navlink", func(c *gin.Context) {
 		Controllers.CreateAdditionalNavlink(c, Services.DB)
 	})
