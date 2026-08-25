@@ -1188,6 +1188,15 @@ create table campaign_episodes
     constraint fk_campaign_episodes_episode  foreign key (episode_id)  references episode_base (id) on delete cascade
 );
 
+create table campaign_npc_characters
+(
+    campaign_id      int not null,
+    npc_character_id int not null,
+    primary key (campaign_id, npc_character_id),
+    constraint fk_campaign_npc_characters_campaign foreign key (campaign_id)      references campaigns (id) on delete cascade,
+    constraint fk_campaign_npc_characters_npc      foreign key (npc_character_id) references npc_character_base (id) on delete cascade
+);
+
 create table npc_character_base
 (
     id     int          auto_increment primary key,
