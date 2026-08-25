@@ -247,6 +247,9 @@ role_id,type,permission
 2,0,/post-draft/update/:id
 2,0,/post-draft/delete/:id
 2,0,/post-draft/delete-group/:draft_id
+1,0,/campaign/:id
+1,0,/campaign/list
+1,0,/npc-character/:id
 2,0,/campaign/:id
 2,0,/campaign/list
 2,0,/campaign/create
