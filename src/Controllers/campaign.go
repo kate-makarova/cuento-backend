@@ -3,6 +3,7 @@ package Controllers
 import (
 	"cuento-backend/src/Entities"
 	"cuento-backend/src/Middlewares"
+	"cuento-backend/src/Services"
 	"database/sql"
 	"net/http"
 	"strconv"
@@ -225,6 +226,10 @@ func GetCampaign(c *gin.Context, db *sql.DB) {
 
 	loadCampaignRelations(&campaign, db)
 
+	userID := Services.GetUserIdFromContext(c)
+	isGm, _ := Services.IsGameMasterOfCampaign(userID, campaign.Id, db)
+	campaign.IsGm = &isGm
+
 	c.JSON(http.StatusOK, campaign)
 }
 
@@ -249,7 +254,29 @@ func GetCampaignList(c *gin.Context, db *sql.DB) {
 		campaign.Episodes = []Entities.Episode{}
 		campaign.NpcCharacters = []Entities.NpcCharacter{}
 		campaign.GameMasters = []Entities.ShortUser{}
+		isGm := false
+		campaign.IsGm = &isGm
 		campaigns = append(campaigns, campaign)
+	}
+	rows.Close()
+
+	userID := Services.GetUserIdFromContext(c)
+	if userID != 0 && len(campaigns) > 0 {
+		gmRows, err := db.Query("SELECT campaign_id FROM campaign_game_masters WHERE user_id = ?", userID)
+		if err == nil {
+			gmSet := make(map[int]bool)
+			for gmRows.Next() {
+				var cid int
+				if gmRows.Scan(&cid) == nil {
+					gmSet[cid] = true
+				}
+			}
+			gmRows.Close()
+			for i := range campaigns {
+				isGm := gmSet[campaigns[i].Id]
+				campaigns[i].IsGm = &isGm
+			}
+		}
 	}
 
 	c.JSON(http.StatusOK, campaigns)
