@@ -1788,6 +1788,61 @@ func DeleteCharacterClaim(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, gin.H{"message": "Claim deleted"})
 }
 
+// CloseActiveClaimRecord expires the active claim record for a given claim and cleans up references on character_claim and wanted_character_base.
+func CloseActiveClaimRecord(c *gin.Context, db *sql.DB) {
+	claimID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid claim ID"})
+		c.Abort()
+		return
+	}
+
+	var recordID int
+	err = db.QueryRow(
+		"SELECT id FROM claim_record WHERE claim_id = ? AND (claim_expiration_date IS NULL OR claim_expiration_date > NOW()) LIMIT 1",
+		claimID,
+	).Scan(&recordID)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "No active claim record found for this claim"})
+		c.Abort()
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start transaction"})
+		c.Abort()
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("UPDATE claim_record SET claim_expiration_date = NOW() WHERE id = ?", recordID); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to expire claim record: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	if _, err := tx.Exec("UPDATE character_claim SET claim_record_id = NULL WHERE claim_record_id = ?", recordID); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to unlink claim record from claim: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	if _, err := tx.Exec("UPDATE wanted_character_base SET is_claimed = false WHERE character_claim_id = ?", claimID); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to reset wanted character claim status: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Claim record closed"})
+}
+
 func DeactivateCharacter(c *gin.Context, db *sql.DB) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {

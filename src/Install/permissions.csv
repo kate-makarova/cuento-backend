@@ -179,6 +179,7 @@ role_id,type,permission
 3,0,/admin/qdrant/subforum-matrix/update
 3,0,/admin/smile/upload
 3,0,/character-claim/delete/:id
+3,0,/admin/claim-record/:id/close
 3,0,/admin/character-list
 3,0,/admin/character/:id/protection-history
 3,0,/admin/character/database-field-schema
@@ -241,6 +242,7 @@ role_id,type,permission
 3,0,/admin/ai-agent-implementation/delete/:id
 3,0,/admin/ai-agent-implementation/:id/call
 2,0,/post-draft/topic/:topic_id/latest
+2,0,/post-draft/entity/:entity_type/latest
 2,0,/post-draft/list/:draft_id
 2,0,/post-draft/:id
 2,0,/post-draft/create

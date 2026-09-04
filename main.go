@@ -406,6 +406,9 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	protectedRouter.POST("/character-claim/delete/:id", "Delete a character claim", func(c *gin.Context) {
 		Controllers.DeleteCharacterClaim(c, Services.DB)
 	})
+	protectedRouter.POST("/admin/claim-record/:id/close", "Close an active claim record", func(c *gin.Context) {
+		Controllers.CloseActiveClaimRecord(c, Services.DB)
+	})
 
 	// Character Template routes
 	publicRouter.GET("/template/episode/get", "Get episode template (public)", func(c *gin.Context) {
@@ -454,6 +457,9 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	})
 	protectedRouter.GET("/post-draft/topic/:topic_id/latest", "Get the latest unpublished draft for a topic", func(c *gin.Context) {
 		Controllers.GetLatestPostDraft(c, Services.DB)
+	})
+	protectedRouter.GET("/post-draft/entity/:entity_type/latest", "Get the latest unpublished entity draft by type", func(c *gin.Context) {
+		Controllers.GetLatestEntityDraft(c, Services.DB)
 	})
 	protectedRouter.GET("/post-draft/list/:draft_id", "List all versions of a draft", func(c *gin.Context) {
 		Controllers.ListPostDrafts(c, Services.DB)
