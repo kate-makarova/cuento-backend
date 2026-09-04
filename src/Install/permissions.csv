@@ -30,6 +30,10 @@ role_id,type,permission
 2,0,/episode/activate/:id
 2,0,/episode/create
 2,0,/episode/deactivate/:id
+2,0,/episode/:id/status
+2,0,/episode/:id/my-custom-avatars
+2,0,/episode/:id/character/:character_id/custom-avatar
+2,0,/episode/:id/character/:character_id/custom-avatar/remove
 2,0,/episode/preview
 2,0,/episode/update/:id
 2,0,/features

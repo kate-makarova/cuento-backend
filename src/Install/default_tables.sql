@@ -327,6 +327,7 @@ create table episode_main
 create table episode_character
 		(episode_id bigint unsigned          null,
 		character_id bigint unsigned          null,
+		custom_avatar varchar(500)            null,
          foreign key (episode_id) references episode_base (id),
          foreign key (character_id) references character_base (id)
 		);

@@ -554,6 +554,18 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	protectedRouter.POST("/episode/deactivate/:id", "Deactivate an episode", func(c *gin.Context) {
 		Controllers.DeactivateEpisode(c, Services.DB)
 	})
+	protectedRouter.POST("/episode/:id/status", "Update episode status (participants only)", func(c *gin.Context) {
+		Controllers.UpdateEpisodeStatus(c, Services.DB)
+	})
+	protectedRouter.GET("/episode/:id/my-custom-avatars", "Get custom avatars for the current user's characters in an episode", func(c *gin.Context) {
+		Controllers.GetMyEpisodeCustomAvatars(c, Services.DB)
+	})
+	protectedRouter.POST("/episode/:id/character/:character_id/custom-avatar", "Set a custom avatar for a character in an episode", func(c *gin.Context) {
+		Controllers.SetEpisodeCustomAvatar(c, Services.DB)
+	})
+	protectedRouter.POST("/episode/:id/character/:character_id/custom-avatar/remove", "Remove a character's custom avatar in an episode", func(c *gin.Context) {
+		Controllers.DeleteEpisodeCustomAvatar(c, Services.DB)
+	})
 	protectedRouter.POST("/episode/:id/warnings-consent", "Record that the user has seen the warnings for an episode", func(c *gin.Context) {
 		Controllers.AddEpisodeWarningsConsent(c, Services.DB)
 	})
