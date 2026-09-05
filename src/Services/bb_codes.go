@@ -255,7 +255,7 @@ func GetBBCompiler() bbcode.Compiler {
 		out := bbcode.NewHTMLTag("")
 		out.Name = "div"
 
-		style := "display: grid;"
+		style := "display: grid; max-width: 100%;"
 		if cols, ok := getArgInt(node, "columns", 1, 12); ok {
 			style += fmt.Sprintf(" grid-template-columns: repeat(%d, 1fr);", cols)
 		}
