@@ -277,7 +277,7 @@ func GetBBCompiler() bbcode.Compiler {
 		out := bbcode.NewHTMLTag("")
 		out.Name = "div"
 
-		var style string
+		style := "min-width: 0;"
 		if col, ok := getArgInt(node, "col", 1, 12); ok {
 			style += fmt.Sprintf("grid-column-start: %d;", col)
 		}
