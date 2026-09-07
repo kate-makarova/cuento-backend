@@ -33,6 +33,9 @@ func main() {
 	Controllers.InitUserRefreshCallbacks()
 	Services.InitHealthMonitor()
 
+	// Backfill absence_timer_start for any active characters that don't have an entry yet.
+	go Services.InitializeAbsenceTimerStart(Services.DB)
+
 	// Start archiving warning notifier (checks daily, sends notifications at 10/5/3/2/1 days before archiving)
 	Services.StartArchivingNotifier(Services.DB)
 
