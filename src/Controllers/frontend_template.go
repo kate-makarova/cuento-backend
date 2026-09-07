@@ -5,6 +5,7 @@ import (
 	"cuento-backend/src/Services"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -66,6 +67,27 @@ var frontendComponentDefs = []frontendComponentDef{
 		DefaultTemplatePath: "src/app/components/wanted-character-header/wanted-character-header.component.html",
 		DescriptionKey:      "frontend_component.src_app_components_wanted_character_header.description",
 	},
+}
+
+func getComponentFile(c *gin.Context, db *sql.DB, path string) {
+	cfg, err := Services.GetGitHubConfig(db)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "GitHub config error: " + err.Error()})
+		c.Abort()
+		return
+	}
+	content, err := Services.GitHubGetFile(cfg, path)
+	if err != nil {
+		var ghErr *Services.GitHubError
+		if errors.As(err, &ghErr) && ghErr.StatusCode == http.StatusNotFound {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "File not found in repository: " + path})
+		} else {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch file from GitHub: " + err.Error()})
+		}
+		c.Abort()
+		return
+	}
+	c.String(http.StatusOK, content)
 }
 
 func findComponentDef(name string) (frontendComponentDef, bool) {
@@ -152,19 +174,7 @@ func GetFrontendComponentTemplate(c *gin.Context, db *sql.DB) {
 	}
 
 	// No DB record — fetch the unmodified default from GitHub
-	cfg, ghErr := Services.GetGitHubConfig(db)
-	if ghErr != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "GitHub config error: " + ghErr.Error()})
-		c.Abort()
-		return
-	}
-	content, ghErr := Services.GitHubGetFile(cfg, def.DefaultTemplatePath)
-	if ghErr != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Default template not found in repository"})
-		c.Abort()
-		return
-	}
-	c.String(http.StatusOK, content)
+	getComponentFile(c, db, def.DefaultTemplatePath)
 }
 
 func GetFrontendComponentDefaultTemplate(c *gin.Context, db *sql.DB) {
@@ -175,20 +185,7 @@ func GetFrontendComponentDefaultTemplate(c *gin.Context, db *sql.DB) {
 		c.Abort()
 		return
 	}
-
-	cfg, err := Services.GetGitHubConfig(db)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "GitHub config error: " + err.Error()})
-		c.Abort()
-		return
-	}
-	content, err := Services.GitHubGetFile(cfg, def.DefaultTemplatePath)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Default template not found in repository"})
-		c.Abort()
-		return
-	}
-	c.String(http.StatusOK, content)
+	getComponentFile(c, db, def.DefaultTemplatePath)
 }
 
 type CustomTemplateVersion struct {
