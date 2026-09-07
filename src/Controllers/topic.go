@@ -293,7 +293,7 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 		if err == nil {
 			// Determine the page based on the post's position in the topic
 			var position int
-			query := "SELECT COUNT(*) FROM posts WHERE topic_id = ? AND id <= ?"
+			query := "SELECT COUNT(*) FROM posts WHERE topic_id = ? AND id <= ? AND (is_deleted IS NULL OR is_deleted != 1)"
 			err = db.QueryRow(query, topicID, postID).Scan(&position)
 			if err == nil {
 				page = int(math.Ceil(float64(position) / float64(postsPerPage)))
