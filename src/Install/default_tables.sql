@@ -1160,6 +1160,14 @@ INSERT IGNORE INTO ai_agents (id, title, short_description, handler) VALUES (
     'GameDigest'
 );
 
+CREATE TABLE absence_timer_start
+(
+    character_id BIGINT UNSIGNED NOT NULL,
+    start_date   DATE            NOT NULL,
+    PRIMARY KEY (character_id),
+    CONSTRAINT fk_absence_timer_start_character FOREIGN KEY (character_id) REFERENCES character_base (id) ON DELETE CASCADE
+);
+
 create table post_drafts
 (
     id           int             auto_increment primary key,

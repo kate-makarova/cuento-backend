@@ -1210,6 +1210,8 @@ func UpdateEpisodeStatus(c *gin.Context, db *sql.DB) {
 		}
 	}
 
+	go Services.RecalculateAbsenceTimerStartForEpisode(id, db)
+
 	c.JSON(http.StatusOK, gin.H{
 		"episode_status": status,
 		"topic_status":   topicStatus,
