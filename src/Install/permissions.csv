@@ -253,3 +253,5 @@ role_id,type,permission
 2,0,/post-draft/update/:id
 2,0,/post-draft/delete/:id
 2,0,/post-draft/delete-group/:draft_id
+3,0,/admin/locale/:id/download/frontend
+3,0,/admin/locale/:id/download/backend
