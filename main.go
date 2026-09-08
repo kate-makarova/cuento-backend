@@ -861,6 +861,9 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	protectedRouter.GET("/admin/frontend-templates/components-versions/*name", "List saved versions for a frontend component", func(c *gin.Context) {
 		Controllers.GetFrontendComponentVersions(c, Services.DB)
 	})
+	protectedRouter.GET("/admin/frontend-templates/component/version/:id", "Get a specific saved template version by ID", func(c *gin.Context) {
+		Controllers.GetFrontendComponentVersion(c, Services.DB)
+	})
 	protectedRouter.POST("/admin/frontend-templates/component/save", "Save a new template version to the database", func(c *gin.Context) {
 		Controllers.SaveFrontendComponentTemplate(c, Services.DB)
 	})

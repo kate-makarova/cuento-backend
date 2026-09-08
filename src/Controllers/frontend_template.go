@@ -177,6 +177,37 @@ func GetFrontendComponentTemplate(c *gin.Context, db *sql.DB) {
 	getComponentFile(c, db, def.DefaultTemplatePath)
 }
 
+func GetFrontendComponentVersion(c *gin.Context, db *sql.DB) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid template ID"})
+		c.Abort()
+		return
+	}
+
+	var v struct {
+		Id               int    `json:"id"`
+		Name             string `json:"name"`
+		TemplateFileName string `json:"template_file_name"`
+		TemplateText     string `json:"template_text"`
+		IsActive         bool   `json:"is_active"`
+	}
+	err = db.QueryRow(
+		"SELECT id, name, template_file_name, template_text, is_active FROM custom_templates WHERE id = ?", id,
+	).Scan(&v.Id, &v.Name, &v.TemplateFileName, &v.TemplateText, &v.IsActive)
+	if err == sql.ErrNoRows {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Template version not found"})
+		c.Abort()
+		return
+	}
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "DB error: " + err.Error()})
+		c.Abort()
+		return
+	}
+	c.JSON(http.StatusOK, v)
+}
+
 func GetFrontendComponentDefaultTemplate(c *gin.Context, db *sql.DB) {
 	name := strings.TrimPrefix(c.Param("name"), "/")
 	def, ok := findComponentDef(name)
