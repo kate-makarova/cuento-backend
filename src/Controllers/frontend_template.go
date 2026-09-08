@@ -334,11 +334,9 @@ func SaveFrontendComponentTemplate(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	sanitized := Services.SanitizeTemplate(req.Content)
-
 	result, err := db.Exec(
 		"INSERT INTO custom_templates (name, template_file_name, template_text, is_active) VALUES (?, ?, ?, 0)",
-		req.Name, def.TemplatePath, sanitized,
+		req.Name, def.TemplatePath, req.Content,
 	)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save template: " + err.Error()})
@@ -378,7 +376,7 @@ func PublishFrontendComponentTemplate(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	files := []Services.GitHubFile{{Path: templateFileName, Content: templateText}}
+	files := []Services.GitHubFile{{Path: templateFileName, Content: Services.SanitizeTemplate(templateText)}}
 	if err := Services.GitHubCommit(cfg, "Publish custom template: "+templateFileName, files); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "GitHub commit failed: " + err.Error()})
 		c.Abort()
