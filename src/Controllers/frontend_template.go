@@ -421,33 +421,31 @@ func PublishFrontendComponentTemplate(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	// Add this component to custom_templates.json.
+	// Add this component to custom_templates.json only if not already listed.
 	active := readActiveCustomTemplates(cfg)
-	active[def.Name] = true
-
-	var entries []customTemplateEntry
-	for _, d := range frontendComponentDefs {
-		if active[d.Name] {
-			entries = append(entries, customTemplateEntry{
-				Component:       d.Name,
-				DefaultTemplate: d.DefaultTemplatePath,
-				Template:        d.TemplatePath,
-			})
+	files := []Services.GitHubFile{{Path: templateFileName, Content: templateText}}
+	if !active[def.Name] {
+		active[def.Name] = true
+		var entries []customTemplateEntry
+		for _, d := range frontendComponentDefs {
+			if active[d.Name] {
+				entries = append(entries, customTemplateEntry{
+					Component:       d.Name,
+					DefaultTemplate: d.DefaultTemplatePath,
+					Template:        d.TemplatePath,
+				})
+			}
 		}
-	}
-	if entries == nil {
-		entries = []customTemplateEntry{}
-	}
-	configContent, err := json.MarshalIndent(entries, "", "  ")
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to serialize custom templates"})
-		c.Abort()
-		return
-	}
-
-	files := []Services.GitHubFile{
-		{Path: templateFileName, Content: templateText},
-		{Path: customTemplatesFile, Content: string(configContent)},
+		if entries == nil {
+			entries = []customTemplateEntry{}
+		}
+		configContent, err := json.MarshalIndent(entries, "", "  ")
+		if err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to serialize custom templates"})
+			c.Abort()
+			return
+		}
+		files = append(files, Services.GitHubFile{Path: customTemplatesFile, Content: string(configContent)})
 	}
 	if err := Services.GitHubCommit(cfg, "Publish custom template: "+templateFileName, files); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "GitHub commit failed: " + err.Error()})
