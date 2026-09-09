@@ -258,6 +258,7 @@ func GetFrontendComponentVersions(c *gin.Context, db *sql.DB) {
 }
 
 type saveComponentTemplateRequest struct {
+	ID            *int   `json:"id"`
 	ComponentName string `json:"component_name" binding:"required"`
 	Name          string `json:"name"           binding:"required"`
 	Content       string `json:"content"        binding:"required"`
@@ -334,17 +335,39 @@ func SaveFrontendComponentTemplate(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	result, err := db.Exec(
-		"INSERT INTO custom_templates (name, template_file_name, template_text, is_active) VALUES (?, ?, ?, 0)",
-		req.Name, def.TemplatePath, req.Content,
-	)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save template: " + err.Error()})
-		c.Abort()
-		return
+	sanitized := Services.SanitizeTemplate(req.Content)
+
+	var rowID int64
+	if req.ID != nil {
+		res, err := db.Exec(
+			"UPDATE custom_templates SET name = ?, template_text = ? WHERE id = ? AND template_file_name = ?",
+			req.Name, sanitized, *req.ID, def.TemplatePath,
+		)
+		if err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update template: " + err.Error()})
+			c.Abort()
+			return
+		}
+		affected, _ := res.RowsAffected()
+		if affected == 0 {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Template version not found"})
+			c.Abort()
+			return
+		}
+		rowID = int64(*req.ID)
+	} else {
+		result, err := db.Exec(
+			"INSERT INTO custom_templates (name, template_file_name, template_text, is_active) VALUES (?, ?, ?, 0)",
+			req.Name, def.TemplatePath, sanitized,
+		)
+		if err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save template: " + err.Error()})
+			c.Abort()
+			return
+		}
+		rowID, _ = result.LastInsertId()
 	}
-	id, _ := result.LastInsertId()
-	c.JSON(http.StatusOK, gin.H{"id": id, "template_file_name": def.TemplatePath})
+	c.JSON(http.StatusOK, gin.H{"id": rowID, "template_file_name": def.TemplatePath})
 }
 
 // PublishFrontendComponentTemplate commits the specified DB version to GitHub as the active custom template.
@@ -376,7 +399,7 @@ func PublishFrontendComponentTemplate(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	files := []Services.GitHubFile{{Path: templateFileName, Content: Services.SanitizeTemplate(templateText)}}
+	files := []Services.GitHubFile{{Path: templateFileName, Content: templateText}}
 	if err := Services.GitHubCommit(cfg, "Publish custom template: "+templateFileName, files); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "GitHub commit failed: " + err.Error()})
 		c.Abort()
