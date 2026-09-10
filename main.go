@@ -35,6 +35,7 @@ func main() {
 
 	// Backfill absence_timer_start for any active characters that don't have an entry yet.
 	go Services.InitializeAbsenceTimerStart(Services.DB)
+	go Services.GetOrCreateVAPIDKeys(Services.DB)
 
 	// Start archiving warning notifier (checks daily, sends notifications at 10/5/3/2/1 days before archiving)
 	Services.StartArchivingNotifier(Services.DB)
@@ -538,6 +539,15 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	})
 	protectedRouter.POST("/notifications/dismiss/:id", "Mark a notification as read", func(c *gin.Context) {
 		Controllers.DismissNotification(c, Services.DB)
+	})
+	publicRouter.GET("/push/vapid-public-key", "Get VAPID public key for push notification subscription", func(c *gin.Context) {
+		Controllers.GetVAPIDPublicKey(c, Services.DB)
+	})
+	protectedRouter.POST("/push/subscribe", "Save a push notification subscription", func(c *gin.Context) {
+		Controllers.SubscribePushNotifications(c, Services.DB)
+	})
+	protectedRouter.POST("/push/unsubscribe", "Remove a push notification subscription", func(c *gin.Context) {
+		Controllers.UnsubscribePushNotifications(c, Services.DB)
 	})
 	protectedRouter.POST("/character/accept/:id", "Accept a character", func(c *gin.Context) {
 		Controllers.AcceptCharacter(c, Services.DB)

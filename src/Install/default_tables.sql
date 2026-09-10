@@ -537,6 +537,7 @@ create table user_notification_setting
     disable_toast     boolean      not null default false,
     disable_sound     boolean      not null default false,
     disable_all       boolean      not null default false,
+    disable_push      boolean      not null default false,
     primary key (user_id, notification_type),
     constraint fk_user_notification_setting_user
         foreign key (user_id) references users (id) on delete cascade
@@ -1206,4 +1207,16 @@ create table post_drafts
     index idx_post_drafts_user_id (user_id),
     constraint fk_post_drafts_user      foreign key (user_id)      references users (id) on delete cascade,
     constraint fk_post_drafts_character foreign key (character_id) references character_base (id) on delete set null
+);
+
+create table user_push_subscriptions
+(
+    id           int          auto_increment primary key,
+    user_id      int          not null,
+    endpoint     text         not null,
+    p256dh       varchar(512) not null,
+    auth         varchar(256) not null,
+    date_created datetime     not null default current_timestamp,
+    index idx_user_push_subscriptions_user_id (user_id),
+    constraint fk_user_push_subscriptions_user foreign key (user_id) references users (id) on delete cascade
 );
