@@ -316,6 +316,12 @@ func RegisterPostEventHandlers() {
 			authorCharacterName = event.Post.CharacterProfile.CharacterName
 		}
 
+		var totalPosts int
+		db.QueryRow(
+			"SELECT COUNT(*) FROM posts WHERE topic_id = ? AND (is_deleted IS NULL OR is_deleted != 1)",
+			event.TopicID,
+		).Scan(&totalPosts)
+
 		for rows.Next() {
 			var participantUserID int
 			var participantCharacterID int
@@ -330,6 +336,7 @@ func RegisterPostEventHandlers() {
 					UserCharacterName: participantCharacterName,
 					CharacterId:       authorCharacterID,
 					CharacterName:     authorCharacterName,
+					TotalPosts:        totalPosts,
 				}
 
 				Events.Publish(db, Events.NotificationCreated, Events.NotificationEvent{
