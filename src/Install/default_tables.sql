@@ -1211,12 +1211,14 @@ create table post_drafts
 
 create table user_push_subscriptions
 (
-    id           int          auto_increment primary key,
-    user_id      int          not null,
-    endpoint     text         not null,
-    p256dh       varchar(512) not null,
-    auth         varchar(256) not null,
-    date_created datetime     not null default current_timestamp,
+    id            int          auto_increment primary key,
+    user_id       int          not null,
+    endpoint      varchar(2048) not null,
+    endpoint_hash varchar(64)   generated always as (sha2(endpoint, 256)) stored,
+    p256dh        varchar(512) not null,
+    auth          varchar(256) not null,
+    date_created  datetime     not null default current_timestamp,
+    unique key uq_endpoint_hash (endpoint_hash),
     index idx_user_push_subscriptions_user_id (user_id),
     constraint fk_user_push_subscriptions_user foreign key (user_id) references users (id) on delete cascade
 );
