@@ -26,7 +26,6 @@ func init() {
 const (
 	vapidPrivateKeySetting = "vapid_private_key"
 	vapidPublicKeySetting  = "vapid_public_key"
-	vapidSubject           = "mailto:admin@cuento.app"
 )
 
 func GetOrCreateVAPIDKeys(db *sql.DB) (public, private string, err error) {
@@ -63,6 +62,11 @@ func SendPushToUser(db *sql.DB, userID int, notificationType, title, message str
 		pushLogger.Printf("[push] no VAPID public key for user %d\n", userID)
 		return
 	}
+	domain, _ := GetGlobalSetting("domain", db)
+	subject := "mailto:admin@example.com"
+	if domain != "" {
+		subject = "https://" + domain
+	}
 
 	rows, err := db.Query(
 		"SELECT endpoint, p256dh, auth FROM user_push_subscriptions WHERE user_id = ?", userID,
@@ -91,7 +95,7 @@ func SendPushToUser(db *sql.DB, userID int, notificationType, title, message str
 		resp, err := webpush.SendNotification([]byte(payload), sub, &webpush.Options{
 			VAPIDPublicKey:  publicKey,
 			VAPIDPrivateKey: privateKey,
-			Subscriber:      vapidSubject,
+			Subscriber:      subject,
 			TTL:             86400,
 		})
 		if err != nil {
