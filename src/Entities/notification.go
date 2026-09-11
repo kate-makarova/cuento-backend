@@ -56,7 +56,6 @@ type NotificationGame struct {
 	UserCharacterName string `json:"user_character_name"`
 	CharacterId       int    `json:"character_id"`
 	CharacterName     string `json:"character_name"`
-	TotalPosts        int    `json:"total_posts"`
 }
 
 type NotificationSystem struct {
