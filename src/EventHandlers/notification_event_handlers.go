@@ -103,12 +103,15 @@ func RegisterNotificationEventHandlers() {
 		})
 
 		// Send push notification only if user is offline and not disabled for this type.
-		if !Websockets.MainHub.IsUserConnected(event.UserID) {
+		isConnected := Websockets.MainHub.IsUserConnected(event.UserID)
+		Services.LogPush("notification event for user %d type %s: isConnected=%v", event.UserID, event.Type, isConnected)
+		if !isConnected {
 			var disablePush bool
 			_ = db.QueryRow(
 				"SELECT disable_push FROM user_notification_setting WHERE user_id = ? AND notification_type = ?",
 				event.UserID, event.Type,
 			).Scan(&disablePush)
+			Services.LogPush("user %d disablePush=%v", event.UserID, disablePush)
 			if !disablePush {
 				go Services.SendPushToUser(db, event.UserID, event.Type, title, event.Message)
 			}

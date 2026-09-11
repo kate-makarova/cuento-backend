@@ -11,6 +11,10 @@ import (
 
 var pushLogger *log.Logger
 
+func LogPush(format string, args ...interface{}) {
+	pushLogger.Printf(format, args...)
+}
+
 func init() {
 	if err := os.MkdirAll("logs", 0755); err == nil {
 		f, err := os.OpenFile("logs/push.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
