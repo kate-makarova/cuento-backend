@@ -130,6 +130,7 @@ func HandleWebSocket(c *gin.Context, db *sql.DB) {
 			if err := json.Unmarshal(p, &msg); err == nil {
 				if msg.Type == "ping" {
 					conn.SetReadDeadline(time.Now().Add(45 * time.Second))
+					conn.WriteJSON(map[string]string{"type": "pong"})
 					continue
 				}
 				if msg.Type == "page_change" {
