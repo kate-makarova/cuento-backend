@@ -315,6 +315,47 @@ func UninstallLocale(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, gin.H{"uninstalled": locale.Code})
 }
 
+func DeleteLocale(c *gin.Context, db *sql.DB) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid locale ID"})
+		c.Abort()
+		return
+	}
+
+	var locale LocaleItem
+	err = db.QueryRow(
+		"SELECT id, human_name, code, front_end_file_name, back_end_file_name, is_installed FROM locales WHERE id = ?", id,
+	).Scan(&locale.Id, &locale.HumanName, &locale.Code, &locale.FrontEndFileName, &locale.BackEndFileName, &locale.IsInstalled)
+	if err == sql.ErrNoRows {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Locale not found"})
+		c.Abort()
+		return
+	} else if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "DB error: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	if protectedLocaleCodes[locale.Code] {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "Cannot delete default locale: " + locale.Code})
+		c.Abort()
+		return
+	}
+
+	if locale.IsInstalled {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusConflict, Message: "Uninstall the locale before deleting it"})
+		c.Abort()
+		return
+	}
+
+	_ = os.Remove(filepath.Join(backendLocaleDir, filepath.Base(locale.FrontEndFileName)))
+	_ = os.Remove(filepath.Join(backendLocaleDir, filepath.Base(locale.BackEndFileName)))
+
+	_, _ = db.Exec("DELETE FROM locales WHERE id = ?", id)
+	c.JSON(http.StatusOK, gin.H{"deleted": locale.Code})
+}
+
 // saveUploadedFile writes a multipart file to dst without calling os.MkdirAll,
 // which would try to chmod the parent directory and fail in containers.
 func saveUploadedFile(fh *multipart.FileHeader, dst string) error {
