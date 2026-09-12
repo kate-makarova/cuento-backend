@@ -158,8 +158,8 @@ func UploadLocale(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	if err := os.MkdirAll(backendLocaleDir, 0755); err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create locale directory"})
+	if err := os.Mkdir(backendLocaleDir, 0755); err != nil && !os.IsExist(err) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create locale directory: " + err.Error()})
 		c.Abort()
 		return
 	}
