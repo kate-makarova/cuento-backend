@@ -5,6 +5,8 @@ import (
 	"cuento-backend/src/Services"
 	"database/sql"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -158,17 +160,12 @@ func UploadLocale(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	if err := os.Mkdir(backendLocaleDir, 0755); err != nil && !os.IsExist(err) {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create locale directory: " + err.Error()})
-		c.Abort()
-		return
-	}
-	if err := c.SaveUploadedFile(tsFile, filepath.Join(backendLocaleDir, tsName)); err != nil {
+	if err := saveUploadedFile(tsFile, filepath.Join(backendLocaleDir, tsName)); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save .ts file: " + err.Error()})
 		c.Abort()
 		return
 	}
-	if err := c.SaveUploadedFile(jsonFile, filepath.Join(backendLocaleDir, jsonName)); err != nil {
+	if err := saveUploadedFile(jsonFile, filepath.Join(backendLocaleDir, jsonName)); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save .json file: " + err.Error()})
 		c.Abort()
 		return
@@ -316,6 +313,25 @@ func UninstallLocale(c *gin.Context, db *sql.DB) {
 
 	_, _ = db.Exec("UPDATE locales SET is_installed = 0 WHERE id = ?", id)
 	c.JSON(http.StatusOK, gin.H{"uninstalled": locale.Code})
+}
+
+// saveUploadedFile writes a multipart file to dst without calling os.MkdirAll,
+// which would try to chmod the parent directory and fail in containers.
+func saveUploadedFile(fh *multipart.FileHeader, dst string) error {
+	src, err := fh.Open()
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, src)
+	return err
 }
 
 // addLocaleBlock inserts a new locale block into the LOCALES array in locale_config.ts.
