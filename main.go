@@ -1066,6 +1066,15 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	protectedRouter.GET("/admin/locale/:id/download/backend", "Download backend locale file", func(c *gin.Context) {
 		Controllers.DownloadBackEndLocaleFile(c, Services.DB)
 	})
+	protectedRouter.POST("/admin/locale/upload", "Upload a new locale (.ts and .json files)", func(c *gin.Context) {
+		Controllers.UploadLocale(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/locale/:id/install", "Install a locale (commit to frontend repo)", func(c *gin.Context) {
+		Controllers.InstallLocale(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/locale/:id/uninstall", "Uninstall a locale (remove from frontend repo)", func(c *gin.Context) {
+		Controllers.UninstallLocale(c, Services.DB)
+	})
 
 	// User data migration routes
 	protectedRouter.GET("/user-data-migration/list", "Get list of all data migration processings for the current user", func(c *gin.Context) {

@@ -1172,15 +1172,17 @@ CREATE TABLE custom_templates
 
 CREATE TABLE locales
 (
-    id                 INT AUTO_INCREMENT PRIMARY KEY,
-    human_name         VARCHAR(100) NOT NULL,
+    id                  INT AUTO_INCREMENT PRIMARY KEY,
+    human_name          VARCHAR(100) NOT NULL,
+    code                VARCHAR(20)  NOT NULL,
     front_end_file_name VARCHAR(100) NOT NULL,
-    back_end_file_name  VARCHAR(100) NOT NULL
+    back_end_file_name  VARCHAR(100) NOT NULL,
+    is_installed        TINYINT(1)   NOT NULL DEFAULT 0
 );
 
-INSERT INTO locales (human_name, front_end_file_name, back_end_file_name) VALUES
-    ('English', 'en.ts', 'en.json'),
-    ('Russian', 'ru.ts', 'ru.json');
+INSERT INTO locales (human_name, code, front_end_file_name, back_end_file_name, is_installed) VALUES
+    ('English', 'en-CA', 'en.ts', 'en.json', 1),
+    ('Russian', 'ru-RU', 'ru.ts', 'ru.json', 1);
 
 CREATE TABLE absence_timer_start
 (
