@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-const frontendLocaleDir = "./../frontend/src/locale"
 const backendLocaleDir = "./locales"
 
 type LocaleItem struct {
@@ -63,7 +62,7 @@ func DownloadFrontEndLocaleFile(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	path := filepath.Join(frontendLocaleDir, filepath.Base(fileName))
+	path := filepath.Join(backendLocaleDir, filepath.Base(fileName))
 	content, err := os.ReadFile(path)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Frontend locale file not found on disk"})
