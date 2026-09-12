@@ -1180,7 +1180,7 @@ CREATE TABLE locales
     is_installed        TINYINT(1)   NOT NULL DEFAULT 0
 );
 
-INSERT INTO locales (human_name, code, front_end_file_name, back_end_file_name, is_installed) VALUES
+INSERT IGNORE INTO locales (human_name, code, front_end_file_name, back_end_file_name, is_installed) VALUES
     ('English', 'en-CA', 'en.ts', 'en.json', 1),
     ('Russian', 'ru-RU', 'ru.ts', 'ru.json', 1);
 

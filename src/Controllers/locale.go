@@ -18,7 +18,7 @@ import (
 const backendLocaleDir = "./locales"
 const localeConfigPath = "src/locale_config.ts"
 
-var protectedLocaleCodes = map[string]bool{"en-CA": true, "ru-RU": true}
+var protectedLocaleCodes = map[string]bool{"en-CA": true}
 
 type LocaleItem struct {
 	Id                int    `json:"id"`
