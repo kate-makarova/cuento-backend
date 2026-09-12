@@ -164,12 +164,12 @@ func UploadLocale(c *gin.Context, db *sql.DB) {
 		return
 	}
 	if err := c.SaveUploadedFile(tsFile, filepath.Join(backendLocaleDir, tsName)); err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save .ts file"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save .ts file: " + err.Error()})
 		c.Abort()
 		return
 	}
 	if err := c.SaveUploadedFile(jsonFile, filepath.Join(backendLocaleDir, jsonName)); err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save .json file"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save .json file: " + err.Error()})
 		c.Abort()
 		return
 	}
