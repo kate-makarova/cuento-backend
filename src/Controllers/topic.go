@@ -921,6 +921,28 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 		guestName = req.GuestName
 	}
 
+	// Verify the character profile belongs to the current user.
+	if userID != 0 && req.UseCharacterProfile && req.CharacterProfileID != nil {
+		var ownerUserID int
+		err := tx.QueryRow(
+			`SELECT cb.user_id FROM character_profile_base cpb
+			 JOIN character_base cb ON cb.id = cpb.character_id
+			 WHERE cpb.id = ?`,
+			*req.CharacterProfileID,
+		).Scan(&ownerUserID)
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Character profile not found"})
+			return
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify character ownership"})
+			return
+		}
+		if ownerUserID != userID {
+			c.JSON(http.StatusForbidden, gin.H{"error": "This character does not belong to you"})
+			return
+		}
+	}
+
 	// For episode topics, check character membership unless open_to_everyone
 	if req.UseCharacterProfile && req.CharacterProfileID != nil {
 		var topicType int
