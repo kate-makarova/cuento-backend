@@ -390,6 +390,14 @@ func saveUploadedFile(fh *multipart.FileHeader, dst string) error {
 	return err
 }
 
+// angularLocaleKeys is the set of locale keys supported by the frontend's ANGULAR_LOCALES map.
+var angularLocaleKeys = map[string]bool{
+	"ru": true, "zh": true, "zh-Hans": true, "zh-Hant": true,
+	"de": true, "fr": true, "es": true, "pt": true, "it": true,
+	"ja": true, "ko": true, "pl": true, "uk": true, "tr": true,
+	"ar": true,
+}
+
 // addLocaleBlock inserts a new locale block into the LOCALES array in locale_config.ts.
 func addLocaleBlock(config, code string) string {
 	parts := strings.SplitN(code, "-", 2)
@@ -397,13 +405,17 @@ func addLocaleBlock(config, code string) string {
 	fileBase := langPrefix
 	translationConst := "TRANSLATIONS_" + strings.ToUpper(langPrefix)
 
+	angularLocale := ""
+	if angularLocaleKeys[langPrefix] {
+		angularLocale = fmt.Sprintf("\n  angularLocale: '%s',", langPrefix)
+	}
+
 	block := fmt.Sprintf(`  {
     code: '%s',
     langPrefixes: ['%s'],
-    translations: () => import('./locale/%s').then(m => m.%s),
-    angularLocale: () => import('@angular/common/locales/%s'),
+    translations: () => import('./locale/%s').then(m => m.%s),%s
   },
-`, code, langPrefix, fileBase, translationConst, langPrefix)
+`, code, langPrefix, fileBase, translationConst, angularLocale)
 
 	// Locate the LOCALES array declaration, then find its closing ]; and insert before it.
 	localesIdx := strings.Index(config, "export const LOCALES")
