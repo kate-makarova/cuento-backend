@@ -19,6 +19,7 @@ import (
 
 const backendLocaleDir = "./locales"
 const localeConfigPath = "src/locale_config.ts"
+const localeConfigDefaultPath = "src/locale_config_default.ts"
 
 var protectedLocaleCodes = map[string]bool{"en-CA": true}
 
@@ -226,7 +227,7 @@ func InstallLocale(c *gin.Context, db *sql.DB) {
 	}
 
 	// Read current locale_config.ts from GitHub.
-	configContent, err := Services.GitHubGetFile(cfg, localeConfigPath)
+	configContent, err := getLocaleConfig(cfg)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch locale_config.ts: " + err.Error()})
 		c.Abort()
@@ -290,7 +291,7 @@ func UninstallLocale(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	configContent, err := Services.GitHubGetFile(cfg, localeConfigPath)
+	configContent, err := getLocaleConfig(cfg)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch locale_config.ts: " + err.Error()})
 		c.Abort()
@@ -354,6 +355,20 @@ func DeleteLocale(c *gin.Context, db *sql.DB) {
 
 	_, _ = db.Exec("DELETE FROM locales WHERE id = ?", id)
 	c.JSON(http.StatusOK, gin.H{"deleted": locale.Code})
+}
+
+// getLocaleConfig reads locale_config.ts from the repo.
+// If it doesn't exist (404), it falls back to locale_config_default.ts.
+func getLocaleConfig(cfg Services.GitHubConfig) (string, error) {
+	content, err := Services.GitHubGetFile(cfg, localeConfigPath)
+	if err == nil {
+		return content, nil
+	}
+	ghErr, ok := err.(*Services.GitHubError)
+	if !ok || ghErr.StatusCode != 404 {
+		return "", err
+	}
+	return Services.GitHubGetFile(cfg, localeConfigDefaultPath)
 }
 
 // saveUploadedFile writes a multipart file to dst without calling os.MkdirAll,
