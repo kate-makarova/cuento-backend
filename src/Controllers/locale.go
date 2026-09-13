@@ -405,18 +405,36 @@ func addLocaleBlock(config, code string) string {
   },
 `, code, langPrefix, fileBase, translationConst, langPrefix)
 
-	// Insert before the closing ];
-	return strings.Replace(config, "];", block+"];", 1)
+	// Locate the LOCALES array declaration, then find its closing ]; and insert before it.
+	localesIdx := strings.Index(config, "export const LOCALES")
+	if localesIdx == -1 {
+		return config
+	}
+	closeIdx := strings.Index(config[localesIdx:], "\n];")
+	if closeIdx == -1 {
+		return config
+	}
+	insertAt := localesIdx + closeIdx
+	return config[:insertAt] + "\n" + block + config[insertAt+1:]
 }
 
 // removeLocaleBlock removes a locale block for the given code from locale_config.ts.
+// Only operates inside the LOCALES array to avoid touching the rest of the file.
 func removeLocaleBlock(config, code string) string {
-	lines := strings.Split(config, "\n")
+	localesIdx := strings.Index(config, "export const LOCALES")
+	if localesIdx == -1 {
+		return config
+	}
+
+	before := config[:localesIdx]
+	arraySection := config[localesIdx:]
+
+	lines := strings.Split(arraySection, "\n")
 	var result []string
 	skip := false
 	for _, line := range lines {
 		if strings.Contains(line, fmt.Sprintf("code: '%s'", code)) {
-			// Remove the opening brace line we already added.
+			// Remove the opening brace line we already appended.
 			if len(result) > 0 && strings.TrimSpace(result[len(result)-1]) == "{" {
 				result = result[:len(result)-1]
 			}
@@ -424,14 +442,12 @@ func removeLocaleBlock(config, code string) string {
 			continue
 		}
 		if skip {
-			// Skip until closing },
 			if strings.TrimSpace(line) == "}," {
 				skip = false
-				continue
 			}
 			continue
 		}
 		result = append(result, line)
 	}
-	return strings.Join(result, "\n")
+	return before + strings.Join(result, "\n")
 }
