@@ -891,12 +891,14 @@ create table smiles
 
 create table lore_pages
 (
-    topic_id  bigint unsigned not null,
-    post_id   bigint unsigned not null,
-    name      varchar(255)    not null,
-    is_hidden boolean         not null default false,
-    position  int             not null default 0,
-    primary key (topic_id, post_id),
+    id               bigint unsigned auto_increment primary key,
+    topic_id         bigint unsigned not null,
+    post_id          bigint unsigned null,
+    name             varchar(255)    not null,
+    is_hidden        boolean         not null default false,
+    position         int             not null default 0,
+    is_external_link boolean         null,
+    external_link    varchar(2048)   null,
     constraint fk_lore_pages_topic foreign key (topic_id) references topics (id) on delete cascade,
     constraint fk_lore_pages_post  foreign key (post_id)  references posts (id)  on delete cascade
 );
