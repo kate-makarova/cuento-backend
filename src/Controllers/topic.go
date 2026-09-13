@@ -921,15 +921,15 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 		guestName = req.GuestName
 	}
 
-	// Verify the character profile belongs to the current user.
+	// Verify the character profile belongs to the current user and the character is active.
 	if userID != 0 && req.UseCharacterProfile && req.CharacterProfileID != nil {
-		var ownerUserID int
+		var ownerUserID, characterStatus int
 		err := tx.QueryRow(
-			`SELECT cb.user_id FROM character_profile_base cpb
+			`SELECT cb.user_id, cb.character_status FROM character_profile_base cpb
 			 JOIN character_base cb ON cb.id = cpb.character_id
 			 WHERE cpb.id = ?`,
 			*req.CharacterProfileID,
-		).Scan(&ownerUserID)
+		).Scan(&ownerUserID, &characterStatus)
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Character profile not found"})
 			return
@@ -939,6 +939,10 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 		}
 		if ownerUserID != userID {
 			c.JSON(http.StatusForbidden, gin.H{"error": "This character does not belong to you"})
+			return
+		}
+		if characterStatus != int(Entities.ActiveCharacter) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "This character is not active"})
 			return
 		}
 	}
