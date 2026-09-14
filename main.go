@@ -510,10 +510,10 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	protectedRouter.POST("/lore-page/create", "Create a lore page", func(c *gin.Context) {
 		Controllers.CreateLorePage(c, Services.DB)
 	})
-	protectedRouter.POST("/lore-page/update/:post_id", "Update lore page by post ID", func(c *gin.Context) {
+	protectedRouter.POST("/lore-page/update/:id", "Update lore page by ID", func(c *gin.Context) {
 		Controllers.UpdateLorePage(c, Services.DB)
 	})
-	protectedRouter.GET("/lore-page/delete/:post_id", "Delete lore page by post ID", func(c *gin.Context) {
+	protectedRouter.GET("/lore-page/delete/:id", "Delete lore page by ID", func(c *gin.Context) {
 		Controllers.DeleteLorePage(c, Services.DB)
 	})
 	protectedRouter.POST("/topics/move", "Move topics to a different subforum", func(c *gin.Context) {
