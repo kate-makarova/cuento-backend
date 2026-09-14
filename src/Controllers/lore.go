@@ -186,6 +186,11 @@ func CreateLoreTopic(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	if hasPerm, err := Services.HasPermission(userID, fmt.Sprintf("subforum_create_lore_topic:%d", req.SubforumId), db); err != nil || !hasPerm {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to create lore topics in this subforum"})
+		return
+	}
+
 	var username string
 	if err := db.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&username); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user details: " + err.Error()})
