@@ -1233,5 +1233,6 @@ create table workflows
     event_name       varchar(100) not null,
     subforum_ids     varchar(500) not null,
     handler_function varchar(100) not null,
-    config           json         not null
+    config           json         not null,
+    event_config     json         null
 );
