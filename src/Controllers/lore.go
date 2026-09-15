@@ -368,6 +368,15 @@ func UpdateLoreTopic(c *gin.Context, db *sql.DB) {
 		)
 	}
 
+	if req.Status != nil {
+		Events.Publish(db, Events.TopicStatusChanged, Events.TopicStatusChangedEvent{
+			TopicID:    int64(topicID),
+			SubforumID: subforumID,
+			OldStatus:  int(currentStatus),
+			NewStatus:  int(*req.Status),
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "Topic updated successfully"})
 }
 

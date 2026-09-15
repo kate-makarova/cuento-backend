@@ -15,35 +15,59 @@ func RegisterWorkflowEventHandlers() {
 		if !ok {
 			return
 		}
+		dispatchWorkflows(db, string(Events.TopicFull), event.TopicID, event.SubforumID, nil)
+	})
 
-		rows, err := db.Query(
-			"SELECT subforum_ids, handler_function, config FROM workflows WHERE event_name = ?",
-			string(Events.TopicFull),
-		)
-		if err != nil {
-			fmt.Printf("WorkflowHandler: failed to query workflows: %v\n", err)
+	Events.Subscribe(Events.TopicStatusChanged, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.TopicStatusChangedEvent)
+		if !ok {
 			return
 		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var subforumIDs string
-			var handlerName string
-			var config json.RawMessage
-			if err := rows.Scan(&subforumIDs, &handlerName, &config); err != nil {
-				continue
+		dispatchWorkflows(db, string(Events.TopicStatusChanged), event.TopicID, event.SubforumID, func(eventConfig json.RawMessage) bool {
+			var cfg struct {
+				NewStatus *int `json:"new_status"`
 			}
-			if !subforumInList(event.SubforumID, subforumIDs) {
-				continue
+			if err := json.Unmarshal(eventConfig, &cfg); err != nil || cfg.NewStatus == nil {
+				return true
 			}
-			handler, ok := workflowHandlers[handlerName]
-			if !ok {
-				fmt.Printf("WorkflowHandler: unknown handler function %q\n", handlerName)
-				continue
-			}
-			handler(db, data, config)
-		}
+			return event.NewStatus == *cfg.NewStatus
+		})
 	})
+}
+
+func dispatchWorkflows(db *sql.DB, eventName string, topicID int64, subforumID int, matchEventConfig func(json.RawMessage) bool) {
+	rows, err := db.Query(
+		"SELECT subforum_ids, handler_function, config, event_config FROM workflows WHERE event_name = ?",
+		eventName,
+	)
+	if err != nil {
+		fmt.Printf("WorkflowHandler: failed to query workflows: %v\n", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var subforumIDs, handlerName string
+		var config json.RawMessage
+		var eventConfigRaw []byte
+		if err := rows.Scan(&subforumIDs, &handlerName, &config, &eventConfigRaw); err != nil {
+			continue
+		}
+		if !subforumInList(subforumID, subforumIDs) {
+			continue
+		}
+		if matchEventConfig != nil && len(eventConfigRaw) > 0 {
+			if !matchEventConfig(json.RawMessage(eventConfigRaw)) {
+				continue
+			}
+		}
+		handler, ok := workflowHandlers[handlerName]
+		if !ok {
+			fmt.Printf("WorkflowHandler: unknown handler function %q\n", handlerName)
+			continue
+		}
+		handler(db, topicID, config)
+	}
 }
 
 func subforumInList(subforumID int, list string) bool {

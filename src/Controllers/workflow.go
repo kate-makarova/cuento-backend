@@ -12,20 +12,27 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const workflowSelectQuery = "SELECT id, event_name, subforum_ids, handler_function, config, event_config FROM workflows"
+
 func scanWorkflow(row *sql.Row) (*Entities.Workflow, error) {
 	var w Entities.Workflow
 	var config []byte
-	if err := row.Scan(&w.Id, &w.EventName, &w.SubforumIds, &w.HandlerFunction, &config); err != nil {
+	var eventConfig []byte
+	if err := row.Scan(&w.Id, &w.EventName, &w.SubforumIds, &w.HandlerFunction, &config, &eventConfig); err != nil {
 		return nil, err
 	}
 	if len(config) > 0 {
 		w.Config = json.RawMessage(config)
 	}
+	if len(eventConfig) > 0 {
+		raw := json.RawMessage(eventConfig)
+		w.EventConfig = &raw
+	}
 	return &w, nil
 }
 
 func AdminListWorkflows(c *gin.Context, db *sql.DB) {
-	rows, err := db.Query("SELECT id, event_name, subforum_ids, handler_function, config FROM workflows")
+	rows, err := db.Query(workflowSelectQuery)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to list workflows: " + err.Error()})
 		c.Abort()
@@ -37,13 +44,18 @@ func AdminListWorkflows(c *gin.Context, db *sql.DB) {
 	for rows.Next() {
 		var w Entities.Workflow
 		var config []byte
-		if err := rows.Scan(&w.Id, &w.EventName, &w.SubforumIds, &w.HandlerFunction, &config); err != nil {
+		var eventConfig []byte
+		if err := rows.Scan(&w.Id, &w.EventName, &w.SubforumIds, &w.HandlerFunction, &config, &eventConfig); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan workflow: " + err.Error()})
 			c.Abort()
 			return
 		}
 		if len(config) > 0 {
 			w.Config = json.RawMessage(config)
+		}
+		if len(eventConfig) > 0 {
+			raw := json.RawMessage(eventConfig)
+			w.EventConfig = &raw
 		}
 		list = append(list, w)
 	}
@@ -53,10 +65,11 @@ func AdminListWorkflows(c *gin.Context, db *sql.DB) {
 
 func AdminCreateWorkflow(c *gin.Context, db *sql.DB) {
 	var req struct {
-		EventName       string          `json:"event_name" binding:"required"`
-		SubforumIds     string          `json:"subforum_ids" binding:"required"`
-		HandlerFunction string          `json:"handler_function" binding:"required"`
-		Config          json.RawMessage `json:"config" binding:"required"`
+		EventName       string           `json:"event_name" binding:"required"`
+		SubforumIds     string           `json:"subforum_ids" binding:"required"`
+		HandlerFunction string           `json:"handler_function" binding:"required"`
+		Config          json.RawMessage  `json:"config" binding:"required"`
+		EventConfig     *json.RawMessage `json:"event_config"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
@@ -64,9 +77,14 @@ func AdminCreateWorkflow(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	var eventConfigArg interface{}
+	if req.EventConfig != nil {
+		eventConfigArg = []byte(*req.EventConfig)
+	}
+
 	res, err := db.Exec(
-		"INSERT INTO workflows (event_name, subforum_ids, handler_function, config) VALUES (?, ?, ?, ?)",
-		req.EventName, req.SubforumIds, req.HandlerFunction, []byte(req.Config),
+		"INSERT INTO workflows (event_name, subforum_ids, handler_function, config, event_config) VALUES (?, ?, ?, ?, ?)",
+		req.EventName, req.SubforumIds, req.HandlerFunction, []byte(req.Config), eventConfigArg,
 	)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create workflow: " + err.Error()})
@@ -75,7 +93,7 @@ func AdminCreateWorkflow(c *gin.Context, db *sql.DB) {
 	}
 
 	id, _ := res.LastInsertId()
-	row := db.QueryRow("SELECT id, event_name, subforum_ids, handler_function, config FROM workflows WHERE id = ?", id)
+	row := db.QueryRow(workflowSelectQuery+" WHERE id = ?", id)
 	workflow, err := scanWorkflow(row)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch workflow: " + err.Error()})
@@ -95,10 +113,11 @@ func AdminUpdateWorkflow(c *gin.Context, db *sql.DB) {
 	}
 
 	var req struct {
-		EventName       *string         `json:"event_name"`
-		SubforumIds     *string         `json:"subforum_ids"`
-		HandlerFunction *string         `json:"handler_function"`
-		Config          json.RawMessage `json:"config"`
+		EventName       *string          `json:"event_name"`
+		SubforumIds     *string          `json:"subforum_ids"`
+		HandlerFunction *string          `json:"handler_function"`
+		Config          json.RawMessage  `json:"config"`
+		EventConfig     *json.RawMessage `json:"event_config"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
@@ -132,6 +151,10 @@ func AdminUpdateWorkflow(c *gin.Context, db *sql.DB) {
 		setClauses = append(setClauses, "config = ?")
 		args = append(args, []byte(req.Config))
 	}
+	if req.EventConfig != nil {
+		setClauses = append(setClauses, "event_config = ?")
+		args = append(args, []byte(*req.EventConfig))
+	}
 
 	if len(setClauses) > 0 {
 		args = append(args, id)
@@ -143,7 +166,7 @@ func AdminUpdateWorkflow(c *gin.Context, db *sql.DB) {
 		}
 	}
 
-	row := db.QueryRow("SELECT id, event_name, subforum_ids, handler_function, config FROM workflows WHERE id = ?", id)
+	row := db.QueryRow(workflowSelectQuery+" WHERE id = ?", id)
 	workflow, err := scanWorkflow(row)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch workflow: " + err.Error()})

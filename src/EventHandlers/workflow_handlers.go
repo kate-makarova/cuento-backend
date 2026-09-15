@@ -1,25 +1,19 @@
 package EventHandlers
 
 import (
-	"cuento-backend/src/Events"
 	"cuento-backend/src/Services"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 )
 
-type WorkflowHandlerFunc func(db *sql.DB, data Events.EventData, config json.RawMessage)
+type WorkflowHandlerFunc func(db *sql.DB, topicID int64, config json.RawMessage)
 
 var workflowHandlers = map[string]WorkflowHandlerFunc{
 	"MoveTopic": moveTopicHandler,
 }
 
-func moveTopicHandler(db *sql.DB, data Events.EventData, config json.RawMessage) {
-	event, ok := data.(Events.TopicFullEvent)
-	if !ok {
-		return
-	}
-
+func moveTopicHandler(db *sql.DB, topicID int64, config json.RawMessage) {
 	var cfg struct {
 		TargetSubforumID int `json:"target_subforum_id"`
 	}
@@ -28,7 +22,7 @@ func moveTopicHandler(db *sql.DB, data Events.EventData, config json.RawMessage)
 		return
 	}
 
-	if err := Services.MoveTopics(db, []int{int(event.TopicID)}, cfg.TargetSubforumID); err != nil {
-		fmt.Printf("MoveTopic workflow: failed to move topic %d: %v\n", event.TopicID, err)
+	if err := Services.MoveTopics(db, []int{int(topicID)}, cfg.TargetSubforumID); err != nil {
+		fmt.Printf("MoveTopic workflow: failed to move topic %d: %v\n", topicID, err)
 	}
 }
