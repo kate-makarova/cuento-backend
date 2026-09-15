@@ -1190,6 +1190,7 @@ CREATE TABLE absence_timer_start
 (
     character_id BIGINT UNSIGNED NOT NULL,
     start_date   DATE            NOT NULL,
+    extra_days   INT             NOT NULL DEFAULT 0,
     PRIMARY KEY (character_id),
     CONSTRAINT fk_absence_timer_start_character FOREIGN KEY (character_id) REFERENCES character_base (id) ON DELETE CASCADE
 );
