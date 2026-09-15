@@ -1967,49 +1967,13 @@ func MoveTopics(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	placeholders := strings.Repeat("?,", len(req.TopicIDs)-1) + "?"
-
-	// Collect source subforum IDs before moving
-	idArgs := make([]interface{}, len(req.TopicIDs))
-	for i, id := range req.TopicIDs {
-		idArgs[i] = id
-	}
-	sourceRows, err := db.Query(fmt.Sprintf("SELECT DISTINCT subforum_id FROM topics WHERE id IN (%s)", placeholders), idArgs...)
-	var sourceSubforumIDs []int
-	if err == nil {
-		defer sourceRows.Close()
-		for sourceRows.Next() {
-			var sfID int
-			if sourceRows.Scan(&sfID) == nil {
-				sourceSubforumIDs = append(sourceSubforumIDs, sfID)
-			}
-		}
-	}
-
-	moveArgs := make([]interface{}, 0, len(req.TopicIDs)+1)
-	moveArgs = append(moveArgs, req.SubforumID)
-	moveArgs = append(moveArgs, idArgs...)
-
-	result, err := db.Exec(fmt.Sprintf("UPDATE topics SET subforum_id = ? WHERE id IN (%s)", placeholders), moveArgs...)
-	if err != nil {
+	if err := Services.MoveTopics(db, req.TopicIDs, req.SubforumID); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to move topics: " + err.Error()})
 		c.Abort()
 		return
 	}
 
-	moved, _ := result.RowsAffected()
-	c.JSON(http.StatusOK, gin.H{"moved": moved})
-
-	affected := make(map[int]bool)
-	affected[req.SubforumID] = true
-	for _, id := range sourceSubforumIDs {
-		affected[id] = true
-	}
-	subforumIDs := make([]int, 0, len(affected))
-	for id := range affected {
-		subforumIDs = append(subforumIDs, id)
-	}
-	Events.Publish(db, Events.TopicsMoved, Events.TopicsMovedEvent{SubforumIDs: subforumIDs})
+	c.JSON(http.StatusOK, gin.H{"moved": len(req.TopicIDs)})
 }
 
 func BatchDeleteTopics(c *gin.Context, db *sql.DB) {

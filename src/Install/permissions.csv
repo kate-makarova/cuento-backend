@@ -271,3 +271,7 @@ role_id,type,permission
 3,0,/admin/frontend-templates/component/version/:id
 2,0,/push/subscribe
 2,0,/push/unsubscribe
+3,0,/admin/workflow/list
+3,0,/admin/workflow/create
+3,0,/admin/workflow/update/:id
+3,0,/admin/workflow/delete/:id

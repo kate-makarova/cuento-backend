@@ -35,6 +35,7 @@ const (
 	WantedCharacterUpdated EventType = "WantedCharacterUpdated"
 	SubforumUpdated        EventType = "SubforumUpdated"
 	PostCountUpdated       EventType = "PostCountUpdated"
+	TopicFull              EventType = "TopicFull"
 )
 
 type EventData interface{}
@@ -187,6 +188,12 @@ type WantedCharacterUpdatedEvent struct {
 
 type SubforumUpdatedEvent struct {
 	SubforumID int
+}
+
+type TopicFullEvent struct {
+	TopicID    int64
+	SubforumID int
+	TopicName  string
 }
 
 type ReactionCreatedEvent struct {

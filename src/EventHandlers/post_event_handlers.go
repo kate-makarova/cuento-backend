@@ -101,6 +101,18 @@ func RegisterPostEventHandlers() {
 			fmt.Printf("Error updating topic stats: %v\n", err)
 		}
 
+		var newPostNumber int
+		var topicName string
+		if err := db.QueryRow("SELECT post_number, name FROM topics WHERE id = ?", event.TopicID).Scan(&newPostNumber, &topicName); err == nil {
+			if newPostNumber == Entities.TopicPostCap {
+				Events.Publish(db, Events.TopicFull, Events.TopicFullEvent{
+					TopicID:    event.TopicID,
+					SubforumID: event.SubforumID,
+					TopicName:  topicName,
+				})
+			}
+		}
+
 		// 3. Update Subforum Stats
 		var username string
 		err = db.QueryRow("SELECT username FROM users WHERE id = ?", event.Post.AuthorUserId).Scan(&username)

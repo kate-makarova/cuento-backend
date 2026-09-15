@@ -1125,6 +1125,19 @@ protectedRouter.GET("/admin/ai-agent-implementation/list", "Get list of all AI a
 		Controllers.AdminCallAiAgentImplementation(c, Services.DB)
 	})
 
+	protectedRouter.GET("/admin/workflow/list", "Get list of all workflows", func(c *gin.Context) {
+		Controllers.AdminListWorkflows(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/workflow/create", "Create a new workflow", func(c *gin.Context) {
+		Controllers.AdminCreateWorkflow(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/workflow/update/:id", "Update a workflow by ID", func(c *gin.Context) {
+		Controllers.AdminUpdateWorkflow(c, Services.DB)
+	})
+	protectedRouter.DELETE("/admin/workflow/delete/:id", "Delete a workflow by ID", func(c *gin.Context) {
+		Controllers.AdminDeleteWorkflow(c, Services.DB)
+	})
+
 	// WebSocket route with special authentication
 	wsGroup := r.Group("/")
 	wsGroup.Use(Middlewares.WebSocketAuthMiddleware())

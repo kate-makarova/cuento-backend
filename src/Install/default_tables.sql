@@ -1226,3 +1226,12 @@ create table user_push_subscriptions
     index idx_user_push_subscriptions_user_id (user_id),
     constraint fk_user_push_subscriptions_user foreign key (user_id) references users (id) on delete cascade
 );
+
+create table workflows
+(
+    id               int          auto_increment primary key,
+    event_name       varchar(100) not null,
+    subforum_ids     varchar(500) not null,
+    handler_function varchar(100) not null,
+    config           json         not null
+);
