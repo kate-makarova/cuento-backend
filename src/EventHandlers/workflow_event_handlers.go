@@ -15,7 +15,7 @@ func RegisterWorkflowEventHandlers() {
 		if !ok {
 			return
 		}
-		dispatchWorkflows(db, string(Events.TopicFull), event.SubforumID, data, nil)
+		dispatchWorkflows(db, string(Events.TopicFull), event.TopicID, event.SubforumID, nil)
 	})
 
 	Events.Subscribe(Events.TopicStatusChanged, func(db *sql.DB, data Events.EventData) {
@@ -23,7 +23,7 @@ func RegisterWorkflowEventHandlers() {
 		if !ok {
 			return
 		}
-		dispatchWorkflows(db, string(Events.TopicStatusChanged), event.SubforumID, data, func(eventConfig json.RawMessage) bool {
+		dispatchWorkflows(db, string(Events.TopicStatusChanged), event.TopicID, event.SubforumID, func(eventConfig json.RawMessage) bool {
 			var cfg struct {
 				NewStatus *int `json:"new_status"`
 			}
@@ -35,7 +35,7 @@ func RegisterWorkflowEventHandlers() {
 	})
 }
 
-func dispatchWorkflows(db *sql.DB, eventName string, subforumID int, data Events.EventData, matchEventConfig func(json.RawMessage) bool) {
+func dispatchWorkflows(db *sql.DB, eventName string, topicID int64, subforumID int, matchEventConfig func(json.RawMessage) bool) {
 	rows, err := db.Query(
 		"SELECT subforum_ids, handler_function, config, event_config FROM workflows WHERE event_name = ?",
 		eventName,
@@ -66,7 +66,7 @@ func dispatchWorkflows(db *sql.DB, eventName string, subforumID int, data Events
 			fmt.Printf("WorkflowHandler: unknown handler function %q\n", handlerName)
 			continue
 		}
-		handler(db, data, config)
+		handler(db, topicID, config)
 	}
 }
 
