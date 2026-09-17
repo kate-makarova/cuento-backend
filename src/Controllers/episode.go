@@ -1094,10 +1094,7 @@ func DeactivateEpisode(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	_, _ = tx.Exec(
-		"INSERT INTO topic_activity_log (topic_id, event, old_state, new_state) VALUES (?, 'episode_status_changed', ?, ?)",
-		deactivateTopicID, deactivateOldEpisodeStatus, int(Entities.InactiveEpisode),
-	)
+	Services.AddTopicActivityLog(tx, 0, deactivateTopicID, "episode_status_changed", deactivateOldEpisodeStatus, int(Entities.InactiveEpisode))
 
 	if err := tx.Commit(); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
@@ -1199,10 +1196,7 @@ func UpdateEpisodeStatus(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	_, _ = tx.Exec(
-		"INSERT INTO topic_activity_log (user_id, topic_id, event, old_state, new_state) VALUES (?, ?, 'episode_status_changed', ?, ?)",
-		userID, updateStatusTopicID, updateStatusOldEpisodeStatus, int(status),
-	)
+	Services.AddTopicActivityLog(tx, userID, updateStatusTopicID, "episode_status_changed", updateStatusOldEpisodeStatus, int(status))
 
 	if err := tx.Commit(); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
@@ -1305,10 +1299,7 @@ func ActivateEpisode(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	_, _ = tx.Exec(
-		"INSERT INTO topic_activity_log (topic_id, event, old_state, new_state) VALUES (?, 'episode_status_changed', ?, ?)",
-		activateTopicID, activateOldEpisodeStatus, int(Entities.ActiveEpisode),
-	)
+	Services.AddTopicActivityLog(tx, 0, activateTopicID, "episode_status_changed", activateOldEpisodeStatus, int(Entities.ActiveEpisode))
 
 	if err := tx.Commit(); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})

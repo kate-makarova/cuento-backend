@@ -369,10 +369,7 @@ func UpdateLoreTopic(c *gin.Context, db *sql.DB) {
 	}
 
 	if req.Status != nil {
-		_, _ = db.Exec(
-			"INSERT INTO topic_activity_log (user_id, topic_id, event, old_state, new_state) VALUES (?, ?, 'topic_status_changed', ?, ?)",
-			userID, topicID, int(currentStatus), int(*req.Status),
-		)
+		Services.AddTopicActivityLog(db, userID, int64(topicID), "topic_status_changed", int(currentStatus), int(*req.Status))
 		Events.Publish(db, Events.TopicStatusChanged, Events.TopicStatusChangedEvent{
 			TopicID:    int64(topicID),
 			SubforumID: subforumID,
