@@ -502,7 +502,11 @@ func addLocaleBlock(config, code, fileBase string) string {
 	if localesIdx == -1 {
 		return config
 	}
-	openAt := localesIdx + strings.Index(config[localesIdx:], "[")
+	eqIdx := strings.Index(config[localesIdx:], "=")
+	if eqIdx == -1 {
+		return config
+	}
+	openAt := localesIdx + eqIdx + strings.Index(config[localesIdx+eqIdx:], "[")
 	depth, closeAt := 0, -1
 	for i := openAt; i < len(config); i++ {
 		switch config[i] {
