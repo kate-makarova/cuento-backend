@@ -498,17 +498,30 @@ func addLocaleBlock(config, code, fileBase string) string {
   },
 `, code, langPrefix, fileBase, translationConst, angularLocale)
 
-	// Locate the LOCALES array declaration, then find its closing ]; and insert before it.
 	localesIdx := strings.Index(config, "export const LOCALES")
 	if localesIdx == -1 {
 		return config
 	}
-	closeIdx := strings.Index(config[localesIdx:], "\n];")
-	if closeIdx == -1 {
+	openAt := localesIdx + strings.Index(config[localesIdx:], "[")
+	depth, closeAt := 0, -1
+	for i := openAt; i < len(config); i++ {
+		switch config[i] {
+		case '[':
+			depth++
+		case ']':
+			depth--
+			if depth == 0 {
+				closeAt = i
+			}
+		}
+		if closeAt != -1 {
+			break
+		}
+	}
+	if closeAt == -1 {
 		return config
 	}
-	insertAt := localesIdx + closeIdx
-	return config[:insertAt] + "\n" + block + config[insertAt+1:]
+	return config[:closeAt] + "\n" + block + config[closeAt:]
 }
 
 // removeLocaleBlock removes the locale block whose import path matches fileBase from locale_config.ts.
