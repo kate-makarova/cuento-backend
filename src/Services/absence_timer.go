@@ -6,18 +6,16 @@ import (
 	"time"
 )
 
-// recalculateAbsenceTimerStart is the internal implementation.
-//
-// floorDate, if non-nil, is the minimum allowed start_date. Pass today's date when calling
-// from an episode closure so characters always get a full N-day window from closure time.
+// recalculateAbsenceTimerStart recomputes when the archiving countdown begins for a character.
 //
 // Rules:
 //   - Not active → remove from table (no archiving).
-//   - No active episodes → timer starts from max(date_last_post, floorDate).
+//   - No active episodes → timer starts from the later of date_last_post or the most recent
+//     episode closure recorded in topic_activity_log.
 //   - All active episodes have this character as last poster → no timer (delete from table).
 //   - Any active episode has another character as last poster → timer starts from the earliest
 //     such post date (the oldest post the character has yet to answer).
-func recalculateAbsenceTimerStart(characterID int, db *sql.DB, floorDate *time.Time) {
+func recalculateAbsenceTimerStart(characterID int, db *sql.DB) {
 	var charStatus int
 	var userID int
 	var topicCreatedAt time.Time
@@ -76,36 +74,26 @@ func recalculateAbsenceTimerStart(characterID int, db *sql.DB, floorDate *time.T
 	var startDate time.Time
 
 	if len(episodes) == 0 {
-		// No active episodes — start from the character's own last post date, but also
-		// consider the most recent last-post date across all episodes they participated in
-		// (regardless of status). This prevents the timer from ignoring recent episode
-		// activity (e.g. a reply posted just before the episode was closed).
+		// No active episodes — base the timer on date_last_post, then floor it at the most
+		// recent episode closure date from the activity log so the character always gets a
+		// full N-day window from when their last episode actually ended.
 		if lastPost != nil {
 			startDate = *lastPost
 		} else {
 			startDate = topicCreatedAt
 		}
-		var latestEpisodePost *time.Time
+		var lastClosure *time.Time
 		_ = db.QueryRow(`
-			SELECT MAX(p.date_created)
-			FROM episode_character ec
-			JOIN episode_base eb ON ec.episode_id = eb.id
-			JOIN (
-				SELECT topic_id, MAX(id) AS last_post_id
-				FROM posts
-				WHERE is_deleted IS NULL OR is_deleted != 1
-				GROUP BY topic_id
-			) lp ON lp.topic_id = eb.topic_id
-			JOIN posts p ON p.id = lp.last_post_id
+			SELECT MAX(tal.date)
+			FROM topic_activity_log tal
+			JOIN episode_base eb ON eb.topic_id = tal.topic_id
+			JOIN episode_character ec ON ec.episode_id = eb.id
 			WHERE ec.character_id = ?
-		`, characterID).Scan(&latestEpisodePost)
-		if latestEpisodePost != nil && latestEpisodePost.After(startDate) {
-			startDate = *latestEpisodePost
-		}
-		// When called from an episode closure, guarantee the character gets at least
-		// N days from the closure date rather than from whenever they last posted.
-		if floorDate != nil && floorDate.After(startDate) {
-			startDate = *floorDate
+			  AND tal.event = 'episode_status_changed'
+			  AND tal.new_state IN (1, 2)
+		`, characterID).Scan(&lastClosure)
+		if lastClosure != nil && lastClosure.After(startDate) {
+			startDate = *lastClosure
 		}
 	} else {
 		allByCharacter := true
@@ -156,7 +144,7 @@ func recalculateAbsenceTimerStart(characterID int, db *sql.DB, floorDate *time.T
 
 // RecalculateAbsenceTimerStart recomputes when the archiving countdown begins for a character.
 func RecalculateAbsenceTimerStart(characterID int, db *sql.DB) {
-	recalculateAbsenceTimerStart(characterID, db, nil)
+	recalculateAbsenceTimerStart(characterID, db)
 }
 
 // RecalculateAbsenceTimerStartForEpisode recalculates the absence timer for all characters
@@ -175,32 +163,7 @@ func RecalculateAbsenceTimerStartForEpisode(episodeID int, db *sql.DB) {
 	}
 	rows.Close()
 	for _, id := range charIDs {
-		recalculateAbsenceTimerStart(id, db, nil)
-	}
-}
-
-// RecalculateAbsenceTimerStartForEpisodeClosure recalculates the absence timer for all characters
-// in an episode that is being closed (set to inactive or finished). Characters who end up with no
-// remaining active episodes are guaranteed a start_date of today, giving them a full N-day window
-// from the moment of closure rather than from whenever they last posted.
-func RecalculateAbsenceTimerStartForEpisodeClosure(episodeID int, db *sql.DB) {
-	today := time.Now()
-	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, today.Location())
-
-	rows, err := db.Query("SELECT character_id FROM episode_character WHERE episode_id = ?", episodeID)
-	if err != nil {
-		return
-	}
-	var charIDs []int
-	for rows.Next() {
-		var id int
-		if rows.Scan(&id) == nil {
-			charIDs = append(charIDs, id)
-		}
-	}
-	rows.Close()
-	for _, id := range charIDs {
-		recalculateAbsenceTimerStart(id, db, &today)
+		recalculateAbsenceTimerStart(id, db)
 	}
 }
 
@@ -223,7 +186,7 @@ func RecalculateAbsenceTimerStartForUser(userID int, db *sql.DB) {
 	}
 	rows.Close()
 	for _, id := range charIDs {
-		recalculateAbsenceTimerStart(id, db, nil)
+		recalculateAbsenceTimerStart(id, db)
 	}
 }
 
@@ -252,6 +215,6 @@ func InitializeAbsenceTimerStart(db *sql.DB) {
 	}
 	log.Printf("AbsenceTimerStart init: backfilling %d character(s)", len(charIDs))
 	for _, id := range charIDs {
-		recalculateAbsenceTimerStart(id, db, nil)
+		recalculateAbsenceTimerStart(id, db)
 	}
 }
