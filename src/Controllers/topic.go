@@ -922,14 +922,18 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 	}
 
 	// Verify the character profile belongs to the current user and the character is active.
+	// Mask profiles have character_id=NULL and store their owner in character_profile_base.user_id.
 	if userID != 0 && req.UseCharacterProfile && req.CharacterProfileID != nil {
-		var ownerUserID, characterStatus int
+		var ownerUserID int
+		var characterStatus sql.NullInt64
+		var isMask sql.NullBool
 		err := tx.QueryRow(
-			`SELECT cb.user_id, cb.character_status FROM character_profile_base cpb
-			 JOIN character_base cb ON cb.id = cpb.character_id
+			`SELECT COALESCE(cb.user_id, cpb.user_id), cb.character_status, cpb.is_mask
+			 FROM character_profile_base cpb
+			 LEFT JOIN character_base cb ON cb.id = cpb.character_id
 			 WHERE cpb.id = ?`,
 			*req.CharacterProfileID,
-		).Scan(&ownerUserID, &characterStatus)
+		).Scan(&ownerUserID, &characterStatus, &isMask)
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Character profile not found"})
 			return
@@ -941,7 +945,7 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "This character does not belong to you"})
 			return
 		}
-		if characterStatus != int(Entities.ActiveCharacter) {
+		if !(isMask.Valid && isMask.Bool) && (!characterStatus.Valid || characterStatus.Int64 != int64(Entities.ActiveCharacter)) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "This character is not active"})
 			return
 		}
