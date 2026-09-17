@@ -1323,14 +1323,15 @@ func UpdatePost(c *gin.Context, db *sql.DB) {
 		var newCharacterID *int
 
 		if *req.UseCharacterProfile && req.CharacterProfileID != nil {
-			// Validate: profile must belong to the post's original author
+			// Validate: profile must belong to the post's original author.
+			// Masks have character_id=NULL; ownership is stored in cpb.user_id directly.
 			var profileOwnerUserID int
 			var characterID sql.NullInt64
 			var isMask sql.NullBool
 			err = db.QueryRow(`
-				SELECT cb.user_id, cpb.character_id, cpb.is_mask
+				SELECT COALESCE(cb.user_id, cpb.user_id), cpb.character_id, cpb.is_mask
 				FROM character_profile_base cpb
-				JOIN character_base cb ON cb.id = cpb.character_id
+				LEFT JOIN character_base cb ON cb.id = cpb.character_id
 				WHERE cpb.id = ?
 			`, *req.CharacterProfileID).Scan(&profileOwnerUserID, &characterID, &isMask)
 			if err != nil {
