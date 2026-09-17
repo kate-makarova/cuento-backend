@@ -1612,6 +1612,10 @@ func UpdateTopic(c *gin.Context, db *sql.DB) {
 	}
 
 	if req.Status != nil {
+		_, _ = db.Exec(
+			"INSERT INTO topic_activity_log (user_id, topic_id, event, old_state, new_state) VALUES (?, ?, 'topic_status_changed', ?, ?)",
+			userID, topicID, int(currentStatus), int(*req.Status),
+		)
 		Events.Publish(db, Events.TopicStatusChanged, Events.TopicStatusChangedEvent{
 			TopicID:    int64(topicID),
 			SubforumID: subforumID,
@@ -1734,6 +1738,10 @@ func BulkUpdateTopics(c *gin.Context, db *sql.DB) {
 
 	if req.Status != nil {
 		for tID, meta := range topicMetaMap {
+			_, _ = db.Exec(
+				"INSERT INTO topic_activity_log (user_id, topic_id, event, old_state, new_state) VALUES (?, ?, 'topic_status_changed', ?, ?)",
+				userID, tID, int(meta.status), int(*req.Status),
+			)
 			Events.Publish(db, Events.TopicStatusChanged, Events.TopicStatusChangedEvent{
 				TopicID:    int64(tID),
 				SubforumID: meta.subforumID,
