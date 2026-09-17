@@ -323,6 +323,9 @@ func main() {
 	protectedRouter.GET("/stats/overall", "Get overall game stats for a time period", func(c *gin.Context) {
 		Controllers.GetOverallStats(c, Services.DB)
 	})
+	protectedRouter.GET("/stats/writing-activity", "Get daily post counts for a time period", func(c *gin.Context) {
+		Controllers.GetWritingActivity(c, Services.DB)
+	})
 
 	optionalAuthRouter.GET("/features", "Get list of all feature flags", func(c *gin.Context) {
 		Features.GetFeaturesHandler(c)

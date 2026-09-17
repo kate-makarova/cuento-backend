@@ -81,3 +81,60 @@ func GetOverallStats(c *gin.Context, db *sql.DB) {
 
 	c.JSON(http.StatusOK, stats)
 }
+
+type DailyPostCount struct {
+	Date  string `json:"date"`
+	Count int    `json:"count"`
+}
+
+func GetWritingActivity(c *gin.Context, db *sql.DB) {
+	dateFromStr := c.Query("date_from")
+	dateToStr := c.Query("date_to")
+
+	dateFrom, err := time.Parse("2006-01-02", dateFromStr)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid date_from: expected YYYY-MM-DD"})
+		c.Abort()
+		return
+	}
+	dateTo, err := time.Parse("2006-01-02", dateToStr)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid date_to: expected YYYY-MM-DD"})
+		c.Abort()
+		return
+	}
+	dateToInclusive := dateTo.Add(24*time.Hour - time.Second)
+
+	rows, err := db.Query(`
+		SELECT DATE(date_created) AS day, COUNT(*) AS post_count
+		FROM posts
+		WHERE date_created BETWEEN ? AND ?
+		  AND (is_deleted IS NULL OR is_deleted != 1)
+		GROUP BY day
+		ORDER BY day
+	`, dateFrom, dateToInclusive)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to query writing activity"})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	postsByDay := make(map[string]int)
+	for rows.Next() {
+		var day string
+		var count int
+		if rows.Scan(&day, &count) == nil {
+			postsByDay[day] = count
+		}
+	}
+
+	// Build a contiguous slice covering every day in the range, filling zeros.
+	var result []DailyPostCount
+	for d := dateFrom; !d.After(dateTo); d = d.AddDate(0, 0, 1) {
+		key := d.Format("2006-01-02")
+		result = append(result, DailyPostCount{Date: key, Count: postsByDay[key]})
+	}
+
+	c.JSON(http.StatusOK, result)
+}
