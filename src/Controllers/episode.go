@@ -1229,7 +1229,11 @@ func UpdateEpisodeStatus(c *gin.Context, db *sql.DB) {
 		}
 	}
 
-	go Services.RecalculateAbsenceTimerStartForEpisode(id, db)
+	if status == Entities.ActiveEpisode {
+		go Services.RecalculateAbsenceTimerStartForEpisode(id, db)
+	} else {
+		go Services.RecalculateAbsenceTimerStartForEpisodeClosure(id, db)
+	}
 
 	if updateStatusTopicID > 0 && updateStatusOldStatus != int(topicStatus) {
 		Events.Publish(db, Events.TopicStatusChanged, Events.TopicStatusChangedEvent{
