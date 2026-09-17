@@ -320,6 +320,10 @@ func main() {
 	protectedGroup.Use(Middlewares.PermissionsMiddleware(Services.DB))
 	protectedRouter := Router.NewProtectedCustomRouter(protectedGroup)
 
+	protectedRouter.GET("/stats/overall", "Get overall game stats for a time period", func(c *gin.Context) {
+		Controllers.GetOverallStats(c, Services.DB)
+	})
+
 	optionalAuthRouter.GET("/features", "Get list of all feature flags", func(c *gin.Context) {
 		Features.GetFeaturesHandler(c)
 	})
