@@ -70,9 +70,10 @@ func GetOverallStats(c *gin.Context, db *sql.DB) {
 	`, int(Entities.InactiveEpisode), dateFrom, dateTo).Scan(&stats.InactivatedEpisodes)
 
 	_ = db.QueryRow(`
-		SELECT COUNT(*) FROM posts
-		WHERE date_created BETWEEN ? AND ?
-		  AND (is_deleted IS NULL OR is_deleted != 1)
+		SELECT COUNT(*) FROM posts p
+		JOIN episode_base eb ON eb.topic_id = p.topic_id
+		WHERE p.date_created BETWEEN ? AND ?
+		  AND (p.is_deleted IS NULL OR p.is_deleted != 1)
 	`, dateFrom, dateTo).Scan(&stats.TotalPosts)
 
 	_ = db.QueryRow(`
@@ -132,10 +133,11 @@ func GetWritingActivity(c *gin.Context, db *sql.DB) {
 	dateTo, _ := time.Parse("2006-01-02", c.Query("date_to"))
 
 	rows, err := db.Query(`
-		SELECT DATE(date_created) AS day, COUNT(*) AS post_count
-		FROM posts
-		WHERE date_created BETWEEN ? AND ?
-		  AND (is_deleted IS NULL OR is_deleted != 1)
+		SELECT DATE(p.date_created) AS day, COUNT(*) AS post_count
+		FROM posts p
+		JOIN episode_base eb ON eb.topic_id = p.topic_id
+		WHERE p.date_created BETWEEN ? AND ?
+		  AND (p.is_deleted IS NULL OR p.is_deleted != 1)
 		GROUP BY day
 		ORDER BY day
 	`, dateFrom, dateToInclusive)
@@ -174,6 +176,7 @@ func GetTopWriters(c *gin.Context, db *sql.DB) {
 	rows, err := db.Query(`
 		SELECT p.author_user_id, u.username, COUNT(p.id) AS post_count
 		FROM posts p
+		JOIN episode_base eb ON eb.topic_id = p.topic_id
 		JOIN users u ON u.id = p.author_user_id
 		WHERE p.date_created BETWEEN ? AND ?
 		  AND (p.is_deleted IS NULL OR p.is_deleted != 1)
@@ -214,6 +217,7 @@ func GetTopCharacters(c *gin.Context, db *sql.DB) {
 			COALESCE(cpb.is_mask, false) AS is_mask,
 			COUNT(p.id) AS post_count
 		FROM posts p
+		JOIN episode_base eb ON eb.topic_id = p.topic_id
 		JOIN character_profile_base cpb ON cpb.id = p.character_profile_id
 		LEFT JOIN character_base cb ON cb.id = cpb.character_id
 		WHERE p.date_created BETWEEN ? AND ?
@@ -338,6 +342,7 @@ func GetPostsByFaction(c *gin.Context, db *sql.DB) {
 		JOIN character_base cb          ON cb.id = cf.character_id
 		JOIN character_profile_base cpb ON cpb.character_id = cb.id
 		JOIN posts p                    ON p.character_profile_id = cpb.id
+		JOIN episode_base eb            ON eb.topic_id = p.topic_id
 		WHERE p.date_created BETWEEN ? AND ?
 		  AND p.use_character_profile = true
 		  AND (p.is_deleted IS NULL OR p.is_deleted != 1)
