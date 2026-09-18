@@ -332,6 +332,12 @@ func main() {
 	protectedRouter.GET("/stats/top-characters", "Get top 10 characters and masks by post count for a time period", func(c *gin.Context) {
 		Controllers.GetTopCharacters(c, Services.DB)
 	})
+	protectedRouter.GET("/stats/episodes-by-faction", "Get episode counts by faction (created/finished/archived) for a time period", func(c *gin.Context) {
+		Controllers.GetEpisodesByFaction(c, Services.DB)
+	})
+	protectedRouter.GET("/stats/posts-by-faction", "Get post counts by faction for a time period", func(c *gin.Context) {
+		Controllers.GetPostsByFaction(c, Services.DB)
+	})
 
 	optionalAuthRouter.GET("/features", "Get list of all feature flags", func(c *gin.Context) {
 		Features.GetFeaturesHandler(c)
