@@ -534,16 +534,16 @@ func GetUserProfile(c *gin.Context, db *sql.DB) {
 			cpb.id,
 			cpb.mask_name,
 			cpb.avatar,
-			COUNT(DISTINCT em.episode_id)    AS total_episodes,
-			COUNT(DISTINCT p.id)             AS total_posts,
-			MAX(p.date_created)              AS date_last_post
+			(SELECT COUNT(*) FROM episode_mask em WHERE em.mask_id = cpb.id) AS total_episodes,
+			(SELECT COUNT(*) FROM posts p
+				WHERE p.character_profile_id = cpb.id
+				  AND (p.is_deleted IS NULL OR p.is_deleted != 1)) AS total_posts,
+			(SELECT MAX(p.date_created) FROM posts p
+				WHERE p.character_profile_id = cpb.id
+				  AND (p.is_deleted IS NULL OR p.is_deleted != 1)) AS date_last_post
 		FROM character_profile_base cpb
-		LEFT JOIN episode_mask em ON em.mask_id = cpb.id
-		LEFT JOIN posts p ON p.character_profile_id = cpb.id
-			AND (p.is_deleted IS NULL OR p.is_deleted != 1)
 		WHERE cpb.user_id = ? AND cpb.is_mask = 1
 		  AND (cpb.is_archived IS NULL OR cpb.is_archived = 0)
-		GROUP BY cpb.id, cpb.mask_name, cpb.avatar
 	`, userID)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get user masks: " + err.Error()})
