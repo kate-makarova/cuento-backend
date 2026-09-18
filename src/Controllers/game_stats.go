@@ -150,10 +150,10 @@ func GetWritingActivity(c *gin.Context, db *sql.DB) {
 
 	postsByDay := make(map[string]int)
 	for rows.Next() {
-		var day string
+		var day time.Time
 		var count int
 		if rows.Scan(&day, &count) == nil {
-			postsByDay[day] = count
+			postsByDay[day.Format("2006-01-02")] = count
 		}
 	}
 
