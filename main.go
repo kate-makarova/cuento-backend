@@ -1147,6 +1147,22 @@ protectedRouter.GET("/admin/ai-agent-implementation/list", "Get list of all AI a
 		Controllers.AdminCallAiAgentImplementation(c, Services.DB)
 	})
 
+	protectedRouter.GET("/admin/ai-models", "List all AI models", func(c *gin.Context) {
+		Controllers.AdminListAIModels(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/ai-models/:id", "Get a single AI model by ID", func(c *gin.Context) {
+		Controllers.AdminGetAIModel(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/ai-models/create", "Create a new AI model", func(c *gin.Context) {
+		Controllers.AdminCreateAIModel(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/ai-models/update/:id", "Update an AI model", func(c *gin.Context) {
+		Controllers.AdminUpdateAIModel(c, Services.DB)
+	})
+	protectedRouter.DELETE("/admin/ai-models/delete/:id", "Delete an AI model", func(c *gin.Context) {
+		Controllers.AdminDeleteAIModel(c, Services.DB)
+	})
+
 	protectedRouter.GET("/admin/workflow/list", "Get list of all workflows", func(c *gin.Context) {
 		Controllers.AdminListWorkflows(c, Services.DB)
 	})

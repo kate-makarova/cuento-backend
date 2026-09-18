@@ -1253,3 +1253,16 @@ create table topic_activity_log
     constraint fk_topic_activity_log_topic foreign key (topic_id) references topics (id) on delete cascade,
     constraint fk_topic_activity_log_user  foreign key (user_id)  references users (id)  on delete set null
 );
+
+create table ai_models
+(
+    id            int          auto_increment primary key,
+    name          varchar(255) not null,
+    size          int          not null,
+    api_address   varchar(255) not null,
+    api_key       varchar(255) not null,
+    machine_name  varchar(255) not null,
+    is_active     boolean      not null default false,
+    protocol_type int          not null,
+    model_type    int          not null default 1
+);

@@ -10,25 +10,15 @@ import (
 	"google.golang.org/genai"
 )
 
-var activeAgent *AIAgent
+var activePool *AIModelPool
 
 func ReinitializeAgent(db *sql.DB) {
-	agent, err := buildAgent(db)
-	if err != nil {
-		fmt.Printf("MCP: AI agent reinitialization failed: %v\n", err)
-		activeAgent = nil
-		return
-	}
-	activeAgent = agent
-	fmt.Println("MCP: AI agent reinitialized successfully")
+	activePool = NewAIModelPool(db)
+	fmt.Println("MCP: AI model pool reinitialized")
 }
 
 func StartMCPServer(db *sql.DB, addr string) error {
-	agent, err := buildAgent(db)
-	if err != nil {
-		fmt.Printf("MCP: AI agent not initialized: %v\n", err)
-	}
-	activeAgent = agent
+	activePool = NewAIModelPool(db)
 
 	s := server.NewMCPServer(
 		"cuento",
@@ -77,58 +67,3 @@ func ListAvailableModels(db *sql.DB) ([]string, error) {
 	}
 }
 
-// openAIBaseURLs re-exports the provider→base URL map from Services.
-var openAIBaseURLs = Services.OpenAIBaseURLs
-
-// defaultModels maps provider names to sensible default model names.
-var defaultModels = map[string]string{
-	"gemini":   "gemini-2.0-flash",
-	"claude":   "claude-3-5-sonnet-20241022",
-	"openai":   "gpt-4o",
-	"deepseek": "deepseek-chat",
-	"groq":     "llama-3.3-70b-versatile",
-	"mistral":  "mistral-large-latest",
-}
-
-func buildAgent(db *sql.DB) (*AIAgent, error) {
-	apiKey, err := Services.GetGlobalSetting("ai_api_key", db)
-	if err != nil || apiKey == "" {
-		return nil, fmt.Errorf("ai_api_key not set")
-	}
-
-	aiName, err := Services.GetGlobalSetting("ai_name", db)
-	if err != nil || aiName == "" {
-		return nil, fmt.Errorf("ai_name not set")
-	}
-
-	aiModel, err := Services.GetGlobalSetting("ai_model", db)
-	if err != nil || aiModel == "" {
-		if def, ok := defaultModels[aiName]; ok {
-			aiModel = def
-		} else {
-			aiModel = "gemini-2.0-flash"
-		}
-	}
-
-	switch aiName {
-	case "gemini":
-		client, err := NewGeminiClient(apiKey, aiModel)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create Gemini client: %w", err)
-		}
-		return NewAIAgent(client), nil
-
-	case "claude":
-		client, err := NewClaudeClient(apiKey, aiModel)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create Claude client: %w", err)
-		}
-		return NewAIAgent(client), nil
-
-	case "openai", "deepseek", "groq", "mistral":
-		return NewAIAgent(&OpenAICompatClient{client: Services.OpenAIClient, model: aiModel}), nil
-
-	default:
-		return nil, fmt.Errorf("unknown ai_name: %s (supported: gemini, claude, openai, deepseek, groq, mistral)", aiName)
-	}
-}

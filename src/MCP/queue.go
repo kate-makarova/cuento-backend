@@ -78,7 +78,7 @@ func processAllPending(db *sql.DB) {
 // processNextTask claims and executes one pending task.
 // Returns (true, nil) if a task was processed, (false, nil) if the queue is empty.
 func processNextTask(db *sql.DB) (bool, error) {
-	if activeAgent == nil {
+	if activePool == nil {
 		return false, nil
 	}
 
@@ -124,6 +124,13 @@ func processNextTask(db *sql.DB) (bool, error) {
 func executeTask(db *sql.DB, taskID, userID int) {
 	ctx := context.Background()
 
+	client, err := activePool.ClientForMinSize(Entities.AIModelSizeSmall, Entities.AIModelTypeText)
+	if err != nil {
+		markFailed(db, taskID, userID, "no AI model available: "+err.Error())
+		return
+	}
+	agent := NewAIAgent(client)
+
 	history, err := loadChatHistory(userID, db)
 	if err != nil {
 		markFailed(db, taskID, userID, "failed to load history: "+err.Error())
@@ -153,7 +160,7 @@ func executeTask(db *sql.DB, taskID, userID int) {
 	var lastErr error
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		replyText, sources, lastErr = activeAgent.Chat(ctx, history, systemInstruction)
+		replyText, sources, lastErr = agent.Chat(ctx, history, systemInstruction)
 		if lastErr == nil {
 			break
 		}
