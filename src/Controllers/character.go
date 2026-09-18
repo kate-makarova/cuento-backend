@@ -1334,8 +1334,9 @@ func AcceptCharacter(c *gin.Context, db *sql.DB) {
 	var avatar *string
 	var topicID int
 	var subforumID int
-	err = tx.QueryRow(`SELECT cb.user_id, cb.name, cb.avatar, cb.topic_id, COALESCE(t.subforum_id, 0)
-		FROM character_base cb JOIN topics t ON cb.topic_id = t.id WHERE cb.id = ?`, id).Scan(&userID, &name, &avatar, &topicID, &subforumID)
+	var acceptOldCharStatus int
+	err = tx.QueryRow(`SELECT cb.user_id, cb.name, cb.avatar, cb.topic_id, COALESCE(t.subforum_id, 0), cb.character_status
+		FROM character_base cb JOIN topics t ON cb.topic_id = t.id WHERE cb.id = ?`, id).Scan(&userID, &name, &avatar, &topicID, &subforumID, &acceptOldCharStatus)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Character not found"})
 		c.Abort()
@@ -1391,6 +1392,8 @@ func AcceptCharacter(c *gin.Context, db *sql.DB) {
 			return
 		}
 	}
+
+	Services.AddTopicActivityLog(tx, 0, int64(topicID), "character_status_changed", acceptOldCharStatus, int(Entities.ActiveCharacter))
 
 	if err := tx.Commit(); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
