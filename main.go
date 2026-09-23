@@ -1147,6 +1147,10 @@ protectedRouter.GET("/admin/ai-agent-implementation/list", "Get list of all AI a
 		Controllers.AdminCallAiAgentImplementation(c, Services.DB)
 	})
 
+	protectedRouter.POST("/ai/proofread", "Proofread text: fix typos, grammar and punctuation", func(c *gin.Context) {
+		Controllers.ProofreadText(c, Services.DB)
+	})
+
 	protectedRouter.GET("/admin/ai-models", "List all AI models", func(c *gin.Context) {
 		Controllers.AdminListAIModels(c, Services.DB)
 	})
