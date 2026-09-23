@@ -16,18 +16,39 @@ func NewAIModelPool(db *sql.DB) *AIModelPool {
 
 // ClientForMinSize returns the smallest active AI client of the given type whose size >= minSize.
 func (p *AIModelPool) ClientForMinSize(minSize Entities.AIModelSize, modelType Entities.AIModelType) (AIClient, error) {
+	return p.clientForMinSize(minSize, modelType, nil)
+}
+
+// ClientForMinSizeAndProtocol is like ClientForMinSize but also restricts to a specific protocol.
+func (p *AIModelPool) ClientForMinSizeAndProtocol(minSize Entities.AIModelSize, modelType Entities.AIModelType, protocol Entities.AIModelProtocolType) (AIClient, error) {
+	return p.clientForMinSize(minSize, modelType, &protocol)
+}
+
+func (p *AIModelPool) clientForMinSize(minSize Entities.AIModelSize, modelType Entities.AIModelType, protocol *Entities.AIModelProtocolType) (AIClient, error) {
 	var (
 		apiAddress, apiKey, machineName string
 		protocolType                    int
 	)
 
-	err := p.db.QueryRow(`
-		SELECT api_address, api_key, machine_name, protocol_type
-		FROM ai_models
-		WHERE is_active = 1 AND size >= ? AND model_type = ?
-		ORDER BY size ASC
-		LIMIT 1
-	`, minSize, modelType).Scan(&apiAddress, &apiKey, &machineName, &protocolType)
+	var err error
+	if protocol != nil {
+		err = p.db.QueryRow(`
+			SELECT api_address, api_key, machine_name, protocol_type
+			FROM ai_models
+			WHERE is_active = 1 AND size >= ? AND model_type = ? AND protocol_type = ?
+			ORDER BY size ASC
+			LIMIT 1
+		`, minSize, modelType, *protocol).Scan(&apiAddress, &apiKey, &machineName, &protocolType)
+	} else {
+		err = p.db.QueryRow(`
+			SELECT api_address, api_key, machine_name, protocol_type
+			FROM ai_models
+			WHERE is_active = 1 AND size >= ? AND model_type = ?
+			ORDER BY size ASC
+			LIMIT 1
+		`, minSize, modelType).Scan(&apiAddress, &apiKey, &machineName, &protocolType)
+	}
+
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("no active AI model available with size >= %d and model_type = %d", minSize, modelType)
 	}

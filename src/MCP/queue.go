@@ -124,7 +124,7 @@ func processNextTask(db *sql.DB) (bool, error) {
 func executeTask(db *sql.DB, taskID, userID int) {
 	ctx := context.Background()
 
-	client, err := activePool.ClientForMinSize(Entities.AIModelSizeSmall, Entities.AIModelTypeText)
+	client, err := activePool.ClientForMinSizeAndProtocol(Entities.AIModelSizeSmall, Entities.AIModelTypeText, Entities.AIModelProtocolOpenAI)
 	if err != nil {
 		markFailed(db, taskID, userID, "no AI model available: "+err.Error())
 		return
