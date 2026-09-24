@@ -220,6 +220,7 @@ func AdminSwitchAIPool(c *gin.Context, db *sql.DB) {
 
 	switch req.Source {
 	case "db":
+		db.Exec(`UPDATE global_settings SET setting_value = 'db' WHERE setting_name = 'model_pool_source'`)
 		MCP.SwitchPool(MCP.NewAIModelPool(db))
 	case "openrouter":
 		if req.APIKey == "" {
@@ -227,7 +228,10 @@ func AdminSwitchAIPool(c *gin.Context, db *sql.DB) {
 			c.Abort()
 			return
 		}
-		MCP.SwitchPool(MCP.NewOpenRouterModelPool(req.APIKey))
+		db.Exec(`UPDATE global_settings SET setting_value = 'openrouter' WHERE setting_name = 'model_pool_source'`)
+		db.Exec(`UPDATE global_settings SET setting_value = ? WHERE setting_name = 'openrouter_api_key'`, req.APIKey)
+		freeOnly, _ := Services.GetGlobalSetting("openrouter_use_free_only", db)
+		MCP.SwitchPool(MCP.NewOpenRouterModelPool(req.APIKey, freeOnly != "n"))
 	default:
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "unknown source: " + req.Source})
 		c.Abort()

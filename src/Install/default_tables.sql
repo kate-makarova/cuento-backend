@@ -172,6 +172,15 @@ VALUES ('character_avatar_width', '0', 0);
 INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('character_avatar_height', '0', 0);
 
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('model_pool_source', 'db', 1);
+
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('openrouter_api_key', '', 1);
+
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('openrouter_use_free_only', 'y', 1);
+
 CREATE TABLE categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NULL,

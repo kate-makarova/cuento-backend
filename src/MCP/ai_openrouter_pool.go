@@ -42,11 +42,12 @@ type openRouterModel struct {
 }
 
 type OpenRouterModelPool struct {
-	apiKey string
+	apiKey      string
+	useFreeOnly bool
 }
 
-func NewOpenRouterModelPool(apiKey string) *OpenRouterModelPool {
-	return &OpenRouterModelPool{apiKey: apiKey}
+func NewOpenRouterModelPool(apiKey string, useFreeOnly bool) *OpenRouterModelPool {
+	return &OpenRouterModelPool{apiKey: apiKey, useFreeOnly: useFreeOnly}
 }
 
 func (p *OpenRouterModelPool) ClientForMinSize(minSize Entities.AIModelSize, modelType Entities.AIModelType) (AIClient, error) {
@@ -74,6 +75,9 @@ func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelTyp
 			continue
 		}
 		if providerPrefix != "" && !strings.HasPrefix(m.ID, providerPrefix) {
+			continue
+		}
+		if p.useFreeOnly && parsePrice(m.Pricing.Prompt) > 0 {
 			continue
 		}
 		candidates = append(candidates, m)

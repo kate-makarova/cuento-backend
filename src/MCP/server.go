@@ -30,12 +30,25 @@ func SwitchPool(pool ModelPool) {
 	fmt.Printf("MCP: switched to pool %T\n", pool)
 }
 
+// InitPoolFromSettings reads model_pool_source and related settings from the DB
+// and activates the appropriate pool. Called on startup and after settings change.
+func InitPoolFromSettings(db *sql.DB) {
+	source, _ := Services.GetGlobalSetting("model_pool_source", db)
+	if source == "openrouter" {
+		apiKey, _ := Services.GetGlobalSetting("openrouter_api_key", db)
+		freeOnly, _ := Services.GetGlobalSetting("openrouter_use_free_only", db)
+		SwitchPool(NewOpenRouterModelPool(apiKey, freeOnly != "n"))
+	} else {
+		SwitchPool(NewAIModelPool(db))
+	}
+}
+
 func ReinitializeAgent(db *sql.DB) {
-	SwitchPool(NewAIModelPool(db))
+	InitPoolFromSettings(db)
 }
 
 func StartMCPServer(db *sql.DB, addr string) error {
-	SwitchPool(NewAIModelPool(db))
+	InitPoolFromSettings(db)
 
 	s := server.NewMCPServer(
 		"cuento",
