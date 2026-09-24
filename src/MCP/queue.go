@@ -131,11 +131,29 @@ func executeTask(db *sql.DB, taskID, userID int) {
 	}
 	agent := NewAIAgent(client)
 
-	history, err := loadChatHistory(userID, db)
+	// Read session_id and message_id from task payload.
+	var payloadStr string
+	_ = db.QueryRow(`SELECT COALESCE(payload, '{}') FROM ai_task_queue WHERE id = ?`, taskID).Scan(&payloadStr)
+	var taskPayload struct {
+		SessionID string `json:"session_id"`
+		MessageID int64  `json:"message_id"`
+	}
+	_ = json.Unmarshal([]byte(payloadStr), &taskPayload)
+
+	// Load the specific user message that triggered this task.
+	userMsg, err := loadMessageByID(taskPayload.MessageID, db)
 	if err != nil {
-		markFailed(db, taskID, userID, "failed to load history: "+err.Error())
+		markFailed(db, taskID, userID, "failed to load message: "+err.Error())
 		return
 	}
+
+	// Append the new user message to the session and snapshot the history.
+	sess := getOrCreateChatSession(taskPayload.SessionID)
+	sess.mu.Lock()
+	sess.messages = append(sess.messages, userMsg)
+	history := make([]ChatMessage, len(sess.messages))
+	copy(history, sess.messages)
+	sess.mu.Unlock()
 
 	systemInstruction := fmt.Sprintf(
 		"You are a helpful assistant for a forum community. "+
@@ -180,6 +198,11 @@ func executeTask(db *sql.DB, taskID, userID int) {
 	}
 
 	replyText = Services.MarkdownToHTML(replyText)
+
+	// Append assistant reply to the session.
+	sess.mu.Lock()
+	sess.messages = append(sess.messages, ChatMessage{Role: "assistant", Content: replyText})
+	sess.mu.Unlock()
 
 	// Deduplicate sources by (PostID, TopicID) before saving.
 	sources = uniqueSources(sources)
@@ -237,37 +260,6 @@ func executeTask(db *sql.DB, taskID, userID int) {
 	}
 }
 
-// loadChatHistory fetches the last 20 user/assistant messages after the most
-// recent 'clear' marker for the given user.
-func loadChatHistory(userID int, db *sql.DB) ([]ChatMessage, error) {
-	rows, err := db.Query(
-		`SELECT role, content FROM (
-		     SELECT role, content, date_created FROM ai_chat_messages
-		     WHERE user_id = ?
-		       AND role != 'clear'
-		       AND date_created > COALESCE(
-		             (SELECT MAX(date_created) FROM ai_chat_messages WHERE user_id = ? AND role = 'clear'),
-		             '1970-01-01'
-		           )
-		     ORDER BY date_created DESC LIMIT 20
-		 ) sub ORDER BY date_created ASC`,
-		userID, userID,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var history []ChatMessage
-	for rows.Next() {
-		var msg ChatMessage
-		if err := rows.Scan(&msg.Role, &msg.Content); err != nil {
-			continue
-		}
-		history = append(history, msg)
-	}
-	return history, nil
-}
 
 // markFailed marks a task as failed and logs the error.
 func markFailed(db *sql.DB, taskID, userID int, errMsg string) {

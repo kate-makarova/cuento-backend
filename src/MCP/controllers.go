@@ -21,7 +21,8 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 	}
 
 	var req struct {
-		Content string `json:"content" binding:"required"`
+		Content   string `json:"content" binding:"required"`
+		SessionID string `json:"session_id" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
@@ -36,7 +37,7 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 	}
 
 	// Save user message
-	_, err := db.Exec(
+	msgRes, err := db.Exec(
 		"INSERT INTO ai_chat_messages (user_id, role, content, date_created) VALUES (?, 'user', ?, NOW())",
 		userID, req.Content,
 	)
@@ -45,11 +46,17 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 		c.Abort()
 		return
 	}
+	messageID, _ := msgRes.LastInsertId()
+
+	payload, _ := json.Marshal(map[string]interface{}{
+		"session_id": req.SessionID,
+		"message_id": messageID,
+	})
 
 	// Enqueue AI task
 	res, err := db.Exec(
-		"INSERT INTO ai_task_queue (user_id, status, date_created) VALUES (?, 'pending', NOW())",
-		userID,
+		"INSERT INTO ai_task_queue (user_id, status, payload, date_created) VALUES (?, 'pending', ?, NOW())",
+		userID, payload,
 	)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to queue task"})
@@ -133,6 +140,11 @@ func ClearAIContext(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	var req struct {
+		SessionID string `json:"session_id"`
+	}
+	_ = c.ShouldBindJSON(&req)
+
 	_, err := db.Exec(
 		"INSERT INTO ai_chat_messages (user_id, role, content, date_created) VALUES (?, 'clear', '', NOW())",
 		userID,
@@ -141,6 +153,10 @@ func ClearAIContext(c *gin.Context, db *sql.DB) {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to clear context"})
 		c.Abort()
 		return
+	}
+
+	if req.SessionID != "" {
+		InvalidateChatSession(req.SessionID)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
