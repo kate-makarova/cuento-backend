@@ -72,7 +72,7 @@ type digestPost struct {
 func executeGameDigestTask(db *sql.DB, taskID int) {
 	ctx := context.Background()
 
-	client, err := activePool.ClientForMinSize(Entities.AIModelSizeMedium, Entities.AIModelTypeText)
+	client, err := getActivePool().ClientForMinSize(Entities.AIModelSizeMedium, Entities.AIModelTypeText)
 	if err != nil {
 		markFailed(db, taskID, 0, "no AI model available: "+err.Error())
 		return

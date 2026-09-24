@@ -2,6 +2,7 @@ package Controllers
 
 import (
 	"cuento-backend/src/Entities"
+	"cuento-backend/src/MCP"
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
 	"database/sql"
@@ -196,6 +197,44 @@ func AdminUpdateAIModel(c *gin.Context, db *sql.DB) {
 		return
 	}
 	c.JSON(http.StatusOK, m)
+}
+
+// AdminSwitchAIPool switches the active AI model pool at runtime without a restart.
+// Accepts {"source": "db"} or {"source": "openrouter", "api_key": "sk-..."}.
+func AdminSwitchAIPool(c *gin.Context, db *sql.DB) {
+	if !Services.IsSuperuser(c) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "Superuser access required"})
+		c.Abort()
+		return
+	}
+
+	var req struct {
+		Source string `json:"source" binding:"required"`
+		APIKey string `json:"api_key"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	switch req.Source {
+	case "db":
+		MCP.SwitchPool(MCP.NewAIModelPool(db))
+	case "openrouter":
+		if req.APIKey == "" {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "api_key is required for openrouter"})
+			c.Abort()
+			return
+		}
+		MCP.SwitchPool(MCP.NewOpenRouterModelPool(req.APIKey))
+	default:
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "unknown source: " + req.Source})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"source": req.Source})
 }
 
 func AdminDeleteAIModel(c *gin.Context, db *sql.DB) {

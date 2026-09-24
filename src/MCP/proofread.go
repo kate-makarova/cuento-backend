@@ -29,7 +29,11 @@ func ProofreadText(text string, db *sql.DB) (string, error) {
 		return "", fmt.Errorf("suspicious input detected: %s", check.Reason)
 	}
 
-	client, err := activePool.ClientForMinSize(Entities.AIModelSizeLarge, Entities.AIModelTypeText)
+	pool := getActivePool()
+	if pool == nil {
+		return "", fmt.Errorf("AI is not configured")
+	}
+	client, err := pool.ClientForMinSize(Entities.AIModelSizeLarge, Entities.AIModelTypeText)
 	if err != nil {
 		return "", fmt.Errorf("no AI model available: %w", err)
 	}

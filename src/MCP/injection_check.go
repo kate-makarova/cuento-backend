@@ -33,7 +33,8 @@ type InjectionCheckResult struct {
 // CheckForPromptInjection sanitizes text, wraps it in {{ }}, and asks a large
 // model to inspect it for prompt injection attempts.
 func CheckForPromptInjection(text string, db *sql.DB) (InjectionCheckResult, error) {
-	if activePool == nil {
+	pool := getActivePool()
+	if pool == nil {
 		return InjectionCheckResult{}, nil
 	}
 
@@ -42,7 +43,7 @@ func CheckForPromptInjection(text string, db *sql.DB) (InjectionCheckResult, err
 
 	prompt := "{{ " + sanitized + " }}"
 
-	client, err := activePool.ClientForMinSize(Entities.AIModelSizeLarge, Entities.AIModelTypeText)
+	client, err := pool.ClientForMinSize(Entities.AIModelSizeLarge, Entities.AIModelTypeText)
 	if err != nil {
 		return InjectionCheckResult{}, err
 	}

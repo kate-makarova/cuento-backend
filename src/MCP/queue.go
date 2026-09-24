@@ -78,7 +78,7 @@ func processAllPending(db *sql.DB) {
 // processNextTask claims and executes one pending task.
 // Returns (true, nil) if a task was processed, (false, nil) if the queue is empty.
 func processNextTask(db *sql.DB) (bool, error) {
-	if activePool == nil {
+	if getActivePool() == nil {
 		return false, nil
 	}
 
@@ -124,7 +124,7 @@ func processNextTask(db *sql.DB) (bool, error) {
 func executeTask(db *sql.DB, taskID, userID int) {
 	ctx := context.Background()
 
-	client, err := activePool.ClientForMinSizeAndProtocol(Entities.AIModelSizeSmall, Entities.AIModelTypeText, Entities.AIModelProtocolOpenAI)
+	client, err := getActivePool().ClientForMinSizeAndProtocol(Entities.AIModelSizeSmall, Entities.AIModelTypeText, Entities.AIModelProtocolOpenAI)
 	if err != nil {
 		markFailed(db, taskID, userID, "no AI model available: "+err.Error())
 		return

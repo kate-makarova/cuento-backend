@@ -5,20 +5,37 @@ import (
 	"cuento-backend/src/Services"
 	"database/sql"
 	"fmt"
+	"sync"
 
 	"github.com/mark3labs/mcp-go/server"
 	"google.golang.org/genai"
 )
 
-var activePool *AIModelPool
+var (
+	activePoolMu sync.RWMutex
+	activePool   ModelPool
+)
+
+func getActivePool() ModelPool {
+	activePoolMu.RLock()
+	defer activePoolMu.RUnlock()
+	return activePool
+}
+
+// SwitchPool replaces the active model pool without restarting the server.
+func SwitchPool(pool ModelPool) {
+	activePoolMu.Lock()
+	defer activePoolMu.Unlock()
+	activePool = pool
+	fmt.Printf("MCP: switched to pool %T\n", pool)
+}
 
 func ReinitializeAgent(db *sql.DB) {
-	activePool = NewAIModelPool(db)
-	fmt.Println("MCP: AI model pool reinitialized")
+	SwitchPool(NewAIModelPool(db))
 }
 
 func StartMCPServer(db *sql.DB, addr string) error {
-	activePool = NewAIModelPool(db)
+	SwitchPool(NewAIModelPool(db))
 
 	s := server.NewMCPServer(
 		"cuento",

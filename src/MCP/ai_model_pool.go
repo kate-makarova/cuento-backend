@@ -6,6 +6,12 @@ import (
 	"fmt"
 )
 
+// ModelPool selects and instantiates an AI client based on size and type requirements.
+type ModelPool interface {
+	ClientForMinSize(minSize Entities.AIModelSize, modelType Entities.AIModelType) (AIClient, error)
+	ClientForMinSizeAndProtocol(minSize Entities.AIModelSize, modelType Entities.AIModelType, protocol Entities.AIModelProtocolType) (AIClient, error)
+}
+
 type AIModelPool struct {
 	db *sql.DB
 }

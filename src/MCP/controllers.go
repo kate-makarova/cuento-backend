@@ -30,7 +30,7 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	if activePool == nil {
+	if getActivePool() == nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusServiceUnavailable, Message: "AI is not configured"})
 		c.Abort()
 		return

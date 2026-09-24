@@ -1151,6 +1151,10 @@ protectedRouter.GET("/admin/ai-agent-implementation/list", "Get list of all AI a
 		Controllers.ProofreadText(c, Services.DB)
 	})
 
+	protectedRouter.POST("/admin/ai-pool/switch", "Switch the active AI model pool at runtime", func(c *gin.Context) {
+		Controllers.AdminSwitchAIPool(c, Services.DB)
+	})
+
 	protectedRouter.GET("/admin/ai-models", "List all AI models", func(c *gin.Context) {
 		Controllers.AdminListAIModels(c, Services.DB)
 	})
