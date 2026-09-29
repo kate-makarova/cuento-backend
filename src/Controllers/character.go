@@ -1802,20 +1802,20 @@ func DeleteCharacterClaim(c *gin.Context, db *sql.DB) {
 
 // CloseActiveClaimRecord expires the active claim record for a given claim and cleans up references on character_claim and wanted_character_base.
 func CloseActiveClaimRecord(c *gin.Context, db *sql.DB) {
-	claimID, err := strconv.Atoi(c.Param("id"))
+	recordID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid claim ID"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid claim record ID"})
 		c.Abort()
 		return
 	}
 
-	var recordID int
-	err = db.QueryRow(
-		"SELECT id FROM claim_record WHERE claim_id = ? AND (claim_expiration_date IS NULL OR claim_expiration_date > NOW()) LIMIT 1",
-		claimID,
-	).Scan(&recordID)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "No active claim record found for this claim"})
+	var claimID int
+	if err := db.QueryRow("SELECT claim_id FROM claim_record WHERE id = ?", recordID).Scan(&claimID); err != nil {
+		if err == sql.ErrNoRows {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Claim record not found"})
+		} else {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch claim record: " + err.Error()})
+		}
 		c.Abort()
 		return
 	}
