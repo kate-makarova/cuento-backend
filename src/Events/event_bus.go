@@ -39,6 +39,7 @@ const (
 	TopicStatusChanged     EventType = "TopicStatusChanged"
 	PostsMoved             EventType = "PostsMoved"
 	GeneralPostsDeleted    EventType = "GeneralPostsDeleted"
+	UserAbsenceStarted     EventType = "UserAbsenceStarted"
 )
 
 type EventData interface{}
@@ -216,6 +217,11 @@ type PostsMovedEvent struct {
 	SourceTopicIDs      []int
 	TargetTopicID       int
 	AffectedSubforumIDs []int
+}
+
+type UserAbsenceStartedEvent struct {
+	UserID         int
+	AbsenceEndDate time.Time
 }
 
 type ReactionCreatedEvent struct {

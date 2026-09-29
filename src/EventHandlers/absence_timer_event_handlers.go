@@ -1,9 +1,11 @@
 package EventHandlers
 
 import (
+	"cuento-backend/src/Entities"
 	"cuento-backend/src/Events"
 	"cuento-backend/src/Services"
 	"database/sql"
+	"fmt"
 )
 
 func RegisterAbsenceTimerEventHandlers() {
@@ -23,6 +25,65 @@ func RegisterAbsenceTimerEventHandlers() {
 			return
 		}
 		Services.RecalculateAbsenceTimerStart(event.CharacterID, db)
+	})
+
+	// Notify co-participants in active episodes when a user's absence period begins.
+	Events.Subscribe(Events.UserAbsenceStarted, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.UserAbsenceStartedEvent)
+		if !ok {
+			return
+		}
+
+		var username string
+		if err := db.QueryRow("SELECT username FROM users WHERE id = ?", event.UserID).Scan(&username); err != nil {
+			return
+		}
+
+		rows, err := db.Query(`
+			SELECT DISTINCT cb2.user_id
+			FROM episode_character ec1
+			JOIN character_base cb1 ON cb1.id = ec1.character_id
+			JOIN episode_base eb ON eb.id = ec1.episode_id
+			JOIN episode_character ec2 ON ec2.episode_id = ec1.episode_id
+			JOIN character_base cb2 ON cb2.id = ec2.character_id
+			WHERE cb1.user_id = ?
+			  AND cb2.user_id != ?
+			  AND eb.episode_status = ?`,
+			event.UserID, event.UserID, Entities.ActiveEpisode,
+		)
+		if err != nil {
+			fmt.Printf("UserAbsenceStarted: failed to query co-participants for user %d: %v\n", event.UserID, err)
+			return
+		}
+		defer rows.Close()
+
+		endDateStr := event.AbsenceEndDate.Format("2006-01-02")
+		var recipientIDs []int
+		for rows.Next() {
+			var uid int
+			if rows.Scan(&uid) == nil {
+				recipientIDs = append(recipientIDs, uid)
+			}
+		}
+
+		for _, recipientID := range recipientIDs {
+			lang := Services.GetUserLanguage(recipientID, db)
+			localizer := Services.NewLocalizer(lang)
+			msg := Services.TData(localizer, "absence.started_notification", map[string]interface{}{
+				"Username": username,
+				"EndDate":  endDateStr,
+			})
+			Events.Publish(db, Events.NotificationCreated, Events.NotificationEvent{
+				UserID:  recipientID,
+				Type:    "absence_started",
+				Message: msg,
+				Data: map[string]interface{}{
+					"user_id":          event.UserID,
+					"username":         username,
+					"absence_end_date": endDateStr,
+				},
+			})
+		}
 	})
 
 	// Recalculate for all characters in the episode when a new post is created.
