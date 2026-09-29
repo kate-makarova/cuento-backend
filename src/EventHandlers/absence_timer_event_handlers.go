@@ -39,8 +39,9 @@ func RegisterAbsenceTimerEventHandlers() {
 			return
 		}
 
+		// Query distinct (recipient, absent_user_character_name) pairs across active shared episodes.
 		rows, err := db.Query(`
-			SELECT DISTINCT cb2.user_id
+			SELECT DISTINCT cb2.user_id, cb1.name
 			FROM episode_character ec1
 			JOIN character_base cb1 ON cb1.id = ec1.character_id
 			JOIN episode_base eb ON eb.id = ec1.episode_id
@@ -48,7 +49,8 @@ func RegisterAbsenceTimerEventHandlers() {
 			JOIN character_base cb2 ON cb2.id = ec2.character_id
 			WHERE cb1.user_id = ?
 			  AND cb2.user_id != ?
-			  AND eb.episode_status = ?`,
+			  AND eb.episode_status = ?
+			ORDER BY cb2.user_id, cb1.name`,
 			event.UserID, event.UserID, Entities.ActiveEpisode,
 		)
 		if err != nil {
@@ -57,16 +59,24 @@ func RegisterAbsenceTimerEventHandlers() {
 		}
 		defer rows.Close()
 
-		endDateStr := event.AbsenceEndDate.Format("2006-01-02")
-		var recipientIDs []int
+		// Group character names by recipient user ID.
+		recipientChars := map[int][]string{}
+		recipientOrder := []int{}
 		for rows.Next() {
 			var uid int
-			if rows.Scan(&uid) == nil {
-				recipientIDs = append(recipientIDs, uid)
+			var charName string
+			if rows.Scan(&uid, &charName) != nil {
+				continue
 			}
+			if _, seen := recipientChars[uid]; !seen {
+				recipientOrder = append(recipientOrder, uid)
+			}
+			recipientChars[uid] = append(recipientChars[uid], charName)
 		}
 
-		for _, recipientID := range recipientIDs {
+		endDateStr := event.AbsenceEndDate.Format("2006-01-02")
+		for _, recipientID := range recipientOrder {
+			charNames := recipientChars[recipientID]
 			lang := Services.GetUserLanguage(recipientID, db)
 			localizer := Services.NewLocalizer(lang)
 			msg := Services.TData(localizer, "absence.started_notification", map[string]interface{}{
@@ -81,6 +91,7 @@ func RegisterAbsenceTimerEventHandlers() {
 					"user_id":          event.UserID,
 					"username":         username,
 					"absence_end_date": endDateStr,
+					"characters":       charNames,
 				},
 			})
 		}
