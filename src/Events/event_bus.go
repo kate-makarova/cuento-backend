@@ -158,6 +158,8 @@ type EpisodeTopicsDeletedEvent struct {
 
 type UserWipedEvent struct {
 	DeletedGeneralPostIDs []int
+	AffectedTopicIDs      []int
+	AffectedSubforumIDs   []int
 }
 
 type CharacterUpdatedEvent struct {
