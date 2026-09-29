@@ -1532,6 +1532,18 @@ func wipeUserInTx(tx *sql.Tx, db *sql.DB, userID int) ([]topicDeletion, []int, e
 	if _, err := tx.Exec("UPDATE character_profile_base SET user_id = 1 WHERE user_id = ?", userID); err != nil {
 		return nil, nil, fmt.Errorf("failed to reassign character profiles: %w", err)
 	}
+	if _, err := tx.Exec(
+		"UPDATE topics SET status = ? WHERE id IN (SELECT topic_id FROM wanted_character_base WHERE author_user_id = ? AND wanted_character_status = ? AND topic_id IS NOT NULL)",
+		Entities.InactiveTopic, userID, Entities.ActiveWantedCharacter,
+	); err != nil {
+		return nil, nil, fmt.Errorf("failed to deactivate wanted character topics: %w", err)
+	}
+	if _, err := tx.Exec(
+		"UPDATE wanted_character_base SET wanted_character_status = ? WHERE author_user_id = ? AND wanted_character_status = ?",
+		Entities.InactiveWantedCharacter, userID, Entities.ActiveWantedCharacter,
+	); err != nil {
+		return nil, nil, fmt.Errorf("failed to deactivate wanted characters: %w", err)
+	}
 	if _, err := tx.Exec("UPDATE wanted_character_base SET author_user_id = 1 WHERE author_user_id = ?", userID); err != nil {
 		return nil, nil, fmt.Errorf("failed to reassign wanted characters: %w", err)
 	}
