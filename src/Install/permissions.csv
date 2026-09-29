@@ -169,6 +169,7 @@ role_id,type,permission
 3,0,/admin/user/update/:id
 3,0,/admin/user/ban/:id
 3,0,/admin/user/reactivate/:id
+3,0,/admin/user/delete/:id
 3,0,/admin/user/roles/update
 3,0,/admin/user/roles/:id
 3,0,/admin/home
@@ -276,3 +277,4 @@ role_id,type,permission
 3,0,/admin/workflow/create
 3,0,/admin/workflow/update/:id
 3,0,/admin/workflow/delete/:id
+3,0,/admin/posts/move

@@ -538,6 +538,9 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	protectedRouter.POST("/topics/move", "Move topics to a different subforum", func(c *gin.Context) {
 		Controllers.MoveTopics(c, Services.DB)
 	})
+	protectedRouter.POST("/admin/posts/move", "Move posts to a different topic", func(c *gin.Context) {
+		Controllers.MovePosts(c, Services.DB)
+	})
 	protectedRouter.POST("/topics/bulk-update", "Bulk update topics", func(c *gin.Context) {
 		Controllers.BulkUpdateTopics(c, Services.DB)
 	})
@@ -642,6 +645,9 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	})
 	protectedRouter.POST("/admin/user/reactivate/:id", "Reactivate an archived user by ID", func(c *gin.Context) {
 		Controllers.ReactivateUser(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/user/delete/:id", "Delete a user account: removes general posts, reassigns game posts, deletes the user", func(c *gin.Context) {
+		Controllers.AdminWipeUser(c, Services.DB)
 	})
 	protectedRouter.GET("/characters/archiving-warnings", "Get active characters approaching auto-archiving threshold", func(c *gin.Context) {
 		Controllers.GetArchivingWarnings(c, Services.DB)

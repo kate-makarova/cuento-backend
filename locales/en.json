@@ -53,5 +53,7 @@
     "other": "Your character {{.Name}} is about to be deactivated automatically if you do not write a game post in {{.Count}} days."
   },
 
-  "auto_archiving.deactivated": "Your character {{.Name}} has been automatically deactivated due to inactivity."
+  "auto_archiving.deactivated": "Your character {{.Name}} has been automatically deactivated due to inactivity.",
+
+  "absence.started_notification": "{{.Username}} has started an absence until {{.EndDate}}."
 }

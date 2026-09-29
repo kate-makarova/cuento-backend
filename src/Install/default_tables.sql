@@ -876,8 +876,9 @@ create table reactions
 
 create table smile_category
 (
-    id   int          not null auto_increment primary key,
-    name varchar(100) not null
+    id       int          not null auto_increment primary key,
+    name     varchar(100) not null,
+    position int          not null default 0
 );
 
 create table smiles
@@ -977,6 +978,7 @@ CREATE TABLE absent_users
     absence_start_date  DATETIME   NOT NULL,
     absence_end_date    DATETIME   NOT NULL,
     is_deleted          TINYINT(1) NOT NULL DEFAULT 0,
+    start_notified      TINYINT(1) NOT NULL DEFAULT 0,
     CONSTRAINT fk_absent_users_user FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
