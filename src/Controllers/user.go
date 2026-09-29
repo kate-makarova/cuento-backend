@@ -1435,70 +1435,74 @@ func UpdateUserRoles(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, gin.H{"message": "User roles updated"})
 }
 
+type topicDeletion struct {
+	TopicID    int
+	SubforumID int
+	PostIDs    []int
+}
+
 // wipeUserInTx deletes direct messages, removes general posts, reassigns game posts/topics/characters
 // to user 1, and deletes the user — all within the provided transaction.
-// Returns deleted general post IDs, affected topic IDs, and affected subforum IDs for post-commit cleanup.
-func wipeUserInTx(tx *sql.Tx, db *sql.DB, userID int) (deletedPostIDs []int, topicIDs []int, subforumIDs []int, _ error) {
+// Returns per-topic deletion batches for post-commit counter and search-index cleanup.
+func wipeUserInTx(tx *sql.Tx, db *sql.DB, userID int) ([]topicDeletion, error) {
 	if _, err := tx.Exec("DELETE FROM direct_chat_messages WHERE user_id = ?", userID); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to delete direct messages: %w", err)
+		return nil, fmt.Errorf("failed to delete direct messages: %w", err)
 	}
 
-	// Collect topic and subforum IDs before deleting so counters can be recalculated after commit.
-	metaRows, err := db.Query(`
-		SELECT DISTINCT p.id, t.id, t.subforum_id
+	// Collect post IDs grouped by topic before deletion so handlers can work per-topic batch.
+	rows, err := db.Query(`
+		SELECT p.id, p.topic_id, t.subforum_id
 		FROM posts p
 		JOIN topics t ON t.id = p.topic_id
-		WHERE p.author_user_id = ? AND t.type = ?`,
+		WHERE p.author_user_id = ? AND t.type = ?
+		ORDER BY p.topic_id`,
 		userID, Entities.GeneralTopic,
 	)
-	topicSeen := map[int]bool{}
-	subforumSeen := map[int]bool{}
+	var batches []topicDeletion
+	topicIndex := map[int]int{}
 	if err == nil {
-		for metaRows.Next() {
+		for rows.Next() {
 			var pid, tid, sfid int
-			if metaRows.Scan(&pid, &tid, &sfid) == nil {
-				deletedPostIDs = append(deletedPostIDs, pid)
-				if !topicSeen[tid] {
-					topicSeen[tid] = true
-					topicIDs = append(topicIDs, tid)
-				}
-				if !subforumSeen[sfid] {
-					subforumSeen[sfid] = true
-					subforumIDs = append(subforumIDs, sfid)
+			if rows.Scan(&pid, &tid, &sfid) == nil {
+				if idx, ok := topicIndex[tid]; ok {
+					batches[idx].PostIDs = append(batches[idx].PostIDs, pid)
+				} else {
+					topicIndex[tid] = len(batches)
+					batches = append(batches, topicDeletion{TopicID: tid, SubforumID: sfid, PostIDs: []int{pid}})
 				}
 			}
 		}
-		metaRows.Close()
+		rows.Close()
 	}
 
 	if _, err := tx.Exec(
 		"DELETE FROM posts WHERE author_user_id = ? AND topic_id IN (SELECT id FROM topics WHERE type = ?)",
 		userID, Entities.GeneralTopic,
 	); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to delete general posts: %w", err)
+		return nil, fmt.Errorf("failed to delete general posts: %w", err)
 	}
 
 	if _, err := tx.Exec("UPDATE posts SET author_user_id = 1 WHERE author_user_id = ?", userID); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to reassign posts: %w", err)
+		return nil, fmt.Errorf("failed to reassign posts: %w", err)
 	}
 	if _, err := tx.Exec("UPDATE topics SET author_user_id = 1 WHERE author_user_id = ?", userID); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to reassign topics: %w", err)
+		return nil, fmt.Errorf("failed to reassign topics: %w", err)
 	}
 	if _, err := tx.Exec("UPDATE character_base SET user_id = 1 WHERE user_id = ?", userID); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to reassign characters: %w", err)
+		return nil, fmt.Errorf("failed to reassign characters: %w", err)
 	}
 	if _, err := tx.Exec("UPDATE character_profile_base SET user_id = 1 WHERE user_id = ?", userID); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to reassign character profiles: %w", err)
+		return nil, fmt.Errorf("failed to reassign character profiles: %w", err)
 	}
 	if _, err := tx.Exec("UPDATE wanted_character_base SET author_user_id = 1 WHERE author_user_id = ?", userID); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to reassign wanted characters: %w", err)
+		return nil, fmt.Errorf("failed to reassign wanted characters: %w", err)
 	}
 
 	if _, err := tx.Exec("DELETE FROM users WHERE id = ?", userID); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to delete user: %w", err)
+		return nil, fmt.Errorf("failed to delete user: %w", err)
 	}
 
-	return deletedPostIDs, topicIDs, subforumIDs, nil
+	return batches, nil
 }
 
 type WipeOutMyUserRequest struct {
@@ -1537,7 +1541,7 @@ func WipeOutMyUser(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	deletedPostIDs, topicIDs, subforumIDs, err := wipeUserInTx(tx, db, userID)
+	batches, err := wipeUserInTx(tx, db, userID)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: err.Error()})
 		c.Abort()
@@ -1552,11 +1556,15 @@ func WipeOutMyUser(c *gin.Context, db *sql.DB) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "User account wiped"})
 
-	Events.Publish(db, Events.UserWiped, Events.UserWipedEvent{
-		DeletedGeneralPostIDs: deletedPostIDs,
-		AffectedTopicIDs:      topicIDs,
-		AffectedSubforumIDs:   subforumIDs,
-	})
+	Events.Publish(db, Events.UserWiped, Events.UserWipedEvent{})
+	for _, b := range batches {
+		Events.Publish(db, Events.GeneralPostsDeleted, Events.GeneralPostsDeletedEvent{
+			TopicID:    b.TopicID,
+			SubforumID: b.SubforumID,
+			Count:      len(b.PostIDs),
+			PostIDs:    b.PostIDs,
+		})
+	}
 }
 
 func AdminWipeUser(c *gin.Context, db *sql.DB) {
@@ -1582,7 +1590,7 @@ func AdminWipeUser(c *gin.Context, db *sql.DB) {
 	}
 	defer tx.Rollback()
 
-	deletedPostIDs, topicIDs, subforumIDs, err := wipeUserInTx(tx, db, userID)
+	batches, err := wipeUserInTx(tx, db, userID)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: err.Error()})
 		c.Abort()
@@ -1597,11 +1605,15 @@ func AdminWipeUser(c *gin.Context, db *sql.DB) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "User account deleted"})
 
-	Events.Publish(db, Events.UserWiped, Events.UserWipedEvent{
-		DeletedGeneralPostIDs: deletedPostIDs,
-		AffectedTopicIDs:      topicIDs,
-		AffectedSubforumIDs:   subforumIDs,
-	})
+	Events.Publish(db, Events.UserWiped, Events.UserWipedEvent{})
+	for _, b := range batches {
+		Events.Publish(db, Events.GeneralPostsDeleted, Events.GeneralPostsDeletedEvent{
+			TopicID:    b.TopicID,
+			SubforumID: b.SubforumID,
+			Count:      len(b.PostIDs),
+			PostIDs:    b.PostIDs,
+		})
+	}
 }
 
 func ArchiveAccount(c *gin.Context, db *sql.DB) {
