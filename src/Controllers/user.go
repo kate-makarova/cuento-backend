@@ -1442,11 +1442,12 @@ type topicDeletion struct {
 }
 
 // wipeUserInTx deletes direct messages, removes general posts, deactivates and reassigns
-// characters/topics/profiles to user 1, and deletes the user — all within the provided transaction.
-// Returns per-topic post batches and deactivated character IDs for post-commit event firing.
-func wipeUserInTx(tx *sql.Tx, db *sql.DB, userID int) ([]topicDeletion, []int, error) {
+// characters/wanted characters/profiles to user 1, and deletes the user — all within the
+// provided transaction. Returns per-topic post batches and deactivation results for
+// post-commit event firing.
+func wipeUserInTx(tx *sql.Tx, db *sql.DB, userID int) ([]topicDeletion, []characterDeactivationResult, []wantedCharDeactivationResult, error) {
 	if _, err := tx.Exec("DELETE FROM direct_chat_messages WHERE user_id = ?", userID); err != nil {
-		return nil, nil, fmt.Errorf("failed to delete direct messages: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to delete direct messages: %w", err)
 	}
 
 	// Collect post IDs grouped by topic before deletion so handlers can work per-topic batch.
@@ -1479,23 +1480,24 @@ func wipeUserInTx(tx *sql.Tx, db *sql.DB, userID int) ([]topicDeletion, []int, e
 		"DELETE FROM posts WHERE author_user_id = ? AND topic_id IN (SELECT id FROM topics WHERE type = ?)",
 		userID, Entities.GeneralTopic,
 	); err != nil {
-		return nil, nil, fmt.Errorf("failed to delete general posts: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to delete general posts: %w", err)
 	}
 
 	if _, err := tx.Exec("UPDATE posts SET author_user_id = 1 WHERE author_user_id = ?", userID); err != nil {
-		return nil, nil, fmt.Errorf("failed to reassign posts: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to reassign posts: %w", err)
 	}
 	if _, err := tx.Exec("UPDATE topics SET author_user_id = 1 WHERE author_user_id = ?", userID); err != nil {
-		return nil, nil, fmt.Errorf("failed to reassign topics: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to reassign topics: %w", err)
 	}
 
-	// Collect active characters before deactivating them so callers can fire per-character events.
-	var charIDs []int
+	// Deactivate each active character via the shared helper so all downstream logic is consistent.
+	var charResults []characterDeactivationResult
 	charRows, err := db.Query(
 		"SELECT id FROM character_base WHERE user_id = ? AND character_status = ?",
 		userID, Entities.ActiveCharacter,
 	)
 	if err == nil {
+		var charIDs []int
 		for charRows.Next() {
 			var cid int
 			if charRows.Scan(&cid) == nil {
@@ -1503,56 +1505,55 @@ func wipeUserInTx(tx *sql.Tx, db *sql.DB, userID int) ([]topicDeletion, []int, e
 			}
 		}
 		charRows.Close()
-	}
-
-	if len(charIDs) > 0 {
-		if _, err := tx.Exec(
-			"UPDATE topics SET status = ? WHERE id IN (SELECT topic_id FROM character_base WHERE user_id = ? AND character_status = ? AND topic_id IS NOT NULL)",
-			Entities.InactiveTopic, userID, Entities.ActiveCharacter,
-		); err != nil {
-			return nil, nil, fmt.Errorf("failed to deactivate character topics: %w", err)
+		for _, cid := range charIDs {
+			res, _, err := deactivateCharacterInTx(tx, db, cid)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("failed to deactivate character %d: %w", cid, err)
+			}
+			charResults = append(charResults, res)
 		}
-	}
-	if _, err := tx.Exec(
-		"UPDATE character_base SET character_status = ? WHERE user_id = ? AND character_status = ?",
-		Entities.InactiveCharacter, userID, Entities.ActiveCharacter,
-	); err != nil {
-		return nil, nil, fmt.Errorf("failed to deactivate characters: %w", err)
-	}
-	if _, err := tx.Exec(
-		"UPDATE character_profile_base SET is_archived = 1 WHERE character_id IN (SELECT id FROM character_base WHERE user_id = ?)",
-		userID,
-	); err != nil {
-		return nil, nil, fmt.Errorf("failed to archive character profiles: %w", err)
 	}
 
 	if _, err := tx.Exec("UPDATE character_base SET user_id = 1 WHERE user_id = ?", userID); err != nil {
-		return nil, nil, fmt.Errorf("failed to reassign characters: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to reassign characters: %w", err)
 	}
 	if _, err := tx.Exec("UPDATE character_profile_base SET user_id = 1 WHERE user_id = ?", userID); err != nil {
-		return nil, nil, fmt.Errorf("failed to reassign character profiles: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to reassign character profiles: %w", err)
 	}
-	if _, err := tx.Exec(
-		"UPDATE topics SET status = ? WHERE id IN (SELECT topic_id FROM wanted_character_base WHERE author_user_id = ? AND wanted_character_status = ? AND topic_id IS NOT NULL)",
-		Entities.InactiveTopic, userID, Entities.ActiveWantedCharacter,
-	); err != nil {
-		return nil, nil, fmt.Errorf("failed to deactivate wanted character topics: %w", err)
+
+	// Deactivate each active wanted character via the shared helper.
+	var wcResults []wantedCharDeactivationResult
+	wcRows, err := db.Query(
+		"SELECT id FROM wanted_character_base WHERE author_user_id = ? AND wanted_character_status = ?",
+		userID, Entities.ActiveWantedCharacter,
+	)
+	if err == nil {
+		var wcIDs []int
+		for wcRows.Next() {
+			var wcid int
+			if wcRows.Scan(&wcid) == nil {
+				wcIDs = append(wcIDs, wcid)
+			}
+		}
+		wcRows.Close()
+		for _, wcid := range wcIDs {
+			res, _, err := deactivateWantedCharacterInTx(tx, db, wcid)
+			if err != nil {
+				return nil, nil, nil, fmt.Errorf("failed to deactivate wanted character %d: %w", wcid, err)
+			}
+			wcResults = append(wcResults, res)
+		}
 	}
-	if _, err := tx.Exec(
-		"UPDATE wanted_character_base SET wanted_character_status = ? WHERE author_user_id = ? AND wanted_character_status = ?",
-		Entities.InactiveWantedCharacter, userID, Entities.ActiveWantedCharacter,
-	); err != nil {
-		return nil, nil, fmt.Errorf("failed to deactivate wanted characters: %w", err)
-	}
+
 	if _, err := tx.Exec("UPDATE wanted_character_base SET author_user_id = 1 WHERE author_user_id = ?", userID); err != nil {
-		return nil, nil, fmt.Errorf("failed to reassign wanted characters: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to reassign wanted characters: %w", err)
 	}
 
 	if _, err := tx.Exec("DELETE FROM users WHERE id = ?", userID); err != nil {
-		return nil, nil, fmt.Errorf("failed to delete user: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to delete user: %w", err)
 	}
 
-	return batches, charIDs, nil
+	return batches, charResults, wcResults, nil
 }
 
 type WipeOutMyUserRequest struct {
@@ -1591,7 +1592,7 @@ func WipeOutMyUser(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	batches, charIDs, err := wipeUserInTx(tx, db, userID)
+	batches, charResults, wcResults, err := wipeUserInTx(tx, db, userID)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: err.Error()})
 		c.Abort()
@@ -1615,8 +1616,11 @@ func WipeOutMyUser(c *gin.Context, db *sql.DB) {
 			PostIDs:    b.PostIDs,
 		})
 	}
-	for _, cid := range charIDs {
-		Events.Publish(db, Events.CharacterDeactivated, Events.CharacterDeactivatedEvent{CharacterID: cid})
+	for _, r := range charResults {
+		publishCharacterDeactivatedEvents(db, r)
+	}
+	for _, r := range wcResults {
+		publishWantedCharDeactivatedEvents(db, r)
 	}
 }
 
@@ -1643,7 +1647,7 @@ func AdminWipeUser(c *gin.Context, db *sql.DB) {
 	}
 	defer tx.Rollback()
 
-	batches, charIDs, err := wipeUserInTx(tx, db, userID)
+	batches, charResults, wcResults, err := wipeUserInTx(tx, db, userID)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: err.Error()})
 		c.Abort()
@@ -1667,8 +1671,11 @@ func AdminWipeUser(c *gin.Context, db *sql.DB) {
 			PostIDs:    b.PostIDs,
 		})
 	}
-	for _, cid := range charIDs {
-		Events.Publish(db, Events.CharacterDeactivated, Events.CharacterDeactivatedEvent{CharacterID: cid})
+	for _, r := range charResults {
+		publishCharacterDeactivatedEvents(db, r)
+	}
+	for _, r := range wcResults {
+		publishWantedCharDeactivatedEvents(db, r)
 	}
 }
 
