@@ -446,25 +446,39 @@ func GetBBCompiler() bbcode.Compiler {
 
 	compiler.SetTag("quote", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
 		out := bbcode.NewHTMLTag("")
-		out.Name = "quote-box"
+		out.Name = "blockquote"
 
-		tag := node.GetOpeningTag()
-		author := tag.Value
-		if author != "" {
-			out.Attrs["data-author"] = html.EscapeString(author)
+		author := node.GetOpeningTag().Value
 
-			topicID, hasTopicID := getRawArg(node, "topic-id")
-			postID, hasPostID := getRawArg(node, "post-id")
-			if hasTopicID && hasPostID {
-				if _, err := strconv.Atoi(topicID); err == nil {
-					if _, err := strconv.Atoi(postID); err == nil {
-						out.Attrs["data-href"] = "/viewtopic/" + topicID + "#post-" + postID
-					}
+		var href string
+		topicID, hasTopicID := getRawArg(node, "topic-id")
+		postID, hasPostID := getRawArg(node, "post-id")
+		if author != "" && hasTopicID && hasPostID {
+			if _, err := strconv.Atoi(topicID); err == nil {
+				if _, err := strconv.Atoi(postID); err == nil {
+					href = "/viewtopic/" + topicID + "#post-" + postID
 				}
 			}
 		}
 
-		return out, true
+		cite := bbcode.NewHTMLTag("")
+		cite.Name = "cite"
+		if author != "" {
+			if href != "" {
+				link := bbcode.NewHTMLTag("")
+				link.Name = "a"
+				link.Attrs["href"] = href
+				link.AppendChild(bbcode.NewHTMLTag(author))
+				cite.AppendChild(link)
+				cite.AppendChild(bbcode.NewHTMLTag(" said:"))
+			} else {
+				cite.AppendChild(bbcode.NewHTMLTag(author + " said:"))
+			}
+		} else {
+			cite.AppendChild(bbcode.NewHTMLTag("Quote"))
+		}
+
+		return out.AppendChild(cite), true
 	})
 
 	compiler.SetTag("url", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
