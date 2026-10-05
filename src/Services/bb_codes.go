@@ -456,7 +456,7 @@ func GetBBCompiler() bbcode.Compiler {
 		if author != "" && hasTopicID && hasPostID {
 			if _, err := strconv.Atoi(topicID); err == nil {
 				if _, err := strconv.Atoi(postID); err == nil {
-					href = "/viewtopic/" + topicID + "#post-" + postID
+					href = "/viewtopic/" + topicID + "?post_id=" + postID
 				}
 			}
 		}
