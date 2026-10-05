@@ -444,6 +444,29 @@ func GetBBCompiler() bbcode.Compiler {
 		return out, true
 	})
 
+	compiler.SetTag("quote", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "quote-box"
+
+		tag := node.GetOpeningTag()
+		author := tag.Value
+		if author != "" {
+			out.Attrs["data-author"] = html.EscapeString(author)
+
+			topicID, hasTopicID := getRawArg(node, "topic-id")
+			postID, hasPostID := getRawArg(node, "post-id")
+			if hasTopicID && hasPostID {
+				if _, err := strconv.Atoi(topicID); err == nil {
+					if _, err := strconv.Atoi(postID); err == nil {
+						out.Attrs["data-href"] = "/viewtopic/" + topicID + "#post-" + postID
+					}
+				}
+			}
+		}
+
+		return out, true
+	})
+
 	compiler.SetTag("url", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
 		out := bbcode.NewHTMLTag("")
 		out.Name = "a"
