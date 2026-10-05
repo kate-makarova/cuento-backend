@@ -448,7 +448,17 @@ func GetBBCompiler() bbcode.Compiler {
 		out := bbcode.NewHTMLTag("")
 		out.Name = "blockquote"
 
+		// Extract the tag value (author name), stripping surrounding quotes if present.
 		author := node.GetOpeningTag().Value
+		if raw := node.GetOpeningTag().Raw; strings.Contains(raw, "=") {
+			rest := raw[strings.Index(raw, "=")+1:]
+			if len(rest) > 0 && (rest[0] == '"' || rest[0] == '\'') {
+				quoteChar := rest[0]
+				if end := strings.IndexByte(rest[1:], quoteChar); end >= 0 {
+					author = rest[1 : end+1]
+				}
+			}
+		}
 
 		var href string
 		topicID, hasTopicID := getRawArg(node, "topic-id")
