@@ -1127,6 +1127,23 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 		Controllers.UpdateUserCharacterMap(c, Services.DB)
 	})
 
+	// Interactive map routes
+	optionalAuthRouter.GET("/interactive-map/list", "Get list of interactive maps (public only for guests)", func(c *gin.Context) {
+		Controllers.GetInteractiveMapList(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/interactive-map/:id", "Get an interactive map by ID (public check for guests)", func(c *gin.Context) {
+		Controllers.GetInteractiveMap(c, Services.DB)
+	})
+	protectedRouter.POST("/interactive-map/create", "Create a new interactive map", func(c *gin.Context) {
+		Controllers.CreateInteractiveMap(c, Services.DB)
+	})
+	protectedRouter.POST("/interactive-map/update/:id", "Update an interactive map by ID", func(c *gin.Context) {
+		Controllers.UpdateInteractiveMap(c, Services.DB)
+	})
+	protectedRouter.POST("/interactive-map/delete/:id", "Delete an interactive map by ID", func(c *gin.Context) {
+		Controllers.DeleteInteractiveMap(c, Services.DB)
+	})
+
 	// AI Agent routes (admin only)
 	protectedRouter.GET("/admin/ai-agent/list", "Get list of all AI agents", func(c *gin.Context) {
 		Controllers.AdminListAiAgents(c, Services.DB)

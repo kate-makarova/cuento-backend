@@ -1255,3 +1255,13 @@ create table topic_activity_log
     constraint fk_topic_activity_log_topic foreign key (topic_id) references topics (id) on delete cascade,
     constraint fk_topic_activity_log_user  foreign key (user_id)  references users (id)  on delete set null
 );
+
+create table interactive_maps
+(
+    id         int          auto_increment primary key,
+    title      varchar(255) not null,
+    config     json         not null,
+    is_public  tinyint(1)   not null default 0,
+    creator_id int          null,
+    constraint fk_interactive_maps_creator foreign key (creator_id) references users (id) on delete set null
+);
