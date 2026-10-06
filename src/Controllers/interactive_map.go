@@ -176,15 +176,15 @@ func UpdateInteractiveMap(c *gin.Context, db *sql.DB) {
 	query += " WHERE id = ?"
 	args = append(args, id)
 
-	result, err := db.Exec(query, args...)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update map: " + err.Error()})
+	var exists bool
+	if err := db.QueryRow("SELECT 1 FROM interactive_maps WHERE id = ?", id).Scan(&exists); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Map not found"})
 		c.Abort()
 		return
 	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Map not found"})
+
+	if _, err := db.Exec(query, args...); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update map: " + err.Error()})
 		c.Abort()
 		return
 	}
