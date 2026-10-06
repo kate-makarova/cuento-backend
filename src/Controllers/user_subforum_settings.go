@@ -55,6 +55,53 @@ func GetUserSubforumSettings(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, settings)
 }
 
+func UpdateAllUserSubforumSettings(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+
+	var req []UpsertUserSubforumSettingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start transaction"})
+		c.Abort()
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec("DELETE FROM user_subforum_settings WHERE user_id = ?", userID); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to clear settings: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	for _, s := range req {
+		if !s.HideNewPostsIndex && !s.HideNewPostsActivePage {
+			continue
+		}
+		if _, err := tx.Exec(
+			"INSERT INTO user_subforum_settings (user_id, subforum_id, hide_new_posts_index, hide_new_posts_active_page) VALUES (?, ?, ?, ?)",
+			userID, s.SubforumID, s.HideNewPostsIndex, s.HideNewPostsActivePage,
+		); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save settings: " + err.Error()})
+			c.Abort()
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit"})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Settings updated"})
+}
+
 func UpsertUserSubforumSetting(c *gin.Context, db *sql.DB) {
 	userID := Services.GetUserIdFromContext(c)
 
