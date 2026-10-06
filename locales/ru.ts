@@ -216,6 +216,8 @@ export const TRANSLATIONS_RU = {
   "nav.userlist": "Список пользователей",
   "postform.video": "Видео",
   "postform.audio": "Аудио",
+  "postform.audioInsert": "Вставить",
+  "postform.audioSourceDirect": "Прямой аудиофайл",
   "postform.uploadImage": "Загрузить изображение",
   "postform.grid": "Сетка",
   "footer.poweredBy": "Работает на Cuento",
