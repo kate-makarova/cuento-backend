@@ -278,6 +278,8 @@ role_id,type,permission
 3,0,/admin/workflow/update/:id
 3,0,/admin/workflow/delete/:id
 3,0,/admin/posts/move
+2,0,/user/subforum-settings
+2,0,/user/subforum-settings/update-all
 2,0,/interactive-map/create
 2,0,/interactive-map/update/:id
 2,0,/interactive-map/delete/:id
