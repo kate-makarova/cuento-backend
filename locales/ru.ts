@@ -1085,6 +1085,7 @@ export const TRANSLATIONS_RU = {
   "settings.subforum.name": "Подфорум",
   "settings.subforum.hideNewPostsIndex": "Скрыть новые посты на главной",
   "settings.subforum.hideNewPostsActivePage": "Скрыть новые посты на активной странице",
+  "settings.subforum.save": "Сохранить настройки подфорумов",
   "settings.pushNotifications": "Push-уведомления",
   "settings.push.denied": "Push-уведомления заблокированы в браузере. Чтобы включить их, обновите настройки разрешений сайта и перезагрузите страницу.",
   "settings.push.enabled": "Push-уведомления включены. Вы будете получать уведомления, даже когда приложение закрыто.",
