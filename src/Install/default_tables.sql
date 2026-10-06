@@ -1258,7 +1258,9 @@ create table topic_activity_log
 
 create table interactive_maps
 (
-    id     int          auto_increment primary key,
-    title  varchar(255) not null,
-    config json         not null
+    id         int          auto_increment primary key,
+    title      varchar(255) not null,
+    config     json         not null,
+    creator_id int          null,
+    constraint fk_interactive_maps_creator foreign key (creator_id) references users (id) on delete set null
 );
