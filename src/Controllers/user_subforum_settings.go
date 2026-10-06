@@ -30,8 +30,9 @@ func GetUserSubforumSettings(c *gin.Context, db *sql.DB) {
 		       COALESCE(uss.hide_new_posts_index, 0),
 		       COALESCE(uss.hide_new_posts_active_page, 0)
 		FROM subforums s
+		LEFT JOIN categories c ON c.id = s.category_id
 		LEFT JOIN user_subforum_settings uss ON uss.subforum_id = s.id AND uss.user_id = ?
-		ORDER BY s.position`,
+		ORDER BY c.position, s.position`,
 		userID,
 	)
 	if err != nil {
