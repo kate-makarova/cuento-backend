@@ -1131,10 +1131,7 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	protectedRouter.GET("/user/subforum-settings", "Get current user's subforum settings", func(c *gin.Context) {
 		Controllers.GetUserSubforumSettings(c, Services.DB)
 	})
-	protectedRouter.POST("/user/subforum-settings/upsert", "Create or update a subforum setting for the current user", func(c *gin.Context) {
-		Controllers.UpsertUserSubforumSetting(c, Services.DB)
-	})
-	protectedRouter.POST("/user/subforum-settings/update-all", "Replace all subforum settings for the current user", func(c *gin.Context) {
+protectedRouter.POST("/user/subforum-settings/update-all", "Replace all subforum settings for the current user", func(c *gin.Context) {
 		Controllers.UpdateAllUserSubforumSettings(c, Services.DB)
 	})
 
