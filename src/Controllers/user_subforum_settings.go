@@ -10,9 +10,10 @@ import (
 )
 
 type UserSubforumSetting struct {
-	SubforumID             int64 `json:"subforum_id"`
-	HideNewPostsIndex      bool  `json:"hide_new_posts_index"`
-	HideNewPostsActivePage bool  `json:"hide_new_posts_active_page"`
+	SubforumID             int64  `json:"subforum_id"`
+	SubforumName           string `json:"subforum_name"`
+	HideNewPostsIndex      bool   `json:"hide_new_posts_index"`
+	HideNewPostsActivePage bool   `json:"hide_new_posts_active_page"`
 }
 
 type UpsertUserSubforumSettingRequest struct {
@@ -24,8 +25,13 @@ type UpsertUserSubforumSettingRequest struct {
 func GetUserSubforumSettings(c *gin.Context, db *sql.DB) {
 	userID := Services.GetUserIdFromContext(c)
 
-	rows, err := db.Query(
-		"SELECT subforum_id, hide_new_posts_index, hide_new_posts_active_page FROM user_subforum_settings WHERE user_id = ?",
+	rows, err := db.Query(`
+		SELECT s.id, s.name,
+		       COALESCE(uss.hide_new_posts_index, 0),
+		       COALESCE(uss.hide_new_posts_active_page, 0)
+		FROM subforums s
+		LEFT JOIN user_subforum_settings uss ON uss.subforum_id = s.id AND uss.user_id = ?
+		ORDER BY s.position`,
 		userID,
 	)
 	if err != nil {
@@ -38,7 +44,7 @@ func GetUserSubforumSettings(c *gin.Context, db *sql.DB) {
 	settings := []UserSubforumSetting{}
 	for rows.Next() {
 		var s UserSubforumSetting
-		if err := rows.Scan(&s.SubforumID, &s.HideNewPostsIndex, &s.HideNewPostsActivePage); err != nil {
+		if err := rows.Scan(&s.SubforumID, &s.SubforumName, &s.HideNewPostsIndex, &s.HideNewPostsActivePage); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan setting: " + err.Error()})
 			c.Abort()
 			return
