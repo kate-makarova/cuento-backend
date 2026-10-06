@@ -1831,17 +1831,18 @@ func GetActiveTopics(c *gin.Context, db *sql.DB) {
 		       t.author_user_id, u.username as author_username,
 		       t.last_post_author_user_id, u2.username as last_post_author_username,
 		       (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0)) as last_post_id,
-		       (CASE WHEN ? != 0 AND (utv.post_id IS NULL OR utv.post_id < (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0))) THEN 1 ELSE 0 END) as not_viewed,
+		       (CASE WHEN ? != 0 AND COALESCE(uss.hide_new_posts_index, 0) = 0 AND (utv.post_id IS NULL OR utv.post_id < (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0))) THEN 1 ELSE 0 END) as not_viewed,
 		       utv.post_id as last_viewed_id
 		FROM topics t
 		JOIN users u ON t.author_user_id = u.id
 		LEFT JOIN users u2 ON t.last_post_author_user_id = u2.id
 		LEFT JOIN user_topic_view utv ON t.id = utv.topic_id AND utv.user_id = ?
+		LEFT JOIN user_subforum_settings uss ON uss.subforum_id = t.subforum_id AND uss.user_id = ?
 		WHERE t.subforum_id IN (%s)
 	`, placeholders)
 
 	var args []interface{}
-	args = append(args, userID, userID)
+	args = append(args, userID, userID, userID)
 	for _, id := range filteredSubforumIDs {
 		args = append(args, id)
 	}
