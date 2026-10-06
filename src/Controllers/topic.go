@@ -1837,6 +1837,11 @@ func GetActiveTopics(c *gin.Context, db *sql.DB) {
 		query += " AND (utv.post_id IS NULL OR utv.post_id < (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0)))"
 	}
 
+	if userID != 0 {
+		query += " AND t.subforum_id NOT IN (SELECT subforum_id FROM user_subforum_settings WHERE user_id = ? AND hide_new_posts_active_page = 1)"
+		args = append(args, userID)
+	}
+
 	query += " AND t.date_last_post >= DATE_SUB(NOW(), INTERVAL 10 DAY)"
 	query += " AND t.status != ?"
 	args = append(args, Entities.DeletedTopic)
@@ -1954,6 +1959,11 @@ func GetActiveTopicCount(c *gin.Context, db *sql.DB) {
 
 	if notViewed && userID != 0 {
 		query += " AND (utv.post_id IS NULL OR utv.post_id < (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0)))"
+	}
+
+	if userID != 0 {
+		query += " AND t.subforum_id NOT IN (SELECT subforum_id FROM user_subforum_settings WHERE user_id = ? AND hide_new_posts_active_page = 1)"
+		args = append(args, userID)
 	}
 
 	query += " AND t.date_last_post >= DATE_SUB(NOW(), INTERVAL 10 DAY)"

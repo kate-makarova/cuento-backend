@@ -1127,6 +1127,14 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 		Controllers.UpdateUserCharacterMap(c, Services.DB)
 	})
 
+	// User subforum settings routes
+	protectedRouter.GET("/user/subforum-settings", "Get current user's subforum settings", func(c *gin.Context) {
+		Controllers.GetUserSubforumSettings(c, Services.DB)
+	})
+	protectedRouter.POST("/user/subforum-settings/upsert", "Create or update a subforum setting for the current user", func(c *gin.Context) {
+		Controllers.UpsertUserSubforumSetting(c, Services.DB)
+	})
+
 	// Interactive map routes
 	optionalAuthRouter.GET("/interactive-map/list", "Get list of interactive maps (public only for guests)", func(c *gin.Context) {
 		Controllers.GetInteractiveMapList(c, Services.DB)

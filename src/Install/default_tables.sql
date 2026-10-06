@@ -1256,6 +1256,17 @@ create table topic_activity_log
     constraint fk_topic_activity_log_user  foreign key (user_id)  references users (id)  on delete set null
 );
 
+create table user_subforum_settings
+(
+    user_id                    int                not null,
+    subforum_id                bigint unsigned    not null,
+    hide_new_posts_index       tinyint(1)         not null default 0,
+    hide_new_posts_active_page tinyint(1)         not null default 0,
+    primary key (user_id, subforum_id),
+    constraint fk_uss_user     foreign key (user_id)    references users (id)    on delete cascade,
+    constraint fk_uss_subforum foreign key (subforum_id) references subforums (id) on delete cascade
+);
+
 create table interactive_maps
 (
     id         int          auto_increment primary key,
