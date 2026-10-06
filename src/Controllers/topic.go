@@ -56,6 +56,7 @@ type CreatePostRequest struct {
 	CharacterProfileID  *int    `json:"character_profile_id"`
 	GuestName           *string `json:"guest_name"`
 	FromDraftID         *string `json:"from_draft_id"`
+	IdempotencyKey      *string `json:"idempotency_key"`
 }
 
 type UpdatePostRequest struct {
@@ -1021,13 +1022,29 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 		}
 	}
 
-	// Insert Post
-	res, err := tx.Exec("INSERT INTO posts (topic_id, author_user_id, content, date_created, use_character_profile, character_profile_id, guest_name) VALUES (?, ?, ?, NOW(), ?, ?, ?)",
-		req.TopicID, userID, req.Content, req.UseCharacterProfile, req.CharacterProfileID, guestName)
+	// Insert Post — INSERT IGNORE deduplicates via idempotency_key unique constraint
+	res, err := tx.Exec("INSERT IGNORE INTO posts (topic_id, author_user_id, content, date_created, use_character_profile, character_profile_id, guest_name, idempotency_key) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?)",
+		req.TopicID, userID, req.Content, req.UseCharacterProfile, req.CharacterProfileID, guestName, req.IdempotencyKey)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert post: " + err.Error()})
 		return
 	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get rows affected"})
+		return
+	}
+	if rowsAffected == 0 {
+		// Duplicate idempotency_key — request already processed
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"deduplicated": true})
+		return
+	}
+
 	postID, err := res.LastInsertId()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get post ID"})

@@ -286,6 +286,8 @@ CREATE TABLE posts (
                        character_profile_id BIGINT UNSIGNED,
                        use_character_profile BOOLEAN DEFAULT FALSE,
                        is_deleted TINYINT NULL,
+                       idempotency_key VARCHAR(255) NULL,
+                       UNIQUE KEY uq_posts_idempotency_key (idempotency_key),
                        CONSTRAINT fk_posts_topic
                            FOREIGN KEY (topic_id) REFERENCES topics (id) ON DELETE CASCADE,
                        CONSTRAINT fk_posts_user
