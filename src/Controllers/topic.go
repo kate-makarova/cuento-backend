@@ -104,6 +104,19 @@ func GetTopicsBySubforum(c *gin.Context, db *sql.DB) {
 
 	userTimezone := Services.GetUserTimezone(userID, db)
 
+	// If the user has opted out of tracking new posts for this subforum, suppress the not_viewed marker.
+	notViewedUserID := userID
+	if userID != 0 {
+		var hideIndex bool
+		_ = db.QueryRow(
+			"SELECT hide_new_posts_index FROM user_subforum_settings WHERE user_id = ? AND subforum_id = ?",
+			userID, subforum,
+		).Scan(&hideIndex)
+		if hideIndex {
+			notViewedUserID = 0
+		}
+	}
+
 	var topics []ViewforumRow
 
 	limit := 30
@@ -125,7 +138,7 @@ func GetTopicsBySubforum(c *gin.Context, db *sql.DB) {
 		ORDER BY COALESCE(topics.is_sticky, false) DESC, topics.date_last_post DESC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := db.Query(query, userID, userID, subforum, Entities.DeletedTopic, limit, page*limit)
+	rows, err := db.Query(query, notViewedUserID, userID, subforum, Entities.DeletedTopic, limit, page*limit)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get topics: " + err.Error()})
