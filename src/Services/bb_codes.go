@@ -452,7 +452,7 @@ func GetBBCompiler() bbcode.Compiler {
 		out.Attrs["frameborder"] = "0"
 		out.Attrs["allow"] = cfg.allow
 		out.Attrs["loading"] = "lazy"
-		return out, false
+		return out, true
 	})
 
 	compiler.SetTag("video", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
