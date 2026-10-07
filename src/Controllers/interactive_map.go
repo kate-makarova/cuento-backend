@@ -17,6 +17,7 @@ type InteractiveMap struct {
 	Config    json.RawMessage `json:"config"`
 	IsPublic  bool            `json:"is_public"`
 	CreatorID *int            `json:"creator_id"`
+	CanEdit   bool            `json:"can_edit"`
 }
 
 type CreateInteractiveMapRequest struct {
@@ -48,6 +49,8 @@ func GetInteractiveMapList(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
+	canEditOthers, _ := Services.HasPermission(userID, "edit_others_maps", db)
+
 	list := []InteractiveMap{}
 	for rows.Next() {
 		var m InteractiveMap
@@ -61,6 +64,7 @@ func GetInteractiveMapList(c *gin.Context, db *sql.DB) {
 			id := int(creatorID.Int64)
 			m.CreatorID = &id
 		}
+		m.CanEdit = userID != 0 && (canEditOthers || (m.CreatorID != nil && *m.CreatorID == userID))
 		list = append(list, m)
 	}
 
@@ -102,6 +106,9 @@ func GetInteractiveMap(c *gin.Context, db *sql.DB) {
 		id := int(creatorID.Int64)
 		m.CreatorID = &id
 	}
+
+	canEditOthers, _ := Services.HasPermission(userID, "edit_others_maps", db)
+	m.CanEdit = userID != 0 && (canEditOthers || (m.CreatorID != nil && *m.CreatorID == userID))
 
 	c.JSON(http.StatusOK, m)
 }
@@ -176,9 +183,18 @@ func UpdateInteractiveMap(c *gin.Context, db *sql.DB) {
 	query += " WHERE id = ?"
 	args = append(args, id)
 
-	var exists bool
-	if err := db.QueryRow("SELECT 1 FROM interactive_maps WHERE id = ?", id).Scan(&exists); err != nil {
+	var mapCreatorID sql.NullInt64
+	if err := db.QueryRow("SELECT creator_id FROM interactive_maps WHERE id = ?", id).Scan(&mapCreatorID); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Map not found"})
+		c.Abort()
+		return
+	}
+
+	userID := Services.GetUserIdFromContext(c)
+	isCreator := mapCreatorID.Valid && int(mapCreatorID.Int64) == userID
+	canEditOthers, _ := Services.HasPermission(userID, "edit_others_maps", db)
+	if !isCreator && !canEditOthers {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You do not have permission to edit this map"})
 		c.Abort()
 		return
 	}

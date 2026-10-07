@@ -201,6 +201,7 @@ role_id,type,permission
 3,2,show_add_immunity_button
 3,2,show_character_sheet_admin_block
 3,2,show_ai_chat_navlink
+3,3,edit_others_maps
 3,0,/ai-chat/message
 3,0,/ai-chat/history
 3,0,/ai-chat/models
