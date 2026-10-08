@@ -220,9 +220,6 @@ func main() {
 	optionalAuthRouter.GET("/subforum/list-short", "Get list of all subforums", func(c *gin.Context) {
 		Controllers.GetShortSubforumList(c, Services.DB)
 	})
-	protectedRouter.GET("/subforum/list-episode", "Get list of subforums where user can create episode topics", func(c *gin.Context) {
-		Controllers.GetEpisodeSubforumList(c, Services.DB)
-	})
 	optionalAuthRouter.GET("/character-autocomplete/:term", "Get list of characters matching search term", func(c *gin.Context) {
 		Controllers.GetCharacterAutocomplete(c, Services.DB)
 	})
@@ -344,6 +341,9 @@ func main() {
 
 	optionalAuthRouter.GET("/features", "Get list of all feature flags", func(c *gin.Context) {
 		Features.GetFeaturesHandler(c)
+	})
+	protectedRouter.GET("/subforum/list-episode", "Get list of subforums where user can create episode topics", func(c *gin.Context) {
+		Controllers.GetEpisodeSubforumList(c, Services.DB)
 	})
 	protectedRouter.POST("/features/:key/toggle", "Toggle a feature flag on or off", func(c *gin.Context) {
 		Features.ToggleFeatureHandler(c, Services.DB)

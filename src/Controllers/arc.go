@@ -544,13 +544,14 @@ func canEditArc(userID, arcID int, db *sql.DB) bool {
 }
 
 type ArcEpisodeListItem struct {
-	ID           int                       `json:"id"`
-	Title        string                    `json:"title"`
-	Status       int                       `json:"status"`
-	LastPostDate string                    `json:"last_post_date"`
-	LastPostAuthor *Entities.ShortUser     `json:"last_post_author"`
-	Characters   []Entities.ShortCharacter `json:"characters"`
-	Factions     []Entities.FactionShort   `json:"factions"`
+	ID             int                       `json:"id"`
+	TopicID        int                       `json:"topic_id"`
+	Title          string                    `json:"title"`
+	Status         int                       `json:"status"`
+	LastPostDate   string                    `json:"last_post_date"`
+	LastPostAuthor *Entities.ShortUser       `json:"last_post_author"`
+	Characters     []Entities.ShortCharacter `json:"characters"`
+	Factions       []Entities.FactionShort   `json:"factions"`
 }
 
 func GetArcEpisodes(c *gin.Context, db *sql.DB) {
@@ -597,7 +598,7 @@ func GetArcEpisodes(c *gin.Context, db *sql.DB) {
 	}
 
 	rows, err := db.Query(`
-		SELECT e.id, e.name, e.episode_status, t.date_last_post,
+		SELECT e.id, e.topic_id, e.name, e.episode_status, t.date_last_post,
 		       u.id, u.username
 		FROM arc_episodes ae
 		JOIN episode_base e ON ae.episode_id = e.id
@@ -621,7 +622,7 @@ func GetArcEpisodes(c *gin.Context, db *sql.DB) {
 		var lastPostDate sql.NullString
 		var authorID sql.NullInt64
 		var authorUsername sql.NullString
-		if err := rows.Scan(&ep.ID, &ep.Title, &ep.Status, &lastPostDate, &authorID, &authorUsername); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.TopicID, &ep.Title, &ep.Status, &lastPostDate, &authorID, &authorUsername); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan episode: " + err.Error()})
 			c.Abort()
 			return
