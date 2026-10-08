@@ -342,6 +342,9 @@ func main() {
 	optionalAuthRouter.GET("/features", "Get list of all feature flags", func(c *gin.Context) {
 		Features.GetFeaturesHandler(c)
 	})
+	protectedRouter.GET("/subforum/list-episode", "Get list of subforums where user can create episode topics", func(c *gin.Context) {
+		Controllers.GetEpisodeSubforumList(c, Services.DB)
+	})
 	protectedRouter.POST("/features/:key/toggle", "Toggle a feature flag on or off", func(c *gin.Context) {
 		Features.ToggleFeatureHandler(c, Services.DB)
 	})
@@ -1150,6 +1153,46 @@ protectedRouter.POST("/user/subforum-settings/update-all", "Replace all subforum
 	})
 	protectedRouter.POST("/interactive-map/delete/:id", "Delete an interactive map by ID", func(c *gin.Context) {
 		Controllers.DeleteInteractiveMap(c, Services.DB)
+	})
+
+	optionalAuthRouter.POST("/arc/list", "Get list of arcs with filters (public only for guests)", func(c *gin.Context) {
+		Controllers.GetArcList(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/arc/:id", "Get an arc by ID (public check for guests)", func(c *gin.Context) {
+		Controllers.GetArc(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/arc/:id/episodes", "Get list of episodes for an arc", func(c *gin.Context) {
+		Controllers.GetArcEpisodes(c, Services.DB)
+	})
+	protectedRouter.POST("/arc/create", "Create a new arc", func(c *gin.Context) {
+		Controllers.CreateArc(c, Services.DB)
+	})
+	protectedRouter.POST("/arc/update/:id", "Update an arc by ID", func(c *gin.Context) {
+		Controllers.UpdateArc(c, Services.DB)
+	})
+	protectedRouter.DELETE("/arc/delete/:id", "Delete an arc by ID", func(c *gin.Context) {
+		Controllers.DeleteArc(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/npc/:id", "Get an NPC by ID", func(c *gin.Context) {
+		Controllers.GetNPC(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/npc/:id/topics", "Get topics where an NPC appears", func(c *gin.Context) {
+		Controllers.GetNPCTopics(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/arc/:id/npcs", "Get list of NPCs for an arc", func(c *gin.Context) {
+		Controllers.GetArcNPCs(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/arc/:id/npcs/search", "Search NPCs by name for an arc", func(c *gin.Context) {
+		Controllers.SearchNPCs(c, Services.DB)
+	})
+	protectedRouter.POST("/npc/create", "Create a new NPC for an arc", func(c *gin.Context) {
+		Controllers.CreateNPC(c, Services.DB)
+	})
+	protectedRouter.POST("/npc/update/:id", "Update an NPC by ID", func(c *gin.Context) {
+		Controllers.UpdateNPC(c, Services.DB)
+	})
+	protectedRouter.DELETE("/npc/delete/:id", "Delete an NPC by ID", func(c *gin.Context) {
+		Controllers.DeleteNPC(c, Services.DB)
 	})
 
 	// AI Agent routes (admin only)

@@ -202,6 +202,14 @@ role_id,type,permission
 3,2,show_character_sheet_admin_block
 3,2,show_ai_chat_navlink
 3,3,edit_others_maps
+3,2,can_create_story_arc
+3,0,/arc/create
+3,0,/arc/update/:id
+3,0,/arc/delete/:id
+2,0,/subforum/list-episode
+2,0,/npc/create
+2,0,/npc/update/:id
+2,0,/npc/delete/:id
 3,0,/ai-chat/message
 3,0,/ai-chat/history
 3,0,/ai-chat/models
