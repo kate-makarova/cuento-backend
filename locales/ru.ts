@@ -1437,5 +1437,8 @@ export const TRANSLATIONS_RU = {
   "npcdetail.breadcrumbArc": "Арка",
 
   "postform.npcBlock": "Блок NPC",
+  "postform.npcClose": "Отмена",
+  "postform.npcInsert": "Вставить",
+  "postform.npcSearchPlaceholder": "Поиск NPC…",
   "postform.hiddenMessage": "Скрытое сообщение"
 };
