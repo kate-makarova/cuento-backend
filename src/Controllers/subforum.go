@@ -486,7 +486,8 @@ func GetSubforum(c *gin.Context, db *sql.DB) {
 	var categoryID, position sql.NullInt64
 	var topicNumber, postNumber sql.NullInt64
 	var name, description sql.NullString
-	query := "SELECT id, category_id, name, description, position, topic_number, post_number, last_post_topic_id, last_post_topic_name, last_post_id, date_last_post, last_post_author_user_name, show_last_topic FROM subforums WHERE id = ?"
+	var isPrivate sql.NullBool
+	query := "SELECT id, category_id, name, description, position, topic_number, post_number, last_post_topic_id, last_post_topic_name, last_post_id, date_last_post, last_post_author_user_name, show_last_topic, is_private FROM subforums WHERE id = ?"
 	err = db.QueryRow(query, id).Scan(
 		&subforum.Id,
 		&categoryID,
@@ -501,6 +502,7 @@ func GetSubforum(c *gin.Context, db *sql.DB) {
 		&dateLastPost,
 		&subforum.LastPostAuthorName,
 		&subforum.ShowLastTopic,
+		&isPrivate,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -559,6 +561,22 @@ func GetSubforum(c *gin.Context, db *sql.DB) {
 	// Check Permissions
 	permissions := &Entities.SubforumPermissions{}
 	subforum.Permissions = permissions
+
+	// For private subforums, grant standard permissions to listed users directly
+	if isPrivate.Valid && isPrivate.Bool && userID != 0 {
+		var inList int
+		db.QueryRow("SELECT COUNT(*) FROM private_subforum_users WHERE subforum_id = ? AND user_id = ?", id, userID).Scan(&inList)
+		if inList > 0 {
+			permissions.SubforumCreateGeneralTopic = true
+			permissions.SubforumCreateEpisodeTopic = true
+			permissions.SubforumCreateLoreTopic = true
+			permissions.SubforumPost = true
+			permissions.SubforumDeleteOwnTopic = true
+			permissions.SubforumEditOwnPost = true
+			permissions.SubforumEditOwnTopic = true
+			permissions.SubforumDeleteOwnPost = true
+		}
+	}
 
 	if len(roleIDs) > 0 {
 		permMap := map[string]*bool{
