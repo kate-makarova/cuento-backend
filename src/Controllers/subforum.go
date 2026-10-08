@@ -562,21 +562,7 @@ func GetSubforum(c *gin.Context, db *sql.DB) {
 	permissions := &Entities.SubforumPermissions{}
 	subforum.Permissions = permissions
 
-	// For private subforums, grant standard permissions to listed users directly
-	if isPrivate.Valid && isPrivate.Bool && userID != 0 {
-		var inList int
-		db.QueryRow("SELECT COUNT(*) FROM private_subforum_users WHERE subforum_id = ? AND user_id = ?", id, userID).Scan(&inList)
-		if inList > 0 {
-			permissions.SubforumCreateGeneralTopic = true
-			permissions.SubforumCreateEpisodeTopic = true
-			permissions.SubforumCreateLoreTopic = true
-			permissions.SubforumPost = true
-			permissions.SubforumDeleteOwnTopic = true
-			permissions.SubforumEditOwnPost = true
-			permissions.SubforumEditOwnTopic = true
-			permissions.SubforumDeleteOwnPost = true
-		}
-	}
+	Services.ApplyPrivateSubforumPermissions(permissions, userID, id, db)
 
 	if len(roleIDs) > 0 {
 		permMap := map[string]*bool{

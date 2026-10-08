@@ -562,6 +562,23 @@ func GetVisibleSubforums(userID int, permission string, db *sql.DB) ([]int, erro
 		}
 	}
 
+	// Add private subforums the user is explicitly listed in (they have no role permissions)
+	if userID > 0 {
+		listedRows, err := db.Query(
+			"SELECT subforum_id FROM private_subforum_users WHERE user_id = ?", userID,
+		)
+		if err == nil {
+			defer listedRows.Close()
+			for listedRows.Next() {
+				var id int
+				if listedRows.Scan(&id) == nil && !seenSubforums[id] {
+					subforumIDs = append(subforumIDs, id)
+					seenSubforums[id] = true
+				}
+			}
+		}
+	}
+
 	if len(subforumIDs) == 0 {
 		return subforumIDs, nil
 	}
@@ -611,6 +628,31 @@ func GetVisibleSubforums(userID int, permission string, db *sql.DB) ([]int, erro
 	return filtered, nil
 }
 
+// ApplyPrivateSubforumPermissions grants standard member permissions on private subforums
+// to users explicitly listed in private_subforum_users. Safe to call on non-private subforums.
+func ApplyPrivateSubforumPermissions(permissions *Entities.SubforumPermissions, userID int, subforumID int, db *sql.DB) {
+	if userID == 0 {
+		return
+	}
+	var isPrivate sql.NullBool
+	if err := db.QueryRow("SELECT is_private FROM subforums WHERE id = ?", subforumID).Scan(&isPrivate); err != nil || !isPrivate.Valid || !isPrivate.Bool {
+		return
+	}
+	var inList int
+	db.QueryRow("SELECT COUNT(*) FROM private_subforum_users WHERE subforum_id = ? AND user_id = ?", subforumID, userID).Scan(&inList)
+	if inList == 0 {
+		return
+	}
+	permissions.SubforumCreateGeneralTopic = true
+	permissions.SubforumCreateEpisodeTopic = true
+	permissions.SubforumCreateLoreTopic = true
+	permissions.SubforumPost = true
+	permissions.SubforumDeleteOwnTopic = true
+	permissions.SubforumEditOwnPost = true
+	permissions.SubforumEditOwnTopic = true
+	permissions.SubforumDeleteOwnPost = true
+}
+
 func GetSubforumPermissions(userID int, subforumID int, db *sql.DB) (*Entities.SubforumPermissions, error) {
 	var roleIDs []int
 	if userID > 0 {
@@ -635,6 +677,8 @@ func GetSubforumPermissions(userID int, subforumID int, db *sql.DB) (*Entities.S
 	}
 
 	permissions := &Entities.SubforumPermissions{}
+	ApplyPrivateSubforumPermissions(permissions, userID, subforumID, db)
+
 	if len(roleIDs) == 0 {
 		return permissions, nil
 	}
