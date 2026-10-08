@@ -24,6 +24,7 @@ var FrontendPermissions = map[string]string{
 	"show_add_immunity_button":         "permission.show_add_immunity_button",
 	"show_character_sheet_admin_block": "permission.show_character_sheet_admin_block",
 	"show_ai_chat_navlink":             "permission.show_ai_chat_navlink",
+	"can_create_story_arc":             "permission.can_create_story_arc",
 }
 
 var BackendPermissions = map[string]string{
@@ -431,7 +432,48 @@ func UpdatePermissionMatrix(permissions []string, db *sql.DB) error {
 	return nil
 }
 
+// privateSubforumGrantedPerms are the permissions automatically granted to users
+// listed in private_subforum_users (standard member access, no moderation).
+var privateSubforumGrantedPerms = map[string]bool{
+	"subforum_read":                          true,
+	"subforum_post":                          true,
+	"subforum_create_general_topic":          true,
+	"subforum_create_episode_topic":          true,
+	"subforum_create_character_topic":        true,
+	"subforum_create_wanted_character_topic": true,
+	"subforum_create_lore_topic":             true,
+	"subforum_edit_own_post":                 true,
+	"subforum_edit_own_topic":                true,
+	"subforum_delete_own_post":               true,
+	"subforum_delete_topic":                  true,
+}
+
 func HasPermission(userID int, permission string, db *sql.DB) (bool, error) {
+	// For subforum permissions on private subforums, access is controlled exclusively
+	// via private_subforum_users. Users listed there get standard member permissions;
+	// users not listed are denied regardless of role.
+	if parts := strings.SplitN(permission, ":", 2); len(parts) == 2 && strings.HasPrefix(parts[0], "subforum_") {
+		subforumID, err := strconv.Atoi(parts[1])
+		if err == nil {
+			var isPrivate sql.NullBool
+			if scanErr := db.QueryRow("SELECT is_private FROM subforums WHERE id = ?", subforumID).Scan(&isPrivate); scanErr == nil && isPrivate.Valid && isPrivate.Bool {
+				if userID == 0 {
+					return false, nil
+				}
+				var inList int
+				db.QueryRow("SELECT COUNT(*) FROM private_subforum_users WHERE subforum_id = ? AND user_id = ?", subforumID, userID).Scan(&inList)
+				if inList == 0 {
+					return false, nil
+				}
+				// User has private access — grant standard permissions directly,
+				// fall through to role check for admin-level permissions (delete/edit others').
+				if privateSubforumGrantedPerms[parts[0]] {
+					return true, nil
+				}
+			}
+		}
+	}
+
 	if userID > 0 {
 		var count int
 		err := db.QueryRow(`
@@ -448,7 +490,7 @@ func HasPermission(userID int, permission string, db *sql.DB) (bool, error) {
 		}
 	}
 
-	// Fall back to guest role, mirroring GetVisibleSubforums behaviour
+	// Fall back to guest role
 	var count int
 	err := db.QueryRow(`
 		SELECT COUNT(*)
@@ -522,7 +564,53 @@ func GetVisibleSubforums(userID int, permission string, db *sql.DB) ([]int, erro
 		}
 	}
 
-	return subforumIDs, nil
+	if len(subforumIDs) == 0 {
+		return subforumIDs, nil
+	}
+
+	// Filter out private subforums the user is not explicitly listed in
+	ph := strings.Repeat("?,", len(subforumIDs)-1) + "?"
+	args2 := make([]interface{}, len(subforumIDs))
+	for i, id := range subforumIDs {
+		args2[i] = id
+	}
+
+	var privateRows *sql.Rows
+	if userID > 0 {
+		privateRows, err = db.Query(
+			"SELECT id FROM subforums WHERE id IN ("+ph+") AND is_private = 1 AND id NOT IN (SELECT subforum_id FROM private_subforum_users WHERE user_id = ?)",
+			append(args2, userID)...,
+		)
+	} else {
+		privateRows, err = db.Query(
+			"SELECT id FROM subforums WHERE id IN ("+ph+") AND is_private = 1",
+			args2...,
+		)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer privateRows.Close()
+
+	blocked := make(map[int]bool)
+	for privateRows.Next() {
+		var id int
+		if privateRows.Scan(&id) == nil {
+			blocked[id] = true
+		}
+	}
+
+	if len(blocked) == 0 {
+		return subforumIDs, nil
+	}
+
+	filtered := subforumIDs[:0]
+	for _, id := range subforumIDs {
+		if !blocked[id] {
+			filtered = append(filtered, id)
+		}
+	}
+	return filtered, nil
 }
 
 func GetSubforumPermissions(userID int, subforumID int, db *sql.DB) (*Entities.SubforumPermissions, error) {

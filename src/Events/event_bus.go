@@ -40,6 +40,8 @@ const (
 	PostsMoved             EventType = "PostsMoved"
 	GeneralPostsDeleted    EventType = "GeneralPostsDeleted"
 	UserAbsenceStarted     EventType = "UserAbsenceStarted"
+	ArcCreated             EventType = "ArcCreated"
+	ArcGMsUpdated          EventType = "ArcGMsUpdated"
 )
 
 type EventData interface{}
@@ -222,6 +224,18 @@ type PostsMovedEvent struct {
 type UserAbsenceStartedEvent struct {
 	UserID         int
 	AbsenceEndDate time.Time
+}
+
+type ArcCreatedEvent struct {
+	ArcID        int
+	Title        string
+	GMUserIDs    []int
+}
+
+type ArcGMsUpdatedEvent struct {
+	ArcID        int
+	PrevGMUserIDs []int
+	NewGMUserIDs  []int
 }
 
 type ReactionCreatedEvent struct {

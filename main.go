@@ -1152,6 +1152,25 @@ protectedRouter.POST("/user/subforum-settings/update-all", "Replace all subforum
 		Controllers.DeleteInteractiveMap(c, Services.DB)
 	})
 
+	optionalAuthRouter.POST("/arc/list", "Get list of arcs with filters (public only for guests)", func(c *gin.Context) {
+		Controllers.GetArcList(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/arc/:id", "Get an arc by ID (public check for guests)", func(c *gin.Context) {
+		Controllers.GetArc(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/arc/:id/episodes", "Get list of episodes for an arc", func(c *gin.Context) {
+		Controllers.GetArcEpisodes(c, Services.DB)
+	})
+	protectedRouter.POST("/arc/create", "Create a new arc", func(c *gin.Context) {
+		Controllers.CreateArc(c, Services.DB)
+	})
+	protectedRouter.POST("/arc/update/:id", "Update an arc by ID", func(c *gin.Context) {
+		Controllers.UpdateArc(c, Services.DB)
+	})
+	protectedRouter.DELETE("/arc/delete/:id", "Delete an arc by ID", func(c *gin.Context) {
+		Controllers.DeleteArc(c, Services.DB)
+	})
+
 	// AI Agent routes (admin only)
 	protectedRouter.GET("/admin/ai-agent/list", "Get list of all AI agents", func(c *gin.Context) {
 		Controllers.AdminListAiAgents(c, Services.DB)
