@@ -261,6 +261,41 @@ func GetShortSubforumList(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, subforums)
 }
 
+func GetEpisodeSubforumList(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		c.JSON(http.StatusOK, []Entities.ShortSubform{})
+		return
+	}
+
+	rows, err := db.Query(`
+		SELECT DISTINCT s.id, s.name
+		FROM subforums s
+		JOIN role_permission rp ON rp.type = 1 AND rp.permission = CONCAT('subforum_create_episode_topic:', s.id)
+		JOIN user_role ur ON ur.role_id = rp.role_id AND ur.user_id = ?
+		WHERE (s.is_private IS NULL OR s.is_private = 0)
+		ORDER BY s.position`, userID)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get subforums: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	subforums := []Entities.ShortSubform{}
+	for rows.Next() {
+		var s Entities.ShortSubform
+		if err := rows.Scan(&s.Id, &s.Name); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan subforum: " + err.Error()})
+			c.Abort()
+			return
+		}
+		subforums = append(subforums, s)
+	}
+
+	c.JSON(http.StatusOK, subforums)
+}
+
 func CreateCategory(c *gin.Context, db *sql.DB) {
 	var input struct {
 		Name     string `json:"name" binding:"required"`
