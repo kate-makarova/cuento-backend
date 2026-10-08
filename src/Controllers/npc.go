@@ -80,6 +80,51 @@ func GetArcNPCs(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, list)
 }
 
+func GetNPC(c *gin.Context, db *sql.DB) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid NPC ID"})
+		c.Abort()
+		return
+	}
+
+	var n Entities.NPC
+	var avatar, description sql.NullString
+	err = db.QueryRow(
+		"SELECT id, name, avatar, description, display_order FROM npc WHERE id = ?", id,
+	).Scan(&n.ID, &n.Name, &avatar, &description, &n.DisplayOrder)
+	if err == sql.ErrNoRows {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "NPC not found"})
+		c.Abort()
+		return
+	}
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch NPC: " + err.Error()})
+		c.Abort()
+		return
+	}
+	if avatar.Valid {
+		n.Avatar = &avatar.String
+	}
+	if description.Valid {
+		n.Description = &description.String
+	}
+
+	var arcID int
+	var arcTitle string
+	if db.QueryRow("SELECT na.arc_id, a.title FROM npc_arc na JOIN arcs a ON a.id = na.arc_id WHERE na.npc_id = ?", id).Scan(&arcID, &arcTitle) == nil {
+		n.Arc = &Entities.NPCArc{ID: arcID, Title: arcTitle}
+	}
+
+	userID := Services.GetUserIdFromContext(c)
+	if userID != 0 && arcID != 0 {
+		canEdit := canEditArc(userID, arcID, db)
+		n.CanEdit = &canEdit
+	}
+
+	c.JSON(http.StatusOK, n)
+}
+
 func SearchNPCs(c *gin.Context, db *sql.DB) {
 	arcID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {

@@ -1170,6 +1170,9 @@ protectedRouter.POST("/user/subforum-settings/update-all", "Replace all subforum
 	protectedRouter.DELETE("/arc/delete/:id", "Delete an arc by ID", func(c *gin.Context) {
 		Controllers.DeleteArc(c, Services.DB)
 	})
+	optionalAuthRouter.GET("/npc/:id", "Get an NPC by ID", func(c *gin.Context) {
+		Controllers.GetNPC(c, Services.DB)
+	})
 	optionalAuthRouter.GET("/arc/:id/npcs", "Get list of NPCs for an arc", func(c *gin.Context) {
 		Controllers.GetArcNPCs(c, Services.DB)
 	})
