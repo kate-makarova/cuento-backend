@@ -96,7 +96,7 @@ func GetArcList(c *gin.Context, db *sql.DB) {
 		where = append(where, "a.id IN (SELECT arc_id FROM arc_factions WHERE faction_id IN ("+strings.Join(placeholders, ",")+")"+")")
 	}
 
-	query := "SELECT a.id, a.title, a.description, a.is_public, a.status, a.image_url, a.creator_id FROM arcs a"
+	query := "SELECT a.id, a.title, a.is_public, a.status, a.image_url, a.creator_id FROM arcs a"
 	if len(where) > 0 {
 		query += " WHERE " + strings.Join(where, " AND ")
 	}
@@ -115,15 +115,11 @@ func GetArcList(c *gin.Context, db *sql.DB) {
 	for rows.Next() {
 		var a Arc
 		var creatorID sql.NullInt64
-		var description sql.NullString
 		var imageURL sql.NullString
-		if err := rows.Scan(&a.ID, &a.Title, &description, &a.IsPublic, &a.Status, &imageURL, &creatorID); err != nil {
+		if err := rows.Scan(&a.ID, &a.Title, &a.IsPublic, &a.Status, &imageURL, &creatorID); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan arc: " + err.Error()})
 			c.Abort()
 			return
-		}
-		if description.Valid {
-			a.Description = &description.String
 		}
 		if imageURL.Valid {
 			a.ImageURL = &imageURL.String
@@ -262,6 +258,35 @@ func GetArc(c *gin.Context, db *sql.DB) {
 			}
 		} else {
 			a.CanEdit = true
+		}
+	}
+
+	a.Factions = []Entities.FactionShort{}
+	a.GameMasters = []Entities.ShortUser{}
+
+	factionRows, err := db.Query(
+		"SELECT f.id, f.name FROM arc_factions af JOIN factions f ON af.faction_id = f.id WHERE af.arc_id = ?", id,
+	)
+	if err == nil {
+		defer factionRows.Close()
+		for factionRows.Next() {
+			var f Entities.FactionShort
+			if factionRows.Scan(&f.Id, &f.Name) == nil {
+				a.Factions = append(a.Factions, f)
+			}
+		}
+	}
+
+	gmRows, err := db.Query(
+		"SELECT u.id, u.username FROM arc_game_masters agm JOIN users u ON agm.user_id = u.id WHERE agm.arc_id = ?", id,
+	)
+	if err == nil {
+		defer gmRows.Close()
+		for gmRows.Next() {
+			var u Entities.ShortUser
+			if gmRows.Scan(&u.Id, &u.Username) == nil {
+				a.GameMasters = append(a.GameMasters, u)
+			}
 		}
 	}
 

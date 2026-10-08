@@ -13,9 +13,10 @@ func RegisterArcEventHandlers() {
 			return
 		}
 
+		description := "A private subforum for Game Masters of the story arc " + event.Title
 		res, err := db.Exec(
-			"INSERT INTO subforums (name, is_private) VALUES (?, 1)",
-			event.Title,
+			"INSERT INTO subforums (name, description, is_private) VALUES (?, ?, 1)",
+			event.Title, description,
 		)
 		if err != nil {
 			fmt.Printf("ArcCreated: failed to create subforum: %v\n", err)

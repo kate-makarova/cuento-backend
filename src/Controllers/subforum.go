@@ -483,14 +483,16 @@ func GetSubforum(c *gin.Context, db *sql.DB) {
 
 	var subforum Entities.Subform
 	var dateLastPost *time.Time
+	var categoryID, position sql.NullInt64
 	var topicNumber, postNumber sql.NullInt64
+	var name, description sql.NullString
 	query := "SELECT id, category_id, name, description, position, topic_number, post_number, last_post_topic_id, last_post_topic_name, last_post_id, date_last_post, last_post_author_user_name, show_last_topic FROM subforums WHERE id = ?"
 	err = db.QueryRow(query, id).Scan(
 		&subforum.Id,
-		&subforum.CategoryId,
-		&subforum.Name,
-		&subforum.Description,
-		&subforum.Position,
+		&categoryID,
+		&name,
+		&description,
+		&position,
 		&topicNumber,
 		&postNumber,
 		&subforum.LastPostTopicId,
@@ -510,6 +512,10 @@ func GetSubforum(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	subforum.CategoryId = int(categoryID.Int64)
+	subforum.Name = name.String
+	subforum.Description = description.String
+	subforum.Position = int(position.Int64)
 	subforum.TopicNumber = int(topicNumber.Int64)
 	subforum.PostNumber = int(postNumber.Int64)
 
