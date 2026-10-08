@@ -155,6 +155,72 @@ func ParseBBCode(text string) string {
 	return bbCompiler.Compile(text)
 }
 
+var npcLookupRe = regexp.MustCompile(`<npc-lookup data-id="(\d+)"></npc-lookup>`)
+
+func ResolveNPCPlaceholders(content string, db *sql.DB) string {
+	matches := npcLookupRe.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return content
+	}
+
+	ids := make([]interface{}, 0, len(matches))
+	seen := make(map[string]bool)
+	for _, m := range matches {
+		if !seen[m[1]] {
+			ids = append(ids, m[1])
+			seen[m[1]] = true
+		}
+	}
+
+	placeholders := strings.Repeat("?,", len(ids)-1) + "?"
+	rows, err := db.Query("SELECT id, name, avatar FROM npc WHERE id IN ("+placeholders+")", ids...)
+	if err != nil {
+		return content
+	}
+	defer rows.Close()
+
+	type npcData struct{ name, avatar string }
+	npcs := make(map[string]npcData)
+	for rows.Next() {
+		var id int
+		var name string
+		var avatar sql.NullString
+		if rows.Scan(&id, &name, &avatar) == nil {
+			n := npcData{name: name}
+			if avatar.Valid {
+				n.avatar = avatar.String
+			}
+			npcs[strconv.Itoa(id)] = n
+		}
+	}
+
+	return npcLookupRe.ReplaceAllStringFunc(content, func(match string) string {
+		sub := npcLookupRe.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return match
+		}
+		npc, ok := npcs[sub[1]]
+		if !ok {
+			return ""
+		}
+		var sb strings.Builder
+		sb.WriteString(`<a class="npc-link" href="/npc/`)
+		sb.WriteString(sub[1])
+		sb.WriteString(`" target="_blank">`)
+		if npc.avatar != "" {
+			sb.WriteString(`<img class="npc-avatar" src="`)
+			sb.WriteString(html.EscapeString(npc.avatar))
+			sb.WriteString(`" alt="`)
+			sb.WriteString(html.EscapeString(npc.name))
+			sb.WriteString(`">`)
+		}
+		sb.WriteString(`<span class="npc-name">`)
+		sb.WriteString(html.EscapeString(npc.name))
+		sb.WriteString(`</span></a>`)
+		return sb.String()
+	})
+}
+
 func GetBBCompiler() bbcode.Compiler {
 	compiler := bbcode.NewCompiler(true, true)
 
@@ -605,6 +671,38 @@ func GetBBCompiler() bbcode.Compiler {
 		out.Attrs["loading"] = "lazy"
 		out.Attrs["referrerpolicy"] = "no-referrer"
 
+		return out, false
+	})
+
+	compiler.SetTag("npc-block", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "div"
+		out.Attrs["class"] = "npc-block"
+		return out, true
+	})
+
+	compiler.SetTag("npc-header", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "div"
+		out.Attrs["class"] = "npc-header"
+		return out, true
+	})
+
+	compiler.SetTag("npc-body", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "div"
+		out.Attrs["class"] = "npc-body"
+		return out, true
+	})
+
+	compiler.SetTag("npc", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "npc-lookup"
+		if idStr, ok := getRawArg(node, "id"); ok {
+			if _, err := strconv.Atoi(idStr); err == nil {
+				out.Attrs["data-id"] = idStr
+			}
+		}
 		return out, false
 	})
 

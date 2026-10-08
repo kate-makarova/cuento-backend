@@ -458,7 +458,7 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 		post.DateCreated = dateCreated
 		post.DateCreatedLocalized = Services.LocalizeTime(post.DateCreated, userTimezone)
 		post.Content = rowMap["content"].(string)
-		post.ContentHtml = Services.LinkifyURLs(Services.ParseBBCode(post.Content), domain, db)
+		post.ContentHtml = Services.LinkifyURLs(Services.ResolveNPCPlaceholders(Services.ParseBBCode(post.Content), db), domain, db)
 		post.UseCharacterProfile, _ = strconv.ParseBool(rowMap["use_character_profile"].(string))
 		if v, ok := rowMap["is_gm_post"]; ok {
 			b, _ := strconv.ParseBool(v.(string))
