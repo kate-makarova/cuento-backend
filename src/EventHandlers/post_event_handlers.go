@@ -36,9 +36,14 @@ func RegisterPostEventHandlers() {
 			event.TopicID,
 		).Scan(&totalPosts)
 
+		// Render base HTML once (parse + NPC resolution + linkify), then apply hide blocks per user
+		domain, _ := Services.GetGlobalSetting("domain", db)
+		baseHtml := Services.LinkifyURLs(Services.ResolveNPCPlaceholders(Services.ParseBBCode(event.Post.Content), db), domain, db)
+
 		// Send to each user on the page with their localized date and per-user CanEdit
 		for _, u := range users {
 			userPost := event.Post
+			userPost.ContentHtml = Services.ProcessHideBlocks(baseHtml, u.UserID, int(event.TopicID), db)
 			userPost.DateCreatedLocalized = Services.LocalizeTime(userPost.DateCreated, Services.GetUserTimezone(u.UserID, db))
 
 			canEdit := false

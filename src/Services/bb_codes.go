@@ -155,7 +155,91 @@ func ParseBBCode(text string) string {
 	return bbCompiler.Compile(text)
 }
 
-var npcLookupRe = regexp.MustCompile(`<npc-lookup data-id="(\d+)"></npc-lookup>`)
+var hideBlockRe = regexp.MustCompile(`(?s)<hide-block data-users="([^"]*)">(.*?)</hide-block>`)
+
+func isArcGMForTopic(userID, topicID int, db *sql.DB) bool {
+	if userID == 0 || topicID == 0 {
+		return false
+	}
+	var count int
+	db.QueryRow(`
+		SELECT COUNT(*) FROM arc_game_masters agm
+		JOIN arc_episodes ae ON ae.arc_id = agm.arc_id
+		JOIN episode_base eb ON eb.id = ae.episode_id
+		WHERE eb.topic_id = ? AND agm.user_id = ?`, topicID, userID).Scan(&count)
+	if count > 0 {
+		return true
+	}
+	db.QueryRow(`
+		SELECT COUNT(*) FROM arcs a
+		JOIN arc_episodes ae ON ae.arc_id = a.id
+		JOIN episode_base eb ON eb.id = ae.episode_id
+		WHERE eb.topic_id = ? AND a.creator_id = ?`, topicID, userID).Scan(&count)
+	return count > 0
+}
+
+func ProcessHideBlocks(content string, userID int, topicID int, db *sql.DB) string {
+	isGM := isArcGMForTopic(userID, topicID, db)
+	return hideBlockRe.ReplaceAllStringFunc(content, func(match string) string {
+		sub := hideBlockRe.FindStringSubmatch(match)
+		if len(sub) < 3 {
+			return ""
+		}
+
+		allowed := isGM
+		var userIDs []int
+		for _, s := range strings.Split(sub[1], ",") {
+			s = strings.TrimSpace(s)
+			if id, err := strconv.Atoi(s); err == nil {
+				userIDs = append(userIDs, id)
+				if id == userID {
+					allowed = true
+				}
+			}
+		}
+		if !allowed {
+			return ""
+		}
+
+		// Fetch usernames for the header
+		placeholders := strings.Repeat("?,", len(userIDs)-1) + "?"
+		args := make([]interface{}, len(userIDs))
+		for i, id := range userIDs {
+			args[i] = id
+		}
+		type userLink struct{ id int; username string }
+		var users []userLink
+		if rows, err := db.Query("SELECT id, username FROM users WHERE id IN ("+placeholders+")", args...); err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var u userLink
+				if rows.Scan(&u.id, &u.username) == nil {
+					users = append(users, u)
+				}
+			}
+		}
+
+		var sb strings.Builder
+		sb.WriteString(`<div class="hide-block">`)
+		sb.WriteString(`<div class="hide-header">Visible to: `)
+		for i, u := range users {
+			if i > 0 {
+				sb.WriteString(", ")
+			}
+			sb.WriteString(`<a class="hide-user-link" href="/profile/`)
+			sb.WriteString(strconv.Itoa(u.id))
+			sb.WriteString(`" target="_blank">`)
+			sb.WriteString(html.EscapeString(u.username))
+			sb.WriteString(`</a>`)
+		}
+		sb.WriteString(`</div><div class="hide-body">`)
+		sb.WriteString(sub[2])
+		sb.WriteString(`</div></div>`)
+		return sb.String()
+	})
+}
+
+var npcLookupRe = regexp.MustCompile(`<npc-lookup data-id="(\d+)">(?:</npc-lookup>)?`)
 
 func ResolveNPCPlaceholders(content string, db *sql.DB) string {
 	matches := npcLookupRe.FindAllStringSubmatch(content, -1)
@@ -219,6 +303,25 @@ func ResolveNPCPlaceholders(content string, db *sql.DB) string {
 		sb.WriteString(`</span></a>`)
 		return sb.String()
 	})
+}
+
+// collectNpcIDs recursively walks a BBCode node tree and returns the id
+// attribute of every [npc] tag found, in document order. This is needed
+// because [npc id=1][npc id=2] (without explicit closing tags) causes the
+// parser to nest id=2 inside id=1, so a flat children scan would miss it.
+func collectNpcIDs(node *bbcode.BBCodeNode) []string {
+	var ids []string
+	for _, child := range node.Children {
+		if openTag := child.GetOpeningTag(); openTag != nil && openTag.Name == "npc" {
+			if idStr, ok := getRawArg(child, "id"); ok {
+				if _, err := strconv.Atoi(idStr); err == nil {
+					ids = append(ids, idStr)
+				}
+			}
+		}
+		ids = append(ids, collectNpcIDs(child)...)
+	}
+	return ids
 }
 
 func GetBBCompiler() bbcode.Compiler {
@@ -674,6 +777,25 @@ func GetBBCompiler() bbcode.Compiler {
 		return out, false
 	})
 
+	compiler.SetTag("hide", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "hide-block"
+		if users, ok := getRawArg(node, "users"); ok {
+			// Allow only digits and commas
+			safe := true
+			for _, ch := range users {
+				if (ch < '0' || ch > '9') && ch != ',' {
+					safe = false
+					break
+				}
+			}
+			if safe {
+				out.Attrs["data-users"] = users
+			}
+		}
+		return out, true
+	})
+
 	compiler.SetTag("npc-block", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
 		out := bbcode.NewHTMLTag("")
 		out.Name = "div"
@@ -685,7 +807,13 @@ func GetBBCompiler() bbcode.Compiler {
 		out := bbcode.NewHTMLTag("")
 		out.Name = "div"
 		out.Attrs["class"] = "npc-header"
-		return out, true
+		for _, idStr := range collectNpcIDs(node) {
+			lookup := bbcode.NewHTMLTag("")
+			lookup.Name = "npc-lookup"
+			lookup.Attrs["data-id"] = idStr
+			out.AppendChild(lookup)
+		}
+		return out, false
 	})
 
 	compiler.SetTag("npc-body", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {

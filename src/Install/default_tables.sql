@@ -1348,3 +1348,14 @@ create table npc_arc
     constraint fk_npc_arc_npc foreign key (npc_id) references npc  (id) on delete cascade,
     constraint fk_npc_arc_arc foreign key (arc_id) references arcs (id) on delete cascade
 );
+
+create table npc_post
+(
+    id      bigint unsigned not null auto_increment primary key,
+    npc_id  bigint unsigned not null,
+    post_id bigint unsigned not null,
+    unique key uq_npc_post (npc_id, post_id),
+    key idx_npc_post_post_id (post_id),
+    constraint fk_npc_post_npc  foreign key (npc_id)  references npc   (id) on delete cascade,
+    constraint fk_npc_post_post foreign key (post_id) references posts  (id) on delete cascade
+);

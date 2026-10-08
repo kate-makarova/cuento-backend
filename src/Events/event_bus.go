@@ -42,6 +42,7 @@ const (
 	UserAbsenceStarted     EventType = "UserAbsenceStarted"
 	ArcCreated             EventType = "ArcCreated"
 	ArcGMsUpdated          EventType = "ArcGMsUpdated"
+	NpcUsed                EventType = "NpcUsed"
 )
 
 type EventData interface{}
@@ -247,6 +248,12 @@ type ReactionCreatedEvent struct {
 	Url          string `json:"url"`
 	UserID       int    `json:"user_id"`
 	UserName     string `json:"user_name"`
+}
+
+type NpcUsedEvent struct {
+	PostID   int
+	Content  string
+	IsUpdate bool
 }
 
 type EventHandler func(db *sql.DB, data EventData)

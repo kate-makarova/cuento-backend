@@ -458,7 +458,7 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 		post.DateCreated = dateCreated
 		post.DateCreatedLocalized = Services.LocalizeTime(post.DateCreated, userTimezone)
 		post.Content = rowMap["content"].(string)
-		post.ContentHtml = Services.LinkifyURLs(Services.ResolveNPCPlaceholders(Services.ParseBBCode(post.Content), db), domain, db)
+		post.ContentHtml = Services.ProcessHideBlocks(Services.LinkifyURLs(Services.ResolveNPCPlaceholders(Services.ParseBBCode(post.Content), db), domain, db), currentUserID, topicID, db)
 		post.UseCharacterProfile, _ = strconv.ParseBool(rowMap["use_character_profile"].(string))
 		if v, ok := rowMap["is_gm_post"]; ok {
 			b, _ := strconv.ParseBool(v.(string))
@@ -1204,6 +1204,12 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 				Post:       *fullPost,
 			})
 		}
+		if req.IsGmPost {
+			Events.Publish(db, Events.NpcUsed, Events.NpcUsedEvent{
+				PostID:  int(postID),
+				Content: req.Content,
+			})
+		}
 	}
 
 	if req.FromDraftID != nil && *req.FromDraftID != "" {
@@ -1488,6 +1494,13 @@ func UpdatePost(c *gin.Context, db *sql.DB) {
 			SubforumID: subforumID,
 			Post:       *updatedPost,
 		})
+		if updatedPost.IsGmPost != nil && *updatedPost.IsGmPost {
+			Events.Publish(db, Events.NpcUsed, Events.NpcUsedEvent{
+				PostID:   postID,
+				Content:  req.Content,
+				IsUpdate: true,
+			})
+		}
 	}
 
 	c.JSON(http.StatusOK, updatedPost)

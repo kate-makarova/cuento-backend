@@ -630,6 +630,7 @@ export const TRANSLATIONS_RU = {
   "directchat.selectChat": "Выберите чат из списка, чтобы начать переписку",
   "viewtopic.copyLink": "Скопировать ссылку",
   "viewtopic.addReaction": "Добавить реакцию",
+  "viewtopic.newPostsOnAnotherPage": "На другой странице есть новые сообщения",
   "postform.spoilerTitle": "Заголовок спойлера",
   "postform.spoilerInsert": "Вставить",
   "postform.spoilerCancel": "Отмена",
@@ -1438,6 +1439,7 @@ export const TRANSLATIONS_RU = {
 
   "npcdetail.edit": "Редактировать",
   "npcdetail.error": "Не удалось загрузить данные NPC.",
+  "npcdetail.topicsHeading": "Темы",
   "npcdetail.breadcrumbArcList": "Сюжетные арки",
   "npcdetail.breadcrumbArc": "Арка",
 
@@ -1445,5 +1447,11 @@ export const TRANSLATIONS_RU = {
   "postform.npcClose": "Отмена",
   "postform.npcInsert": "Вставить",
   "postform.npcSearchPlaceholder": "Поиск NPC…",
-  "postform.hiddenMessage": "Скрытое сообщение"
+  "postform.hiddenMessage": "Скрытое сообщение",
+  "postform.normalPost": "Обычный пост",
+  "postform.gmPost": "Пост мастера",
+  "postform.loadingProfile": "Загрузка профиля…",
+  "postform.hideSearchPlaceholder": "Поиск пользователей…",
+  "postform.hideInsert": "Вставить",
+  "postform.hideClose": "Отмена"
 };

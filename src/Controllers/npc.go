@@ -310,3 +310,54 @@ func DeleteNPC(c *gin.Context, db *sql.DB) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "NPC deleted successfully"})
 }
+
+type NpcTopicItem struct {
+	TopicID   int    `json:"topic_id"`
+	TopicName string `json:"topic_name"`
+	PostIDs   []int  `json:"post_ids"`
+}
+
+func GetNPCTopics(c *gin.Context, db *sql.DB) {
+	npcID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid NPC ID"})
+		c.Abort()
+		return
+	}
+
+	rows, err := db.Query(`
+		SELECT t.id, t.name, p.id
+		FROM npc_post np
+		JOIN posts p ON p.id = np.post_id
+		JOIN topics t ON t.id = p.topic_id
+		WHERE np.npc_id = ?
+		ORDER BY t.id, p.id`, npcID)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch NPC topics: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	topicOrder := []int{}
+	topicMap := map[int]*NpcTopicItem{}
+	for rows.Next() {
+		var topicID, postID int
+		var topicName string
+		if err := rows.Scan(&topicID, &topicName, &postID); err != nil {
+			continue
+		}
+		if _, exists := topicMap[topicID]; !exists {
+			topicOrder = append(topicOrder, topicID)
+			topicMap[topicID] = &NpcTopicItem{TopicID: topicID, TopicName: topicName, PostIDs: []int{}}
+		}
+		topicMap[topicID].PostIDs = append(topicMap[topicID].PostIDs, postID)
+	}
+
+	result := make([]NpcTopicItem, 0, len(topicOrder))
+	for _, id := range topicOrder {
+		result = append(result, *topicMap[id])
+	}
+
+	c.JSON(http.StatusOK, result)
+}
