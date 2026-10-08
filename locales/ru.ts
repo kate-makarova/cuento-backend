@@ -718,6 +718,7 @@ export const TRANSLATIONS_RU = {
   "common.saveFailed": "Ошибка",
   "common.cancel": "Отмена",
   "common.close": "Закрыть",
+  "common.home": "Главная",
   "common.level": "Уровень",
   "common.continue": "Продолжить",
   "common.remove": "Удалить",
