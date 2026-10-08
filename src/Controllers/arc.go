@@ -526,6 +526,23 @@ func DeleteArc(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, gin.H{"message": "Arc deleted successfully"})
 }
 
+func canEditArc(userID, arcID int, db *sql.DB) bool {
+	var creatorID sql.NullInt64
+	if err := db.QueryRow("SELECT creator_id FROM arcs WHERE id = ?", arcID).Scan(&creatorID); err != nil {
+		return false
+	}
+	if creatorID.Valid && int(creatorID.Int64) == userID {
+		return true
+	}
+	var gmCount int
+	db.QueryRow("SELECT COUNT(*) FROM arc_game_masters WHERE arc_id = ? AND user_id = ?", arcID, userID).Scan(&gmCount)
+	if gmCount > 0 {
+		return true
+	}
+	hasPerm, _ := Services.HasPermission(userID, "/arc/update/:id", db)
+	return hasPerm
+}
+
 type ArcEpisodeListItem struct {
 	ID           int                       `json:"id"`
 	Title        string                    `json:"title"`

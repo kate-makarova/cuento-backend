@@ -1170,6 +1170,21 @@ protectedRouter.POST("/user/subforum-settings/update-all", "Replace all subforum
 	protectedRouter.DELETE("/arc/delete/:id", "Delete an arc by ID", func(c *gin.Context) {
 		Controllers.DeleteArc(c, Services.DB)
 	})
+	optionalAuthRouter.GET("/arc/:id/npcs", "Get list of NPCs for an arc", func(c *gin.Context) {
+		Controllers.GetArcNPCs(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/arc/:id/npcs/search", "Search NPCs by name for an arc", func(c *gin.Context) {
+		Controllers.SearchNPCs(c, Services.DB)
+	})
+	protectedRouter.POST("/npc/create", "Create a new NPC for an arc", func(c *gin.Context) {
+		Controllers.CreateNPC(c, Services.DB)
+	})
+	protectedRouter.POST("/npc/update/:id", "Update an NPC by ID", func(c *gin.Context) {
+		Controllers.UpdateNPC(c, Services.DB)
+	})
+	protectedRouter.DELETE("/npc/delete/:id", "Delete an NPC by ID", func(c *gin.Context) {
+		Controllers.DeleteNPC(c, Services.DB)
+	})
 
 	// AI Agent routes (admin only)
 	protectedRouter.GET("/admin/ai-agent/list", "Get list of all AI agents", func(c *gin.Context) {

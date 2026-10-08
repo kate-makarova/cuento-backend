@@ -296,6 +296,7 @@ CREATE TABLE posts (
                        character_profile_id BIGINT UNSIGNED,
                        use_character_profile BOOLEAN DEFAULT FALSE,
                        is_deleted TINYINT NULL,
+                       is_gm_post TINYINT(1) NULL,
                        idempotency_key VARCHAR(255) NULL,
                        UNIQUE KEY uq_posts_idempotency_key (idempotency_key),
                        CONSTRAINT fk_posts_topic
@@ -1328,4 +1329,22 @@ create table arc_factions
     primary key (arc_id, faction_id),
     constraint fk_arc_factions_arc     foreign key (arc_id)     references arcs     (id) on delete cascade,
     constraint fk_arc_factions_faction foreign key (faction_id) references factions  (id) on delete cascade
+);
+
+create table npc
+(
+    id            bigint unsigned auto_increment primary key,
+    name          varchar(255)    not null,
+    avatar        varchar(255)    null,
+    description   text            null,
+    display_order int             not null default 0
+);
+
+create table npc_arc
+(
+    npc_id bigint unsigned not null,
+    arc_id int             not null,
+    primary key (npc_id, arc_id),
+    constraint fk_npc_arc_npc foreign key (npc_id) references npc  (id) on delete cascade,
+    constraint fk_npc_arc_arc foreign key (arc_id) references arcs (id) on delete cascade
 );

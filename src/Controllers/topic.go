@@ -57,6 +57,7 @@ type CreatePostRequest struct {
 	GuestName           *string `json:"guest_name"`
 	FromDraftID         *string `json:"from_draft_id"`
 	IdempotencyKey      *string `json:"idempotency_key"`
+	IsGmPost            bool    `json:"is_gm_post"`
 }
 
 type UpdatePostRequest struct {
@@ -367,7 +368,8 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 			cp.id as character_profile_id, cp.character_id, cb.name as character_name, cp.avatar as character_avatar, cp.mask_name, cp.is_mask, cp.signature as character_signature,
 			u.signature as user_signature,
 			t.subforum_id, t.type as topic_type,
-			ec.custom_avatar as episode_custom_avatar
+			ec.custom_avatar as episode_custom_avatar,
+			p.is_gm_post
 			%s
 		FROM posts p
 		JOIN topics t ON p.topic_id = t.id
@@ -458,6 +460,10 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 		post.Content = rowMap["content"].(string)
 		post.ContentHtml = Services.LinkifyURLs(Services.ParseBBCode(post.Content), domain, db)
 		post.UseCharacterProfile, _ = strconv.ParseBool(rowMap["use_character_profile"].(string))
+		if v, ok := rowMap["is_gm_post"]; ok {
+			b, _ := strconv.ParseBool(v.(string))
+			post.IsGmPost = &b
+		}
 		subforumID, _ = strconv.Atoi(rowMap["subforum_id"].(string))
 		topicTypeInt, _ := strconv.Atoi(rowMap["topic_type"].(string))
 		if Entities.TopicType(topicTypeInt) != Entities.EpisodeTopic {
@@ -825,6 +831,22 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 				episode.WarningsConsent = hasConsent
 			}
 
+			// Arc membership
+			var arcID int
+			var arcTitle string
+			if err := db.QueryRow(
+				"SELECT a.id, a.title FROM arcs a JOIN arc_episodes ae ON ae.arc_id = a.id WHERE ae.episode_id = ? LIMIT 1",
+				episode.Id,
+			).Scan(&arcID, &arcTitle); err == nil {
+				episode.IsArc = true
+				episode.Arc = &Entities.EpisodeArc{ID: arcID, Title: arcTitle}
+				if currentUserID != 0 {
+					var gmCount int
+					db.QueryRow("SELECT COUNT(*) FROM arc_game_masters WHERE arc_id = ? AND user_id = ?", arcID, currentUserID).Scan(&gmCount)
+					episode.IsGM = gmCount > 0
+				}
+			}
+
 			topic.Episode = episode
 		}
 	}
@@ -1022,9 +1044,30 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 		}
 	}
 
+	// Validate is_gm_post: only allowed if user is a GM of the arc this episode belongs to
+	var isGmPost *bool
+	if req.IsGmPost {
+		var episodeID int
+		var arcID int
+		if err := tx.QueryRow("SELECT eb.id FROM episode_base eb JOIN topics t ON t.id = eb.topic_id WHERE t.id = ?", req.TopicID).Scan(&episodeID); err == nil {
+			if err := tx.QueryRow("SELECT arc_id FROM arc_episodes WHERE episode_id = ?", episodeID).Scan(&arcID); err == nil {
+				var gmCount int
+				tx.QueryRow("SELECT COUNT(*) FROM arc_game_masters WHERE arc_id = ? AND user_id = ?", arcID, userID).Scan(&gmCount)
+				if gmCount > 0 {
+					t := true
+					isGmPost = &t
+				}
+			}
+		}
+		if isGmPost == nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You are not a game master of the arc this episode belongs to"})
+			return
+		}
+	}
+
 	// Insert Post — INSERT IGNORE deduplicates via idempotency_key unique constraint
-	res, err := tx.Exec("INSERT IGNORE INTO posts (topic_id, author_user_id, content, date_created, use_character_profile, character_profile_id, guest_name, idempotency_key) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?)",
-		req.TopicID, userID, req.Content, req.UseCharacterProfile, req.CharacterProfileID, guestName, req.IdempotencyKey)
+	res, err := tx.Exec("INSERT IGNORE INTO posts (topic_id, author_user_id, content, date_created, use_character_profile, character_profile_id, guest_name, idempotency_key, is_gm_post) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?)",
+		req.TopicID, userID, req.Content, req.UseCharacterProfile, req.CharacterProfileID, guestName, req.IdempotencyKey, isGmPost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert post: " + err.Error()})
 		return
