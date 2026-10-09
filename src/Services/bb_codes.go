@@ -29,6 +29,7 @@ var (
 	viewtopicRe = regexp.MustCompile(`^/viewtopic/(\d+)`)
 	profileRe   = regexp.MustCompile(`^/profile/(\d+)$`)
 	characterRe = regexp.MustCompile(`^/character/(\d+)$`)
+	arcRe       = regexp.MustCompile(`^/arc/(\d+)$`)
 )
 
 func resolveInternalLinkLabel(rawURL, domain string, db *sql.DB) string {
@@ -57,6 +58,8 @@ func resolveInternalLinkLabel(rawURL, domain string, db *sql.DB) string {
 		db.QueryRow("SELECT username FROM users WHERE id = ?", m[1]).Scan(&name)
 	} else if m := characterRe.FindStringSubmatch(path); m != nil {
 		db.QueryRow("SELECT name FROM character_base WHERE id = ?", m[1]).Scan(&name)
+	} else if m := arcRe.FindStringSubmatch(path); m != nil {
+		db.QueryRow("SELECT title FROM arcs WHERE id = ?", m[1]).Scan(&name)
 	} else {
 		name = strings.ReplaceAll(strings.Trim(path, "/"), "-", " ")
 	}
