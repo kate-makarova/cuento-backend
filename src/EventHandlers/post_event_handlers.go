@@ -73,7 +73,7 @@ func RegisterPostEventHandlers() {
 	// Subscriber 6: Update Stats on Post Created
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type == "post_updated" {
+		if !ok || event.Type != "post_created" {
 			return
 		}
 
@@ -145,7 +145,7 @@ func RegisterPostEventHandlers() {
 	// Subscriber: Update character stats on episode post created
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type == "post_updated" {
+		if !ok || event.Type != "post_created" {
 			return
 		}
 
@@ -172,7 +172,7 @@ func RegisterPostEventHandlers() {
 	// Subscriber: Increment post count, then emit PostCountUpdated.
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type == "post_updated" || event.Post.AuthorUserId == 0 {
+		if !ok || event.Type != "post_created" || event.Post.AuthorUserId == 0 {
 			return
 		}
 
@@ -301,7 +301,7 @@ func RegisterPostEventHandlers() {
 	// Subscriber 11: Send Game Notifications for Episode Posts
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type == "post_updated" {
+		if !ok || event.Type != "post_created" {
 			return
 		}
 
@@ -423,7 +423,7 @@ func RegisterPostEventHandlers() {
 	// Subscriber: Update mask stats on episode post created
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type == "post_updated" {
+		if !ok || event.Type != "post_created" {
 			return
 		}
 
@@ -456,7 +456,7 @@ func RegisterPostEventHandlers() {
 	// Subscriber: Award currency for episode post
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type == "post_updated" {
+		if !ok || event.Type != "post_created" {
 			return
 		}
 
