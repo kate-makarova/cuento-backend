@@ -758,6 +758,12 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 
 	topic.CanEdit = &canEdit
 
+	if currentUserID != 0 {
+		var subCount int
+		db.QueryRow("SELECT COUNT(*) FROM user_topic_subscription WHERE user_id = ? AND topic_id = ?", currentUserID, topic.Id).Scan(&subCount)
+		topic.IsSubscribed = subCount > 0
+	}
+
 	if topic.Type == Entities.EpisodeTopic {
 		var episodeID int
 		err := db.QueryRow("SELECT id FROM episode_base WHERE topic_id = ?", topic.Id).Scan(&episodeID)
@@ -2326,4 +2332,49 @@ func GetPostById(c *gin.Context, db *sql.DB) {
 	post.DateCreatedLocalized = Services.LocalizeTime(post.DateCreated, Services.GetUserTimezone(userID, db))
 
 	c.JSON(http.StatusOK, post)
+}
+
+func SubscribeToTopic(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	topicID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid topic ID"})
+		c.Abort()
+		return
+	}
+
+	var exists int
+	if err := db.QueryRow("SELECT COUNT(*) FROM topics WHERE id = ?", topicID).Scan(&exists); err != nil || exists == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Topic not found"})
+		c.Abort()
+		return
+	}
+
+	_, err = db.Exec("INSERT IGNORE INTO user_topic_subscription (user_id, topic_id) VALUES (?, ?)", userID, topicID)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to subscribe: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Subscribed"})
+}
+
+func UnsubscribeFromTopic(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	topicID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid topic ID"})
+		c.Abort()
+		return
+	}
+
+	_, err = db.Exec("DELETE FROM user_topic_subscription WHERE user_id = ? AND topic_id = ?", userID, topicID)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to unsubscribe: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Unsubscribed"})
 }

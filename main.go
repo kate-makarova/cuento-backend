@@ -517,6 +517,12 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	protectedRouter.POST("/topic/update/:id", "Update topic by ID", func(c *gin.Context) {
 		Controllers.UpdateTopic(c, Services.DB)
 	})
+	protectedRouter.POST("/topic/:id/subscribe", "Subscribe to a topic", func(c *gin.Context) {
+		Controllers.SubscribeToTopic(c, Services.DB)
+	})
+	protectedRouter.POST("/topic/:id/unsubscribe", "Unsubscribe from a topic", func(c *gin.Context) {
+		Controllers.UnsubscribeFromTopic(c, Services.DB)
+	})
 	publicRouter.GET("/lore-topic/:id/pages", "Get lore pages by topic ID", func(c *gin.Context) {
 		Controllers.GetLorePagesByTopic(c, Services.DB)
 	})

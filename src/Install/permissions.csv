@@ -55,6 +55,8 @@ role_id,type,permission
 2,0,/template/:type/get
 2,0,/topic/create
 2,0,/topic/update/:id
+2,0,/topic/:id/subscribe
+2,0,/topic/:id/unsubscribe
 2,0,/lore-topic/:id/posts
 2,0,/lore-topic/create
 2,0,/lore-topic/update/:id
