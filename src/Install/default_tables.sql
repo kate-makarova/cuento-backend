@@ -1359,3 +1359,12 @@ create table npc_post
     constraint fk_npc_post_npc  foreign key (npc_id)  references npc   (id) on delete cascade,
     constraint fk_npc_post_post foreign key (post_id) references posts  (id) on delete cascade
 );
+
+create table user_topic_subscription
+(
+    user_id  int            not null,
+    topic_id bigint unsigned not null,
+    primary key (user_id, topic_id),
+    constraint fk_user_topic_sub_user  foreign key (user_id)  references users  (id) on delete cascade,
+    constraint fk_user_topic_sub_topic foreign key (topic_id) references topics (id) on delete cascade
+);

@@ -21,4 +21,5 @@ func RegisterEventHandlers(db *sql.DB) {
 	RegisterWorkflowEventHandlers()
 	RegisterArcEventHandlers()
 	RegisterNpcEventHandlers()
+	RegisterTopicSubscriptionEventHandlers()
 }
