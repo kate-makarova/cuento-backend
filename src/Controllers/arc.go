@@ -297,6 +297,8 @@ func GetArc(c *gin.Context, db *sql.DB) {
 		}
 	}
 
+	db.QueryRow("SELECT COUNT(*) FROM arc_episodes WHERE arc_id = ?", id).Scan(&a.EpisodeCount)
+
 	c.JSON(http.StatusOK, a)
 }
 
