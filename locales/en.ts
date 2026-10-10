@@ -1126,6 +1126,8 @@ export const TRANSLATIONS_EN = {
   "viewtopic.quote": "Quote",
   "viewtopic.topicClosed": "This topic is closed and is no longer accepting new posts.",
   "viewtopic.topicFull": "This topic is full and is no longer accepting new posts.",
+  "viewtopic.subscribe": "Subscribe to topic",
+  "viewtopic.unsubscribe": "Unsubscribe from topic",
   "wantedCharacterList.applyFilters": "Apply Filters",
   "wantedCharacterList.cardView": "Card view",
   "wantedCharacterList.claim": "Claim",
