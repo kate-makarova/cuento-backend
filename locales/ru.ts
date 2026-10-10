@@ -631,6 +631,8 @@ export const TRANSLATIONS_RU = {
   "viewtopic.copyLink": "Скопировать ссылку",
   "viewtopic.addReaction": "Добавить реакцию",
   "viewtopic.newPostsOnAnotherPage": "На другой странице есть новые сообщения",
+  "viewtopic.subscribe": "Подписаться на тему",
+  "viewtopic.unsubscribe": "Отписаться от темы",
   "postform.spoilerTitle": "Заголовок спойлера",
   "postform.spoilerInsert": "Вставить",
   "postform.spoilerCancel": "Отмена",
