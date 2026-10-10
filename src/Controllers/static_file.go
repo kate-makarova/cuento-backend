@@ -395,6 +395,44 @@ func UploadAsset(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"files": files})
 }
 
+type DeleteAssetRequest struct {
+	Name string `json:"name" binding:"required"`
+}
+
+func DeleteAsset(c *gin.Context) {
+	var req DeleteAssetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	fileName := filepath.Base(req.Name)
+	if fileName == "." || fileName == "/" {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid file name"})
+		c.Abort()
+		return
+	}
+
+	publicDir := "./../frontend"
+	filePath := filepath.Join(publicDir, assetsSubdir, fileName)
+
+	if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to delete file: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	files, err := assetList(publicDir)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to list assets: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"files": files})
+}
+
 func changeToWwwData(filePath string) error {
 	// Look up the group by name
 	grp, err := user.LookupGroup("www-data")
