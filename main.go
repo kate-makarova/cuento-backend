@@ -818,6 +818,12 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	protectedRouter.POST("/static-file/revert", "Revert to a specific static file version", func(c *gin.Context) {
 		Controllers.AdminRevertStaticFile(c, Services.DB)
 	})
+	protectedRouter.POST("/asset/upload", "Upload a file to the public assets folder", func(c *gin.Context) {
+		Controllers.UploadAsset(c)
+	})
+	protectedRouter.GET("/asset/list", "List files in the public assets folder", func(c *gin.Context) {
+		Controllers.GetAssetList(c)
+	})
 	protectedRouter.POST("/design-variation/create", "Create a new design variation", func(c *gin.Context) {
 		Controllers.CreateDesignVariation(c, Services.DB)
 	})
