@@ -1368,3 +1368,9 @@ create table user_topic_subscription
     constraint fk_user_topic_sub_user  foreign key (user_id)  references users  (id) on delete cascade,
     constraint fk_user_topic_sub_topic foreign key (topic_id) references topics (id) on delete cascade
 );
+
+-- Ensure sensitive settings are flagged as superuser-only in existing installations.
+UPDATE global_settings SET needs_superuser = 1
+WHERE setting_name IN ('ai_api_key', 'ai_name', 'ai_model',
+                       'github_token', 'github_owner', 'github_repo', 'github_branch',
+                       'imgbb_api_key');
