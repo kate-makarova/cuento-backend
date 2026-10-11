@@ -40,6 +40,9 @@ func main() {
 	// Start archiving warning notifier (checks daily, sends notifications at 10/5/3/2/1 days before archiving)
 	Services.StartArchivingNotifier(Services.DB)
 
+	// Start Google Drive backup scheduler (checks hourly, runs backup per configured frequency)
+	Services.StartBackupScheduler(Services.DB)
+
 	// Start WebSocket Hub
 	go Websockets.MainHub.Run()
 
@@ -312,6 +315,18 @@ func main() {
 	})
 	authOnlyRouter.POST("/admin/backup/restore", "Restore the database from an uploaded SQL file", func(c *gin.Context) {
 		Controllers.RestoreDB(c)
+	})
+	authOnlyRouter.GET("/admin/backup/gdrive", "Get Google Drive backup settings and backup list", func(c *gin.Context) {
+		Controllers.GetGDriveBackupSettings(c, Services.DB)
+	})
+	authOnlyRouter.POST("/admin/backup/gdrive", "Save Google Drive backup settings", func(c *gin.Context) {
+		Controllers.UpdateGDriveBackupSettings(c, Services.DB)
+	})
+	authOnlyRouter.POST("/admin/backup/gdrive/trigger", "Trigger an immediate Google Drive backup", func(c *gin.Context) {
+		Controllers.TriggerGDriveBackup(c, Services.DB)
+	})
+	authOnlyRouter.GET("/admin/backup/gdrive/download/:fileId", "Download a backup file from Google Drive", func(c *gin.Context) {
+		Controllers.DownloadGDriveBackup(c, Services.DB)
 	})
 
 	// Protected routes
