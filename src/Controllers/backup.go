@@ -1,13 +1,11 @@
 package Controllers
 
 import (
-	"cuento-backend/config"
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
-	"fmt"
-	"io"
+	"database/sql"
 	"net/http"
-	"os/exec"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,51 +17,15 @@ func BackupDB(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	cfg := config.LoadDBConfig()
 
-	filename := fmt.Sprintf("backup_%s.sql", time.Now().UTC().Format("2006-01-02_15-04-05"))
-
+	filename := "backup_" + time.Now().UTC().Format("2006-01-02_15-04-05") + ".sql"
 	c.Header("Content-Disposition", "attachment; filename="+filename)
 	c.Header("Content-Type", "application/sql")
-
-	cmd := exec.Command("mysqldump",
-		"-h", cfg.Host,
-		"-P", cfg.Port,
-		"-u", cfg.User,
-		"-p"+cfg.Password,
-		"--single-transaction",
-		"--routines",
-		"--triggers",
-		cfg.Name,
-	)
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start backup: " + err.Error()})
-		c.Abort()
-		return
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start backup: " + err.Error()})
-		c.Abort()
-		return
-	}
-
-	if err := cmd.Start(); err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start mysqldump: " + err.Error()})
-		c.Abort()
-		return
-	}
-
 	c.Status(http.StatusOK)
-	io.Copy(c.Writer, stdout)
 
-	if err := cmd.Wait(); err != nil {
-		errMsg, _ := io.ReadAll(stderr)
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "mysqldump failed: " + string(errMsg)})
+	if err := Services.MysqldumpToWriter(c.Writer); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Backup failed: " + err.Error()})
 		c.Abort()
-		return
 	}
 }
 
@@ -73,7 +35,6 @@ func RestoreDB(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	cfg := config.LoadDBConfig()
 
 	file, _, err := c.Request.FormFile("file")
 	if err != nil {
@@ -83,47 +44,131 @@ func RestoreDB(c *gin.Context) {
 	}
 	defer file.Close()
 
-	cmd := exec.Command("mysql",
-		"-h", cfg.Host,
-		"-P", cfg.Port,
-		"-u", cfg.User,
-		"-p"+cfg.Password,
-		cfg.Name,
-	)
-
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start restore: " + err.Error()})
-		c.Abort()
-		return
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start restore: " + err.Error()})
-		c.Abort()
-		return
-	}
-
-	if err := cmd.Start(); err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start mysql: " + err.Error()})
-		c.Abort()
-		return
-	}
-
-	if _, err := io.Copy(stdin, file); err != nil {
-		stdin.Close()
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to pipe SQL file: " + err.Error()})
-		c.Abort()
-		return
-	}
-	stdin.Close()
-
-	if err := cmd.Wait(); err != nil {
-		errMsg, _ := io.ReadAll(stderr)
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Restore failed: " + string(errMsg)})
+	if err := Services.MysqlRestoreFromReader(file); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Restore failed: " + err.Error()})
 		c.Abort()
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Database restored successfully"})
+}
+
+type GDriveBackupSettings struct {
+	ServiceAccountKey string               `json:"service_account_key"`
+	Enabled           bool                 `json:"enabled"`
+	Frequency         string               `json:"frequency"`
+	Keep              int                  `json:"keep"`
+	LastRun           *time.Time           `json:"last_run"`
+	Backups           []Services.BackupFile `json:"backups"`
+}
+
+func GetGDriveBackupSettings(c *gin.Context, db *sql.DB) {
+	if !Services.IsSuperuser(c) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "Forbidden"})
+		c.Abort()
+		return
+	}
+
+	key, _ := Services.GetGlobalSetting("gdrive_service_account_key", db)
+	enabled, _ := Services.GetGlobalSetting("gdrive_backup_enabled", db)
+	frequency, _ := Services.GetGlobalSetting("gdrive_backup_frequency", db)
+	keepStr, _ := Services.GetGlobalSetting("gdrive_backup_keep", db)
+	lastRunStr, _ := Services.GetGlobalSetting("gdrive_backup_last_run", db)
+
+	if frequency == "" {
+		frequency = "daily"
+	}
+	keep := 5
+	if n, err := strconv.Atoi(keepStr); err == nil && n > 0 {
+		keep = n
+	}
+
+	var lastRun *time.Time
+	if lastRunStr != "" {
+		if t, err := time.Parse(time.RFC3339, lastRunStr); err == nil {
+			lastRun = &t
+		}
+	}
+
+	var backups []Services.BackupFile
+	if key != "" {
+		backups, _ = Services.NewGDriveProvider(db).ListBackups()
+	}
+	if backups == nil {
+		backups = []Services.BackupFile{}
+	}
+
+	c.JSON(http.StatusOK, GDriveBackupSettings{
+		ServiceAccountKey: key,
+		Enabled:           enabled == "y",
+		Frequency:         frequency,
+		Keep:              keep,
+		LastRun:           lastRun,
+		Backups:           backups,
+	})
+}
+
+type UpdateGDriveBackupSettingsRequest struct {
+	ServiceAccountKey string `json:"service_account_key"`
+	Enabled           bool   `json:"enabled"`
+	Frequency         string `json:"frequency"`
+	Keep              int    `json:"keep"`
+}
+
+func UpdateGDriveBackupSettings(c *gin.Context, db *sql.DB) {
+	if !Services.IsSuperuser(c) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "Forbidden"})
+		c.Abort()
+		return
+	}
+
+	var req UpdateGDriveBackupSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request"})
+		c.Abort()
+		return
+	}
+
+	if req.Frequency != "daily" && req.Frequency != "weekly" && req.Frequency != "monthly" {
+		req.Frequency = "daily"
+	}
+	if req.Keep < 1 {
+		req.Keep = 1
+	}
+
+	enabledVal := "n"
+	if req.Enabled {
+		enabledVal = "y"
+	}
+
+	upsert := func(name, value string) error {
+		_, err := db.Exec(`INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
+			VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`, name, value)
+		return err
+	}
+
+	if err := upsert("gdrive_service_account_key", req.ServiceAccountKey); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save settings"})
+		c.Abort()
+		return
+	}
+	upsert("gdrive_backup_enabled", enabledVal)
+	upsert("gdrive_backup_frequency", req.Frequency)
+	upsert("gdrive_backup_keep", strconv.Itoa(req.Keep))
+
+	c.JSON(http.StatusOK, gin.H{"message": "Settings saved"})
+}
+
+func TriggerGDriveBackup(c *gin.Context, db *sql.DB) {
+	if !Services.IsSuperuser(c) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "Forbidden"})
+		c.Abort()
+		return
+	}
+	if err := Services.RunCloudBackup(db); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Backup failed: " + err.Error()})
+		c.Abort()
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Backup completed"})
 }
