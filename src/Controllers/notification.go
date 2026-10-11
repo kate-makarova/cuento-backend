@@ -36,6 +36,7 @@ func GetUnreadNotifications(c *gin.Context, db *sql.DB) {
 		"direct_message":       {},
 		"reaction":             {},
 		"topic_subscriptions":  {},
+		"absence_started":      {},
 	}
 
 	for rows.Next() {
@@ -74,6 +75,10 @@ func GetUnreadNotifications(c *gin.Context, db *sql.DB) {
 			notification = n
 		case "topic_subscriptions":
 			n := Entities.TopicSubscriptionNotification{NotificationBase: base}
+			json.Unmarshal(dataJSON, &n.Data)
+			notification = n
+		case "absence_started":
+			n := Entities.AbsenceStartedNotification{NotificationBase: base}
 			json.Unmarshal(dataJSON, &n.Data)
 			notification = n
 		default:
