@@ -99,6 +99,10 @@ func RegisterNotificationEventHandlers() {
 			n := Entities.TopicSubscriptionNotification{NotificationBase: base}
 			json.Unmarshal(dataJSON, &n.Data)
 			notification = n
+		case "absence_started":
+			n := Entities.AbsenceStartedNotification{NotificationBase: base}
+			json.Unmarshal(dataJSON, &n.Data)
+			notification = n
 		default:
 			notification = base
 		}
