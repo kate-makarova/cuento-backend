@@ -4,6 +4,7 @@ import (
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
 	"database/sql"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -157,6 +158,35 @@ func UpdateGDriveBackupSettings(c *gin.Context, db *sql.DB) {
 	upsert("gdrive_backup_keep", strconv.Itoa(req.Keep))
 
 	c.JSON(http.StatusOK, gin.H{"message": "Settings saved"})
+}
+
+func DownloadGDriveBackup(c *gin.Context, db *sql.DB) {
+	if !Services.IsSuperuser(c) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "Forbidden"})
+		c.Abort()
+		return
+	}
+
+	fileID := c.Param("fileId")
+	if fileID == "" {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Missing file ID"})
+		c.Abort()
+		return
+	}
+
+	provider := Services.NewGDriveProvider(db)
+	reader, filename, err := provider.Download(fileID)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Download failed: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer reader.Close()
+
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	c.Header("Content-Type", "application/sql")
+	c.Status(http.StatusOK)
+	io.Copy(c.Writer, reader)
 }
 
 func TriggerGDriveBackup(c *gin.Context, db *sql.DB) {

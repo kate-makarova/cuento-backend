@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"log"
 	"time"
 
@@ -59,6 +60,22 @@ func (p *GDriveProvider) ListBackups() ([]BackupFile, error) {
 		files = append(files, BackupFile{ID: f.Id, Name: f.Name, CreatedTime: t})
 	}
 	return files, nil
+}
+
+func (p *GDriveProvider) Download(fileID string) (io.ReadCloser, string, error) {
+	svc, err := p.service()
+	if err != nil {
+		return nil, "", err
+	}
+	meta, err := svc.Files.Get(fileID).Fields("name").Do()
+	if err != nil {
+		return nil, "", fmt.Errorf("get file metadata: %w", err)
+	}
+	resp, err := svc.Files.Get(fileID).Download()
+	if err != nil {
+		return nil, "", fmt.Errorf("download file: %w", err)
+	}
+	return resp.Body, meta.Name, nil
 }
 
 func (p *GDriveProvider) Prune(keep int) error {

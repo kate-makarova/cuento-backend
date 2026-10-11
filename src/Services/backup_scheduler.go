@@ -18,6 +18,7 @@ import (
 type BackupStorageProvider interface {
 	Upload(filename string, data []byte) error
 	ListBackups() ([]BackupFile, error)
+	Download(fileID string) (io.ReadCloser, string, error)
 	Prune(keep int) error
 }
 

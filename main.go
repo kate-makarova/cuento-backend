@@ -325,6 +325,9 @@ func main() {
 	authOnlyRouter.POST("/admin/backup/gdrive/trigger", "Trigger an immediate Google Drive backup", func(c *gin.Context) {
 		Controllers.TriggerGDriveBackup(c, Services.DB)
 	})
+	authOnlyRouter.GET("/admin/backup/gdrive/download/:fileId", "Download a backup file from Google Drive", func(c *gin.Context) {
+		Controllers.DownloadGDriveBackup(c, Services.DB)
+	})
 
 	// Protected routes
 	protectedGroup := r.Group("/")

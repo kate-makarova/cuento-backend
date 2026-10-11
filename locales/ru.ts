@@ -463,6 +463,8 @@ export const TRANSLATIONS_RU = {
   "admin.backup.gdriveLastRun": "Последняя копия: ",
   "admin.backup.gdriveColName": "Файл",
   "admin.backup.gdriveColDate": "Создано",
+  "admin.backup.gdriveDownload": "Скачать",
+  "admin.backup.gdriveDownloadError": "Не удалось скачать файл резервной копии.",
   "adminSettings.groupGeneral": "Основные",
   "adminSettings.groupGithub": "GitHub",
   "adminSettings.groupAutoArchiving": "Автоархивирование",
