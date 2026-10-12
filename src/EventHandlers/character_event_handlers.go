@@ -150,9 +150,9 @@ func RegisterCharacterEventHandlers() {
 
 		postID, _ := res.LastInsertId()
 
-		// Notify anyone reading the topic
+		// Notify anyone reading the topic (per-connection hub tracking for multi-tab correctness)
 		topicIDStr := strconv.Itoa(topicID)
-		users := Services.ActivityStorage.GetUsersOnPage("topic", topicIDStr)
+		userIDs := Websockets.MainHub.GetUserIDsOnPage("topic", topicIDStr)
 
 		// Fetch full post data for WebSocket
 		fullPost, err := Services.GetPostById(int(postID), db, Features.IsCurrencyActive(db))
@@ -161,8 +161,8 @@ func RegisterCharacterEventHandlers() {
 				"type": "post_created",
 				"data": fullPost,
 			}
-			for _, u := range users {
-				Websockets.MainHub.SendNotification(u.UserID, notification)
+			for _, uid := range userIDs {
+				Websockets.MainHub.SendNotification(uid, notification)
 			}
 		}
 	})
