@@ -1402,6 +1402,12 @@ func AcceptCharacter(c *gin.Context, db *sql.DB) {
 	}
 
 	// 3. Send event to EventBus
+	Events.Publish(db, Events.CharacterStatusChanged, Events.CharacterStatusChangedEvent{
+		CharacterID: id,
+		UserID:      userID,
+		OldStatus:   Entities.CharacterStatus(acceptOldCharStatus),
+		NewStatus:   Entities.ActiveCharacter,
+	})
 	Events.Publish(db, Events.CharacterAccepted, Events.CharacterAcceptedEvent{
 		CharacterID:   id,
 		CharacterName: name,
@@ -1857,6 +1863,7 @@ func CloseActiveClaimRecord(c *gin.Context, db *sql.DB) {
 
 type characterDeactivationResult struct {
 	CharacterID    int
+	UserID         int
 	TopicID        int64
 	SubforumID     int
 	OldTopicStatus int
@@ -1870,10 +1877,10 @@ func deactivateCharacterInTx(tx *sql.Tx, db *sql.DB, characterID int) (character
 	var res characterDeactivationResult
 	res.CharacterID = characterID
 	_ = db.QueryRow(`
-		SELECT t.id, t.subforum_id, t.status, cb.character_status
+		SELECT t.id, t.subforum_id, t.status, cb.character_status, cb.user_id
 		FROM topics t JOIN character_base cb ON cb.topic_id = t.id
 		WHERE cb.id = ?`, characterID,
-	).Scan(&res.TopicID, &res.SubforumID, &res.OldTopicStatus, &res.OldCharStatus)
+	).Scan(&res.TopicID, &res.SubforumID, &res.OldTopicStatus, &res.OldCharStatus, &res.UserID)
 
 	result, err := tx.Exec("UPDATE character_base SET character_status = ? WHERE id = ?", Entities.InactiveCharacter, characterID)
 	if err != nil {
@@ -1903,6 +1910,12 @@ func deactivateCharacterInTx(tx *sql.Tx, db *sql.DB, characterID int) (character
 }
 
 func publishCharacterDeactivatedEvents(db *sql.DB, res characterDeactivationResult) {
+	Events.Publish(db, Events.CharacterStatusChanged, Events.CharacterStatusChangedEvent{
+		CharacterID: res.CharacterID,
+		UserID:      res.UserID,
+		OldStatus:   Entities.CharacterStatus(res.OldCharStatus),
+		NewStatus:   Entities.InactiveCharacter,
+	})
 	Events.Publish(db, Events.CharacterDeactivated, Events.CharacterDeactivatedEvent{CharacterID: res.CharacterID})
 	if res.TopicID > 0 && res.OldTopicStatus != int(Entities.InactiveTopic) {
 		Events.Publish(db, Events.TopicStatusChanged, Events.TopicStatusChangedEvent{
@@ -1973,7 +1986,8 @@ func DeclineCharacter(c *gin.Context, db *sql.DB) {
 	var charDeclineTopicID int64
 	var charDeclineOldTopicStatus int
 	var charDeclineOldCharStatus int
-	_ = db.QueryRow("SELECT t.id, t.status, cb.character_status FROM topics t JOIN character_base cb ON cb.topic_id = t.id WHERE cb.id = ?", id).Scan(&charDeclineTopicID, &charDeclineOldTopicStatus, &charDeclineOldCharStatus)
+	var charDeclineUserID int
+	_ = db.QueryRow("SELECT t.id, t.status, cb.character_status, cb.user_id FROM topics t JOIN character_base cb ON cb.topic_id = t.id WHERE cb.id = ?", id).Scan(&charDeclineTopicID, &charDeclineOldTopicStatus, &charDeclineOldCharStatus, &charDeclineUserID)
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -2033,6 +2047,13 @@ func DeclineCharacter(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	Events.Publish(db, Events.CharacterStatusChanged, Events.CharacterStatusChangedEvent{
+		CharacterID: id,
+		UserID:      charDeclineUserID,
+		OldStatus:   Entities.CharacterStatus(charDeclineOldCharStatus),
+		NewStatus:   Entities.DeclinedCharacter,
+	})
+
 	c.JSON(http.StatusOK, gin.H{"character_status": Entities.DeclinedCharacter})
 }
 
@@ -2045,7 +2066,8 @@ func PendingCharacter(c *gin.Context, db *sql.DB) {
 	}
 
 	var currentStatus Entities.CharacterStatus
-	if err := db.QueryRow("SELECT character_status FROM character_base WHERE id = ?", id).Scan(&currentStatus); err != nil {
+	var pendingUserID int
+	if err := db.QueryRow("SELECT character_status, user_id FROM character_base WHERE id = ?", id).Scan(&currentStatus, &pendingUserID); err != nil {
 		if err == sql.ErrNoRows {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Character not found"})
 		} else {
@@ -2098,6 +2120,13 @@ func PendingCharacter(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	Events.Publish(db, Events.CharacterStatusChanged, Events.CharacterStatusChangedEvent{
+		CharacterID: id,
+		UserID:      pendingUserID,
+		OldStatus:   currentStatus,
+		NewStatus:   Entities.PendingCharacter,
+	})
+
 	c.JSON(http.StatusOK, gin.H{"character_status": Entities.PendingCharacter})
 }
 
@@ -2112,7 +2141,8 @@ func ActivateCharacter(c *gin.Context, db *sql.DB) {
 	var charActivateTopicID int64
 	var charActivateOldTopicStatus int
 	var charActivateOldCharStatus int
-	_ = db.QueryRow("SELECT t.id, t.status, cb.character_status FROM topics t JOIN character_base cb ON cb.topic_id = t.id WHERE cb.id = ?", id).Scan(&charActivateTopicID, &charActivateOldTopicStatus, &charActivateOldCharStatus)
+	var charActivateUserID int
+	_ = db.QueryRow("SELECT t.id, t.status, cb.character_status, cb.user_id FROM topics t JOIN character_base cb ON cb.topic_id = t.id WHERE cb.id = ?", id).Scan(&charActivateTopicID, &charActivateOldTopicStatus, &charActivateOldCharStatus, &charActivateUserID)
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -2164,6 +2194,12 @@ func ActivateCharacter(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	Events.Publish(db, Events.CharacterStatusChanged, Events.CharacterStatusChangedEvent{
+		CharacterID: id,
+		UserID:      charActivateUserID,
+		OldStatus:   Entities.CharacterStatus(charActivateOldCharStatus),
+		NewStatus:   Entities.ActiveCharacter,
+	})
 	Events.Publish(db, Events.CharacterActivated, Events.CharacterActivatedEvent{CharacterID: id})
 
 	var topicStatus Entities.TopicStatus
