@@ -439,6 +439,7 @@ create table global_stats
 
 INSERT IGNORE INTO global_stats (stat_name, stat_value) VALUES ('total_user_number', 0);
 INSERT IGNORE INTO global_stats (stat_name, stat_value) VALUES ('total_character_number', 0);
+INSERT IGNORE INTO global_stats (stat_name, stat_value) VALUES ('total_active_character_number', 0);
 INSERT IGNORE INTO global_stats (stat_name, stat_value) VALUES ('total_episode_number', 0);
 INSERT IGNORE INTO global_stats (stat_name, stat_value) VALUES ('total_topic_number', 0);
 INSERT IGNORE INTO global_stats (stat_name, stat_value) VALUES ('total_post_number', 0);
