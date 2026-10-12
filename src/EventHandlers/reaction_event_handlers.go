@@ -3,7 +3,6 @@ package EventHandlers
 import (
 	"cuento-backend/src/Entities"
 	"cuento-backend/src/Events"
-	"cuento-backend/src/Services"
 	"cuento-backend/src/Websockets"
 	"database/sql"
 	"fmt"
