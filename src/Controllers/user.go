@@ -82,6 +82,7 @@ type UpdateSettingsRequest struct {
 type CreateUserRequest struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
+	Language string `json:"interface_language,omitempty"`
 }
 
 type UserListItem struct {
@@ -108,6 +109,9 @@ func Register(c *gin.Context, db *sql.DB) {
 	}
 
 	defaultLang := "en-US"
+	if user.InterfaceLanguage != nil && *user.InterfaceLanguage != "" {
+		defaultLang = *user.InterfaceLanguage
+	}
 	defaultTZ := "Europe/London"
 
 	query := "INSERT INTO users (username, password, date_registered, interface_language, interface_timezone) VALUES (?, ?, ?, ?, ?)"
@@ -175,6 +179,9 @@ func CreateUser(c *gin.Context, db *sql.DB) {
 	}
 
 	defaultLang := "en-US"
+	if req.Language != "" {
+		defaultLang = req.Language
+	}
 	defaultTZ := "Europe/London"
 
 	res, err := db.Exec("INSERT INTO users (username, password, date_registered, interface_language, interface_timezone) VALUES (?, ?, ?, ?, ?)",
