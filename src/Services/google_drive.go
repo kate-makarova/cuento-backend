@@ -104,7 +104,7 @@ func (p *GDriveProvider) Prune(keep int) error {
 }
 
 func (p *GDriveProvider) service() (*drive.Service, error) {
-	keyJSON, err := GetGlobalSetting("gdrive_service_account_key", p.db)
+	keyJSON, err := GetBackupSetting("gdrive_service_account_key", p.db)
 	if err != nil || keyJSON == "" {
 		return nil, fmt.Errorf("google drive service account key not configured")
 	}

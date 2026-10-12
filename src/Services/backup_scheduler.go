@@ -31,7 +31,7 @@ type BackupFile struct {
 
 // resolveBackupProvider returns the configured provider, or nil if none is set up.
 func resolveBackupProvider(db *sql.DB) BackupStorageProvider {
-	key, _ := GetGlobalSetting("gdrive_service_account_key", db)
+	key, _ := GetBackupSetting("gdrive_service_account_key", db)
 	if key != "" {
 		return NewGDriveProvider(db)
 	}
@@ -50,15 +50,15 @@ func StartBackupScheduler(db *sql.DB) {
 }
 
 func runScheduledBackupIfDue(db *sql.DB) {
-	enabled, _ := GetGlobalSetting("gdrive_backup_enabled", db)
+	enabled, _ := GetBackupSetting("gdrive_backup_enabled", db)
 	if enabled != "y" {
 		return
 	}
-	frequency, _ := GetGlobalSetting("gdrive_backup_frequency", db)
+	frequency, _ := GetBackupSetting("gdrive_backup_frequency", db)
 	if frequency == "" {
 		frequency = "daily"
 	}
-	lastRunStr, _ := GetGlobalSetting("gdrive_backup_last_run", db)
+	lastRunStr, _ := GetBackupSetting("gdrive_backup_last_run", db)
 
 	due := lastRunStr == ""
 	if !due {
@@ -92,7 +92,7 @@ func RunCloudBackup(db *sql.DB) error {
 		return fmt.Errorf("no backup provider configured")
 	}
 
-	keepStr, _ := GetGlobalSetting("gdrive_backup_keep", db)
+	keepStr, _ := GetBackupSetting("gdrive_backup_keep", db)
 	keep := 5
 	if n, err := strconv.Atoi(keepStr); err == nil && n > 0 {
 		keep = n
@@ -109,9 +109,7 @@ func RunCloudBackup(db *sql.DB) error {
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	db.Exec(`INSERT INTO global_settings (setting_name, setting_value, needs_superuser)
-		VALUES ('gdrive_backup_last_run', ?, 1)
-		ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`, now)
+	db.Exec(`UPDATE backup_settings SET gdrive_last_run = ? WHERE id = 1`, now)
 
 	if err := provider.Prune(keep); err != nil {
 		log.Printf("Backup scheduler: prune failed: %v", err)
