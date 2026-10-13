@@ -321,7 +321,13 @@ func PreviewCharacter(c *gin.Context, db *sql.DB) {
 
 	cfMap := make(map[string]Entities.CustomFieldValue)
 	for k, v := range req.CustomFields {
-		cfMap[k] = Entities.CustomFieldValue{Content: v}
+		var rawContent interface{}
+		if m, ok := v.(map[string]interface{}); ok {
+			rawContent = m["content"]
+		} else {
+			rawContent = v
+		}
+		cfMap[k] = Entities.CustomFieldValue{Content: rawContent}
 	}
 
 	fieldConfig, _ := Services.GetFieldConfig("character", db)
