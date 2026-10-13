@@ -89,6 +89,7 @@ role_id,type,permission
 2,0,/wanted-character/activate/:id
 2,0,/wanted-character/create
 2,0,/wanted-character/deactivate/:id
+2,0,/wanted-character/preview
 2,0,/wanted-character/update/:id
 2,0,/puzzle/:id/achievement
 2,0,/puzzle/achievement/:id
