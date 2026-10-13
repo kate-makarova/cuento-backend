@@ -42,6 +42,18 @@ type CustomFieldEntity struct {
 	FieldConfig  []CustomFieldConfig         `json:"field_config"`
 }
 
+type Block struct {
+	ID     string   `json:"id"`
+	Label  string   `json:"label"`
+	Fields []string `json:"fields"`
+}
+
+type BlockSettingToggle struct {
+	MachineName string   `json:"machine_name"`
+	Label       string   `json:"label"`
+	Children    []string `json:"children"`
+}
+
 type FreeFormatDatePlaceholderType string
 
 const (
@@ -125,7 +137,7 @@ func GenerateEntityTables(entity CustomFieldEntity, entityName string, db *sql.D
 			customFieldFlattenedTableSQL += ", " + config.MachineFieldName + " " + sqlType
 		}
 	}
-	customFieldFlattenedTableSQL += ")"
+	customFieldFlattenedTableSQL += ", block_settings JSON)"
 
 	if _, err := db.Exec(customFieldMainTableSQL); err != nil {
 		return fmt.Errorf("error creating main table: %w", err)
@@ -165,8 +177,16 @@ func UpdateFlattenedTable(entity CustomFieldEntity, entityName string, db *sql.D
 		"select":  "INT",
 	}
 
+	// Ensure block_settings column exists (added in template_blocks feature)
+	if !existingColumns["block_settings"] {
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN block_settings JSON", tableName)); err != nil {
+			return fmt.Errorf("failed to add column block_settings: %w", err)
+		}
+	}
+
 	// Track fields present in the current configuration
-	configFieldNames := make(map[string]bool)
+	// block_settings is a reserved system column, not a user-defined field
+	configFieldNames := map[string]bool{"block_settings": true}
 
 	// 2. Iterate over config and add missing columns
 	for _, config := range entity.FieldConfig {
