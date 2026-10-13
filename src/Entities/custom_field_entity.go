@@ -52,6 +52,7 @@ type BlockSettingToggle struct {
 	MachineName string   `json:"machine_name"`
 	Label       string   `json:"label"`
 	Children    []string `json:"children"`
+	ControlType string   `json:"control_type"`
 }
 
 type FreeFormatDatePlaceholderType string
