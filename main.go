@@ -481,6 +481,9 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	protectedRouter.POST("/wanted-character/create", "Create a new wanted character", func(c *gin.Context) {
 		Controllers.CreateWantedCharacter(c, Services.DB)
 	})
+	protectedRouter.POST("/wanted-character/preview", "Preview a wanted character without saving", func(c *gin.Context) {
+		Controllers.PreviewWantedCharacter(c, Services.DB)
+	})
 	protectedRouter.POST("/wanted-character/update/:id", "Update a wanted character by ID", func(c *gin.Context) {
 		Controllers.UpdateWantedCharacter(c, Services.DB)
 	})
