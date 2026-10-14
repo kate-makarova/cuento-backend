@@ -40,10 +40,8 @@ create table user_role
 
 CREATE TABLE custom_field_config
 (
-    entity_type    VARCHAR(255) NOT NULL,
-    config         JSON         NULL,
-    blocks         JSON         NULL,
-    block_settings JSON         NULL,
+    entity_type VARCHAR(255) NOT NULL,
+    config      JSON         NULL,
     PRIMARY KEY (entity_type)
 );
 

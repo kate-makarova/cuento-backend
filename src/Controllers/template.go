@@ -8,18 +8,51 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
 var safeIdentifier = regexp.MustCompile(`^[a-z0-9_]+$`)
 
+type templateConfigWrapper struct {
+	Fields        json.RawMessage `json:"fields"`
+	Blocks        json.RawMessage `json:"blocks"`
+	BlockSettings json.RawMessage `json:"block_settings"`
+}
+
+func parseTemplateConfigRaw(configJSON string) (fields, blocks, blockSettings json.RawMessage) {
+	fields = json.RawMessage("[]")
+	blocks = json.RawMessage("[]")
+	blockSettings = json.RawMessage("[]")
+	trimmed := strings.TrimSpace(configJSON)
+	if len(trimmed) == 0 {
+		return
+	}
+	if trimmed[0] == '[' {
+		fields = json.RawMessage(configJSON)
+		return
+	}
+	var w templateConfigWrapper
+	if err := json.Unmarshal([]byte(configJSON), &w); err != nil {
+		return
+	}
+	if w.Fields != nil {
+		fields = w.Fields
+	}
+	if w.Blocks != nil {
+		blocks = w.Blocks
+	}
+	if w.BlockSettings != nil {
+		blockSettings = w.BlockSettings
+	}
+	return
+}
+
 func GetTemplate(c *gin.Context, db *sql.DB) {
 	entityType := c.Param("type")
 	var configJSON string
-	var blocksJSON, blockSettingsJSON sql.NullString
-	err := db.QueryRow("SELECT config, blocks, block_settings FROM custom_field_config WHERE entity_type = ?", entityType).
-		Scan(&configJSON, &blocksJSON, &blockSettingsJSON)
+	err := db.QueryRow("SELECT config FROM custom_field_config WHERE entity_type = ?", entityType).Scan(&configJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusOK, gin.H{"fields": []interface{}{}, "blocks": []interface{}{}, "block_settings": []interface{}{}})
@@ -30,30 +63,12 @@ func GetTemplate(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	var fields interface{}
-	if err := json.Unmarshal([]byte(configJSON), &fields); err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to parse template config: " + err.Error()})
-		c.Abort()
-		return
-	}
+	fieldsRaw, blocksRaw, blockSettingsRaw := parseTemplateConfigRaw(configJSON)
 
-	var blocks interface{} = []interface{}{}
-	if blocksJSON.Valid && blocksJSON.String != "" && blocksJSON.String != "null" {
-		if err := json.Unmarshal([]byte(blocksJSON.String), &blocks); err != nil {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to parse blocks config: " + err.Error()})
-			c.Abort()
-			return
-		}
-	}
-
-	var blockSettings interface{} = []interface{}{}
-	if blockSettingsJSON.Valid && blockSettingsJSON.String != "" && blockSettingsJSON.String != "null" {
-		if err := json.Unmarshal([]byte(blockSettingsJSON.String), &blockSettings); err != nil {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to parse block_settings config: " + err.Error()})
-			c.Abort()
-			return
-		}
-	}
+	var fields, blocks, blockSettings interface{}
+	_ = json.Unmarshal(fieldsRaw, &fields)
+	_ = json.Unmarshal(blocksRaw, &blocks)
+	_ = json.Unmarshal(blockSettingsRaw, &blockSettings)
 
 	c.JSON(http.StatusOK, gin.H{
 		"fields":         fields,
@@ -89,10 +104,20 @@ func UpdateTemplate(c *gin.Context, db *sql.DB) {
 		blockSettingsJSON = json.RawMessage("[]")
 	}
 
-	_, err := db.Exec(
-		"INSERT INTO custom_field_config (entity_type, config, blocks, block_settings) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE config = ?, blocks = ?, block_settings = ?",
-		entityType, string(fieldsJSON), string(blocksJSON), string(blockSettingsJSON),
-		string(fieldsJSON), string(blocksJSON), string(blockSettingsJSON),
+	combined, err := json.Marshal(templateConfigWrapper{
+		Fields:        fieldsJSON,
+		Blocks:        blocksJSON,
+		BlockSettings: blockSettingsJSON,
+	})
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to serialize template config: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	_, err = db.Exec(
+		"INSERT INTO custom_field_config (entity_type, config) VALUES (?, ?) ON DUPLICATE KEY UPDATE config = ?",
+		entityType, string(combined), string(combined),
 	)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update template config: " + err.Error()})

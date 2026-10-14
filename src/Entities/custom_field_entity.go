@@ -38,8 +38,9 @@ type CustomFieldValue struct {
 }
 
 type CustomFieldEntity struct {
-	CustomFields map[string]CustomFieldValue `json:"custom_fields"`
-	FieldConfig  []CustomFieldConfig         `json:"field_config"`
+	CustomFields  map[string]CustomFieldValue `json:"custom_fields"`
+	FieldConfig   []CustomFieldConfig         `json:"field_config"`
+	BlockSettings map[string]string           `json:"block_settings,omitempty"`
 }
 
 type Block struct {

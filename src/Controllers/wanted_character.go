@@ -26,10 +26,11 @@ type GetWantedCharacterListRequest struct {
 }
 
 type UpdateWantedCharacterRequest struct {
-	Name         string                 `json:"name" binding:"required"`
-	CustomFields map[string]interface{} `json:"custom_fields"`
-	Factions     []Entities.Faction     `json:"factions"`
-	RelationIds  []int                  `json:"relations"`
+	Name          string                 `json:"name" binding:"required"`
+	CustomFields  map[string]interface{} `json:"custom_fields"`
+	Factions      []Entities.Faction     `json:"factions"`
+	RelationIds   []int                  `json:"relations"`
+	BlockSettings map[string]string      `json:"block_settings"`
 }
 
 type CreateWantedCharacterRequest struct {
@@ -39,6 +40,7 @@ type CreateWantedCharacterRequest struct {
 	CustomFields     map[string]interface{} `json:"custom_fields"`
 	Factions         []Entities.Faction     `json:"factions"`
 	RelationIds      []int                  `json:"relations"`
+	BlockSettings    map[string]string      `json:"block_settings"`
 }
 
 func GetWantedCharacterList(c *gin.Context, db *sql.DB) {
@@ -398,6 +400,14 @@ func CreateWantedCharacter(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	if len(req.BlockSettings) > 0 {
+		if err := Services.SaveEntityBlockSettings(wantedCharacterID, "wanted_character", req.BlockSettings, tx); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save block settings: " + err.Error()})
+			c.Abort()
+			return
+		}
+	}
+
 	var claimID int64
 	if req.CharacterClaimId != nil {
 		claimID = int64(*req.CharacterClaimId)
@@ -543,6 +553,9 @@ func UpdateWantedCharacter(c *gin.Context, db *sql.DB) {
 	updates := map[string]interface{}{
 		"name":          req.Name,
 		"custom_fields": req.CustomFields,
+	}
+	if req.BlockSettings != nil {
+		updates["block_settings"] = req.BlockSettings
 	}
 	_, err = Services.PatchEntity(int64(wantedCharacterID), "wanted_character", updates, tx)
 	if err != nil {
