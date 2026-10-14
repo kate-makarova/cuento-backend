@@ -32,6 +32,7 @@ type BoardInfo struct {
 	UseImageUploading              string              `json:"use_image_uploading"`
 	UserAvatarWidth                int                 `json:"user_avatar_width"`
 	UserAvatarHeight               int                 `json:"user_avatar_height"`
+	UserAvatarLess                 string              `json:"user_avatar_less"`
 	CharacterAvatarWidth           int                 `json:"character_avatar_width"`
 	CharacterAvatarHeight          int                 `json:"character_avatar_height"`
 	Features                       map[string]int      `json:"features"`
@@ -48,7 +49,7 @@ func GetBoard(c *gin.Context, db *sql.DB) {
 		LastRegisteredUser:     nil,
 	}
 
-	rows, err := db.Query("SELECT setting_name, setting_value FROM global_settings WHERE setting_name IN ('site_name', 'domain', 'posts_per_page', 'visual_navlinks_after_header_panel', 'auto_archiving_show_page_link', 'auto_archiving_enabled', 'auto_archiving_days', 'show_content_warnings', 'use_rating_system', 'site_max_rating', 'blur_content_starting_from_rate', 'use_image_uploading', 'user_avatar_width', 'user_avatar_height', 'character_avatar_width', 'character_avatar_height')")
+	rows, err := db.Query("SELECT setting_name, setting_value FROM global_settings WHERE setting_name IN ('site_name', 'domain', 'posts_per_page', 'visual_navlinks_after_header_panel', 'auto_archiving_show_page_link', 'auto_archiving_enabled', 'auto_archiving_days', 'show_content_warnings', 'use_rating_system', 'site_max_rating', 'blur_content_starting_from_rate', 'use_image_uploading', 'user_avatar_width', 'user_avatar_height', 'user_avatar_less', 'character_avatar_width', 'character_avatar_height')")
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get global settings: " + err.Error()})
 		c.Abort()
@@ -96,6 +97,8 @@ func GetBoard(c *gin.Context, db *sql.DB) {
 			boardInfo.UserAvatarWidth, _ = strconv.Atoi(value)
 		case "user_avatar_height":
 			boardInfo.UserAvatarHeight, _ = strconv.Atoi(value)
+		case "user_avatar_less":
+			boardInfo.UserAvatarLess = value
 		case "character_avatar_width":
 			boardInfo.CharacterAvatarWidth, _ = strconv.Atoi(value)
 		case "character_avatar_height":

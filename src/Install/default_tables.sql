@@ -180,6 +180,9 @@ INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser
 VALUES ('user_avatar_height', '0', 0);
 
 INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('user_avatar_less', 'n', 0);
+
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('character_avatar_width', '0', 0);
 
 INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
