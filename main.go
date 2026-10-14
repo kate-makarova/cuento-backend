@@ -547,6 +547,9 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	protectedRouter.POST("/topic/:id/unsubscribe", "Unsubscribe from a topic", func(c *gin.Context) {
 		Controllers.UnsubscribeFromTopic(c, Services.DB)
 	})
+	protectedRouter.GET("/user/subscribed-topics", "Get current user's topic subscriptions", func(c *gin.Context) {
+		Controllers.GetUserSubscribedTopics(c, Services.DB)
+	})
 	publicRouter.GET("/lore-topic/:id/pages", "Get lore pages by topic ID", func(c *gin.Context) {
 		Controllers.GetLorePagesByTopic(c, Services.DB)
 	})

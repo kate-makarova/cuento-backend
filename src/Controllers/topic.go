@@ -38,6 +38,8 @@ type ViewforumRow struct {
 	IsSticky               bool                 `json:"is_sticky"`
 	IsStickyFirstPost      bool                 `json:"is_sticky_first_post"`
 	FirstPostId            *int                 `json:"first_post_id"`
+	SubforumId             int                  `json:"subforum_id,omitempty"`
+	SubforumName           string               `json:"subforum_name,omitempty"`
 }
 
 type CreateTopicRequest struct {
@@ -1911,12 +1913,14 @@ func GetActiveTopics(c *gin.Context, db *sql.DB) {
 		       t.last_post_author_user_id, u2.username as last_post_author_username,
 		       (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0)) as last_post_id,
 		       (CASE WHEN ? != 0 AND COALESCE(uss.hide_new_posts_index, 0) = 0 AND (utv.post_id IS NULL OR utv.post_id < (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0))) THEN 1 ELSE 0 END) as not_viewed,
-		       utv.post_id as last_viewed_id
+		       utv.post_id as last_viewed_id,
+		       t.subforum_id, s.name as subforum_name
 		FROM topics t
 		JOIN users u ON t.author_user_id = u.id
 		LEFT JOIN users u2 ON t.last_post_author_user_id = u2.id
 		LEFT JOIN user_topic_view utv ON t.id = utv.topic_id AND utv.user_id = ?
 		LEFT JOIN user_subforum_settings uss ON uss.subforum_id = t.subforum_id AND uss.user_id = ?
+		JOIN subforums s ON t.subforum_id = s.id
 		WHERE t.subforum_id IN (%s)
 	`, placeholders)
 
@@ -1969,6 +1973,79 @@ func GetActiveTopics(c *gin.Context, db *sql.DB) {
 			&topic.LastPostId,
 			&topic.NotViewed,
 			&topic.LastViewedId,
+			&topic.SubforumId,
+			&topic.SubforumName,
+		); err != nil {
+			continue
+		}
+		if topic.DateLastPost != nil {
+			localized := Services.LocalizeTime(*topic.DateLastPost, userTimezone)
+			topic.DateLastPostLocalized = &localized
+		}
+		topics = append(topics, topic)
+	}
+
+	if topics == nil {
+		topics = []ViewforumRow{}
+	}
+
+	c.JSON(http.StatusOK, topics)
+}
+
+func GetUserSubscribedTopics(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	userTimezone := Services.GetUserTimezone(userID, db)
+
+	query := `
+		SELECT t.id, t.status, t.name, t.type, t.date_last_post, t.post_number,
+		       t.author_user_id, u.username as author_username,
+		       t.last_post_author_user_id, u2.username as last_post_author_username,
+		       (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0)) as last_post_id,
+		       (CASE WHEN utv.post_id IS NULL OR utv.post_id < (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0)) THEN 1 ELSE 0 END) as not_viewed,
+		       utv.post_id as last_viewed_id,
+		       t.subforum_id, s.name as subforum_name
+		FROM topics t
+		JOIN users u ON t.author_user_id = u.id
+		LEFT JOIN users u2 ON t.last_post_author_user_id = u2.id
+		LEFT JOIN user_topic_view utv ON t.id = utv.topic_id AND utv.user_id = ?
+		JOIN user_topic_subscription uts ON t.id = uts.topic_id AND uts.user_id = ?
+		JOIN subforums s ON t.subforum_id = s.id
+		WHERE t.status != ?
+		ORDER BY t.date_last_post DESC
+	`
+
+	rows, err := db.Query(query, userID, userID, Entities.DeletedTopic)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get subscribed topics: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	var topics []ViewforumRow
+	for rows.Next() {
+		var topic ViewforumRow
+		if err := rows.Scan(
+			&topic.Id,
+			&topic.Status,
+			&topic.Name,
+			&topic.Type,
+			&topic.DateLastPost,
+			&topic.PostNumber,
+			&topic.AuthorUserId,
+			&topic.AuthorUsername,
+			&topic.LastPostAuthorUserId,
+			&topic.LastPostAuthorUsername,
+			&topic.LastPostId,
+			&topic.NotViewed,
+			&topic.LastViewedId,
+			&topic.SubforumId,
+			&topic.SubforumName,
 		); err != nil {
 			continue
 		}
