@@ -1356,7 +1356,7 @@ func GetActiveUserActivity(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, buildActiveUserActivity(currentUserID, db))
 }
 
-func UpdateGuestLocation(c *gin.Context) {
+func UpdateGuestLocation(c *gin.Context, db *sql.DB) {
 	var req struct {
 		PageType string `json:"page_type" binding:"required"`
 		PageId   string `json:"page_id"`
@@ -1368,6 +1368,7 @@ func UpdateGuestLocation(c *gin.Context) {
 
 	fingerprint := Services.GuestFingerprint(c.Request)
 	Services.GuestActivity.UpdateLocation(fingerprint, req.PageType, req.PageId)
+	go BroadcastActiveUserActivity(db)
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 

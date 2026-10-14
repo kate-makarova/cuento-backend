@@ -198,7 +198,7 @@ func main() {
 		Controllers.GetActiveUserActivity(c, Services.DB)
 	})
 	publicRouter.POST("/guest/activity", "Update guest location for active users list", func(c *gin.Context) {
-		Controllers.UpdateGuestLocation(c)
+		Controllers.UpdateGuestLocation(c, Services.DB)
 	})
 	optionalAuthRouter.GET("/search", "Search across buckets", func(c *gin.Context) {
 		Controllers.Search(c, Services.DB)
