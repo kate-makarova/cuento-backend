@@ -178,7 +178,12 @@ func getArgInt(node *bbcode.BBCodeNode, key string, min, max int) (int, bool) {
 
 var bbCompiler = GetBBCompiler()
 
+// Matches a structural grid/table BB tag followed by any mix of spaces, tabs,
+// and newlines — so that [tr]\n  [td] renders without whitespace text nodes.
+var structuralTagNewlineRe = regexp.MustCompile(`(?i)(\[/?(?:table|tr|td|grid(?:-item)?)[^\]]*\])([ \t]*\n)+[ \t]*`)
+
 func ParseBBCode(text string) string {
+	text = structuralTagNewlineRe.ReplaceAllString(text, "$1")
 	return bbCompiler.Compile(text)
 }
 
