@@ -497,17 +497,20 @@ create table character_faction
 
 create table character_flattened
 (
-    entity_id int primary key
+    entity_id      int primary key,
+    block_settings json null
 );
 
 create table character_profile_flattened
 (
-    entity_id int primary key
+    entity_id      int primary key,
+    block_settings json null
 );
 
 create table episode_flattened
 (
-    entity_id int primary key
+    entity_id      int primary key,
+    block_settings json null
 );
 
 create table roles
@@ -734,7 +737,8 @@ create table wanted_character_main
 
 create table wanted_character_flattened
 (
-    entity_id int primary key
+    entity_id      int primary key,
+    block_settings json null
 );
 
 create table wanted_character_faction

@@ -18,22 +18,24 @@ import (
 )
 
 type CreateCharacterRequest struct {
-	SubforumID   int                    `json:"subforum_id" binding:"required"`
-	Name         string                 `json:"name" binding:"required"`
-	Avatar       *string                `json:"avatar"`
-	CustomFields map[string]interface{} `json:"custom_fields"`
-	FactionIDs   []Entities.Faction     `json:"factions"`
-	ClaimId      *int                   `json:"claim_id"`
-	ClaimType    string                 `json:"claim_type"`
+	SubforumID    int                    `json:"subforum_id" binding:"required"`
+	Name          string                 `json:"name" binding:"required"`
+	Avatar        *string                `json:"avatar"`
+	CustomFields  map[string]interface{} `json:"custom_fields"`
+	FactionIDs    []Entities.Faction     `json:"factions"`
+	ClaimId       *int                   `json:"claim_id"`
+	ClaimType     string                 `json:"claim_type"`
+	BlockSettings map[string]string      `json:"block_settings"`
 }
 
 type UpdateCharacterRequest struct {
-	Name         string                 `json:"name" binding:"required"`
-	Avatar       *string                `json:"avatar"`
-	CustomFields map[string]interface{} `json:"custom_fields"`
-	FactionIDs   []Entities.Faction     `json:"factions"`
-	ClaimId      *int                   `json:"claim_id"`
-	ClaimType    string                 `json:"claim_type"`
+	Name          string                 `json:"name" binding:"required"`
+	Avatar        *string                `json:"avatar"`
+	CustomFields  map[string]interface{} `json:"custom_fields"`
+	FactionIDs    []Entities.Faction     `json:"factions"`
+	ClaimId       *int                   `json:"claim_id"`
+	ClaimType     string                 `json:"claim_type"`
+	BlockSettings map[string]string      `json:"block_settings"`
 }
 
 func attachPendingClaimRecord(tx *sql.Tx, claimId int, userId int, characterId int64) error {
@@ -246,6 +248,14 @@ func CreateCharacter(c *gin.Context, db *sql.DB) {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to create character: " + err.Error()})
 		c.Abort()
 		return
+	}
+
+	if len(req.BlockSettings) > 0 {
+		if err := Services.SaveEntityBlockSettings(characterID, "character", req.BlockSettings, tx); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save block settings: " + err.Error()})
+			c.Abort()
+			return
+		}
 	}
 
 	// Handle factions
@@ -519,6 +529,9 @@ func UpdateCharacter(c *gin.Context, db *sql.DB) {
 		"name":          req.Name,
 		"avatar":        req.Avatar,
 		"custom_fields": req.CustomFields,
+	}
+	if req.BlockSettings != nil {
+		updates["block_settings"] = req.BlockSettings
 	}
 	_, err = Services.PatchEntity(int64(characterID), "character", updates, tx)
 	if err != nil {
