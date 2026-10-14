@@ -1,6 +1,7 @@
 package EventHandlers
 
 import (
+	"cuento-backend/src/Entities"
 	"cuento-backend/src/Events"
 	"database/sql"
 	"fmt"
@@ -177,16 +178,13 @@ func RegisterEpisodeEventHandlers() {
 			return
 		}
 
-		var inviterName string
-		_ = db.QueryRow("SELECT username FROM users WHERE id = ?", event.UserID).Scan(&inviterName)
-
 		rows, err := db.Query(`
 			SELECT cb.id, cb.name, cb.user_id
 			FROM episode_character ec
 			JOIN character_base cb ON ec.character_id = cb.id
 			WHERE ec.episode_id = ?`, event.EpisodeID)
 		if err != nil {
-			fmt.Printf("Error fetching characters for episode invite notification: %v\n", err)
+			fmt.Printf("Error fetching characters for episode created notification: %v\n", err)
 			return
 		}
 		defer rows.Close()
@@ -202,15 +200,14 @@ func RegisterEpisodeEventHandlers() {
 			}
 			Events.Publish(db, Events.NotificationCreated, Events.NotificationEvent{
 				UserID:  ownerID,
-				Type:    "episode_invite",
+				Type:    "game",
 				Message: fmt.Sprintf("Your character %s was added to a new episode: %s", charName, event.TopicName),
-				Data: map[string]interface{}{
-					"topic_id":       event.TopicID,
-					"topic_name":     event.TopicName,
-					"character_id":   charID,
-					"character_name": charName,
-					"inviter_id":     event.UserID,
-					"inviter_name":   inviterName,
+				Data: Entities.NotificationGame{
+					TopicId:           int(event.TopicID),
+					TopicName:         event.TopicName,
+					Type:              "episode_created",
+					UserCharacterId:   charID,
+					UserCharacterName: charName,
 				},
 			})
 		}

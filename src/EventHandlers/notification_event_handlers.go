@@ -40,8 +40,6 @@ func RegisterNotificationEventHandlers() {
 			title = "Episode Status Changed"
 		case "topic_subscriptions":
 			title = "New Post in Subscribed Topic"
-		case "episode_invite":
-			title = "Your character was added to an episode"
 		}
 
 		res, err := db.Exec("INSERT INTO notifications (user_id, type, title, message, data, date_created, is_read) VALUES (?, ?, ?, ?, ?, NOW(), FALSE)",
@@ -103,10 +101,6 @@ func RegisterNotificationEventHandlers() {
 			notification = n
 		case "absence_started":
 			n := Entities.AbsenceStartedNotification{NotificationBase: base}
-			json.Unmarshal(dataJSON, &n.Data)
-			notification = n
-		case "episode_invite":
-			n := Entities.EpisodeInviteNotification{NotificationBase: base}
 			json.Unmarshal(dataJSON, &n.Data)
 			notification = n
 		default:

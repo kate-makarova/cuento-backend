@@ -142,20 +142,6 @@ type TopicSubscriptionNotification struct {
 	Data NotificationTopicSubscription `json:"data"`
 }
 
-type NotificationEpisodeInvite struct {
-	TopicId       int    `json:"topic_id"`
-	TopicName     string `json:"topic_name"`
-	CharacterId   int    `json:"character_id"`
-	CharacterName string `json:"character_name"`
-	InviterId     int    `json:"inviter_id"`
-	InviterName   string `json:"inviter_name"`
-}
-
-type EpisodeInviteNotification struct {
-	NotificationBase
-	Data NotificationEpisodeInvite `json:"data"`
-}
-
 type NotificationAbsenceStarted struct {
 	UserId          int      `json:"user_id"`
 	Username        string   `json:"username"`
