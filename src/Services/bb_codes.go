@@ -179,12 +179,22 @@ func getArgInt(node *bbcode.BBCodeNode, key string, min, max int) (int, bool) {
 
 var bbCompiler = GetBBCompiler()
 
-// Matches a structural grid/table BB tag followed by any mix of spaces, tabs,
-// and newlines — so that [tr]\n  [td] renders without whitespace text nodes.
-var structuralTagNewlineRe = regexp.MustCompile(`(?i)(\[/?(?:table|tr|td|grid(?:-item)?)[^\]]*\])([ \t]*\n)+[ \t]*`)
+// Matches whitespace/newlines that sit between two structural grid/table BB
+// tags. Both neighbours must be structural so that newlines after [/table] or
+// before [table] (paragraph separators) are preserved.
+var structuralTagNewlineRe = regexp.MustCompile(`(?i)(\[/?(?:table|tr|td|grid(?:-item)?)[^\]]*\])([ \t]*\n)+[ \t]*(\[/?(?:table|tr|td|grid(?:-item)?)[^\]]*\])`)
 
 func ParseBBCode(text string) string {
-	text = structuralTagNewlineRe.ReplaceAllString(text, "$1")
+	// Each pass collapses one layer of whitespace; loop until nothing changes
+	// (needed because consuming the second tag as $3 prevents it from
+	// anchoring the next match in the same pass).
+	for {
+		stripped := structuralTagNewlineRe.ReplaceAllString(text, "$1$3")
+		if stripped == text {
+			break
+		}
+		text = stripped
+	}
 	return bbCompiler.Compile(text)
 }
 
