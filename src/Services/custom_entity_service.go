@@ -694,21 +694,11 @@ func CreateEntity(className string, entity interface{}, db DBExecutor) (interfac
 }
 
 func GetFieldConfig(entityType string, db DBExecutor) ([]Entities.CustomFieldConfig, error) {
-	var configBytes []byte
-	err := db.QueryRow("SELECT config FROM custom_field_config WHERE entity_type = ?", entityType).Scan(&configBytes)
+	tc, err := GetEntityTemplateConfig(entityType, db)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return []Entities.CustomFieldConfig{}, nil
-		}
 		return nil, err
 	}
-	config := make([]Entities.CustomFieldConfig, 0)
-	if len(configBytes) > 0 {
-		if err := json.Unmarshal(configBytes, &config); err != nil {
-			return nil, err
-		}
-	}
-	return config, nil
+	return tc.FieldConfig, nil
 }
 
 type EntityTemplateConfig struct {
