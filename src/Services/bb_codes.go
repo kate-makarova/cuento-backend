@@ -110,6 +110,7 @@ var allowedDivStyleProps = map[string]bool{
 	"color":           true,
 	"font-style":      true,
 	"text-decoration": true,
+	"padding":         true,
 }
 
 var allowedDisplayValues = map[string]bool{
