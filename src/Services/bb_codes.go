@@ -97,6 +97,30 @@ func LinkifyURLs(input, domain string, db *sql.DB) string {
 var audioExtRegexp = regexp.MustCompile(`(?i)\.(mp3|ogg|wav|flac|aac|m4a|opus|webm)(\?.*)?$`)
 var cssDimensionRe = regexp.MustCompile(`^[a-zA-Z0-9.%\-]+$`)
 
+var allowedDivStyleProps = map[string]bool{
+	"border":          true,
+	"background":      true,
+	"width":           true,
+	"height":          true,
+	"max-height":      true,
+	"min-height":      true,
+	"max-width":       true,
+	"min-width":       true,
+	"display":         true,
+	"color":           true,
+	"font-style":      true,
+	"text-decoration": true,
+}
+
+var allowedDisplayValues = map[string]bool{
+	"inline":       true,
+	"block":        true,
+	"inline-block": true,
+	"flex":         true,
+}
+
+var unsafeCSSRe = regexp.MustCompile(`(?i)(javascript\s*:|expression\s*\(|behavior\s*:|vbscript\s*:|-moz-binding)`)
+
 // getRawArg extracts a named arg directly from the raw tag string, bypassing
 // the bbcode library's quoted-value parser which corrupts multi-byte UTF-8.
 func getRawArg(node *bbcode.BBCodeNode, key string) (string, bool) {
@@ -327,6 +351,41 @@ func collectNpcIDs(node *bbcode.BBCodeNode) []string {
 	return ids
 }
 
+func sanitizeStyle(raw string) string {
+	var parts []string
+	for _, decl := range strings.Split(raw, ";") {
+		decl = strings.TrimSpace(decl)
+		if decl == "" {
+			continue
+		}
+		idx := strings.Index(decl, ":")
+		if idx < 0 {
+			continue
+		}
+		prop := strings.ToLower(strings.TrimSpace(decl[:idx]))
+		val := strings.TrimSpace(decl[idx+1:])
+		if val == "" || !allowedDivStyleProps[prop] {
+			continue
+		}
+		if unsafeCSSRe.MatchString(val) {
+			continue
+		}
+		if prop == "display" && !allowedDisplayValues[strings.ToLower(val)] {
+			continue
+		}
+		parts = append(parts, prop+": "+val)
+	}
+	return strings.Join(parts, "; ")
+}
+
+func applyStyle(node *bbcode.BBCodeNode, out *bbcode.HTMLTag) {
+	if raw, ok := getRawArg(node, "style"); ok {
+		if sanitized := sanitizeStyle(raw); sanitized != "" {
+			out.Attrs["style"] = html.EscapeString(sanitized)
+		}
+	}
+}
+
 func GetBBCompiler() bbcode.Compiler {
 	compiler := bbcode.NewCompiler(true, true)
 
@@ -374,20 +433,15 @@ func GetBBCompiler() bbcode.Compiler {
 			out.Attrs["class"] = class
 		}
 
-		var style string
-		if border, ok := getArg(node, "border"); ok {
-			style += fmt.Sprintf("border: %s;", border)
-		}
-		if width, ok := getArg(node, "width"); ok {
-			style += fmt.Sprintf(" width: %s;", width)
-		}
-		if height, ok := getArg(node, "height"); ok {
-			style += fmt.Sprintf(" height: %s;", height)
-		}
-		if style != "" {
-			out.Attrs["style"] = style
-		}
+		applyStyle(node, out)
 
+		return out, true
+	})
+
+	compiler.SetTag("span", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "span"
+		applyStyle(node, out)
 		return out, true
 	})
 
