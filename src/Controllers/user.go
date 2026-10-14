@@ -1315,9 +1315,6 @@ func buildActiveUserActivity(forUserID int, db *sql.DB) []ActiveUserInfo {
 	}
 
 	for _, g := range Services.GuestActivity.GetActiveGuests() {
-		if g.CurrentPageType == "" {
-			continue
-		}
 		info := ActiveUserInfo{
 			IsGuest:             true,
 			Username:            "Guest#" + g.ShortID,
