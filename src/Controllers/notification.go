@@ -37,6 +37,7 @@ func GetUnreadNotifications(c *gin.Context, db *sql.DB) {
 		"reaction":             {},
 		"topic_subscriptions":  {},
 		"absence_started":      {},
+		"episode_invite":       {},
 	}
 
 	for rows.Next() {
@@ -81,6 +82,10 @@ func GetUnreadNotifications(c *gin.Context, db *sql.DB) {
 			n := Entities.AbsenceStartedNotification{NotificationBase: base}
 			json.Unmarshal(dataJSON, &n.Data)
 			notification = n
+		case "episode_invite":
+			n := Entities.EpisodeInviteNotification{NotificationBase: base}
+			json.Unmarshal(dataJSON, &n.Data)
+			notification = n
 		default:
 			notification = base
 		}
@@ -104,6 +109,7 @@ func GetNotificationTypes(c *gin.Context) {
 		"direct_message",
 		"reaction",
 		"topic_subscriptions",
+		"episode_invite",
 	}
 	c.JSON(http.StatusOK, types)
 }
@@ -138,7 +144,7 @@ func GetNotificationSettings(c *gin.Context, db *sql.DB) {
 		saved[s.NotificationType] = s
 	}
 
-	allTypes := []string{"system", "game", "mention", "account_update", "direct_message", "reaction", "topic_subscriptions"}
+	allTypes := []string{"system", "game", "mention", "account_update", "direct_message", "reaction", "topic_subscriptions", "episode_invite"}
 	settings := make([]Entities.UserNotificationSetting, 0, len(allTypes))
 	for _, t := range allTypes {
 		if s, ok := saved[t]; ok {

@@ -170,6 +170,52 @@ func RegisterEpisodeEventHandlers() {
 		}
 	})
 
+	// Subscriber: Notify character owners when a new episode is created with their character
+	Events.Subscribe(Events.EpisodeCreated, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.EpisodeCreatedEvent)
+		if !ok {
+			return
+		}
+
+		var inviterName string
+		_ = db.QueryRow("SELECT username FROM users WHERE id = ?", event.UserID).Scan(&inviterName)
+
+		rows, err := db.Query(`
+			SELECT cb.id, cb.name, cb.user_id
+			FROM episode_character ec
+			JOIN character_base cb ON ec.character_id = cb.id
+			WHERE ec.episode_id = ?`, event.EpisodeID)
+		if err != nil {
+			fmt.Printf("Error fetching characters for episode invite notification: %v\n", err)
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var charID, ownerID int
+			var charName string
+			if rows.Scan(&charID, &charName, &ownerID) != nil {
+				continue
+			}
+			if ownerID == event.UserID {
+				continue
+			}
+			Events.Publish(db, Events.NotificationCreated, Events.NotificationEvent{
+				UserID:  ownerID,
+				Type:    "episode_invite",
+				Message: fmt.Sprintf("Your character %s was added to a new episode: %s", charName, event.TopicName),
+				Data: map[string]interface{}{
+					"topic_id":       event.TopicID,
+					"topic_name":     event.TopicName,
+					"character_id":   charID,
+					"character_name": charName,
+					"inviter_id":     event.UserID,
+					"inviter_name":   inviterName,
+				},
+			})
+		}
+	})
+
 	// Subscriber 10: Update Subforum Stats on Episode Created
 	Events.Subscribe(Events.EpisodeCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.EpisodeCreatedEvent)
