@@ -3,6 +3,7 @@ package Services
 import (
 	"cuento-backend/src/Events"
 	"database/sql"
+	"sort"
 	"sync"
 	"time"
 )
@@ -119,6 +120,9 @@ func (s *UserActivityStorage) GetActiveUsers() []*UserActivity {
 			activeUsers = append(activeUsers, user)
 		}
 	}
+	sort.Slice(activeUsers, func(i, j int) bool {
+		return activeUsers[i].LastActive.After(activeUsers[j].LastActive)
+	})
 	return activeUsers
 }
 
