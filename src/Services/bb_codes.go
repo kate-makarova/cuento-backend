@@ -108,9 +108,18 @@ var allowedDivStyleProps = map[string]bool{
 	"min-width":       true,
 	"display":         true,
 	"color":           true,
+	"font-family":     true,
 	"font-style":      true,
 	"text-decoration": true,
+	"text-shadow":     true,
+	"text-align":      true,
+	"text-transform":  true,
 	"padding":         true,
+	"margin":          true,
+	"flex-direction":  true,
+	"gap":             true,
+	"line-height":     true,
+	"float":           true,
 }
 
 var allowedDisplayValues = map[string]bool{
@@ -118,6 +127,22 @@ var allowedDisplayValues = map[string]bool{
 	"block":        true,
 	"inline-block": true,
 	"flex":         true,
+}
+
+var allowedTextAlignValues = map[string]bool{
+	"left": true, "right": true, "center": true, "justify": true,
+}
+
+var allowedTextTransformValues = map[string]bool{
+	"none": true, "uppercase": true, "lowercase": true, "capitalize": true,
+}
+
+var allowedFlexDirectionValues = map[string]bool{
+	"row": true, "row-reverse": true, "column": true, "column-reverse": true,
+}
+
+var allowedFloatValues = map[string]bool{
+	"left": true, "right": true, "none": true,
 }
 
 var unsafeCSSRe = regexp.MustCompile(`(?i)(javascript\s*:|expression\s*\(|behavior\s*:|vbscript\s*:|-moz-binding)`)
@@ -387,6 +412,18 @@ func sanitizeStyle(raw string) string {
 			continue
 		}
 		if prop == "display" && !allowedDisplayValues[strings.ToLower(val)] {
+			continue
+		}
+		if prop == "text-align" && !allowedTextAlignValues[strings.ToLower(val)] {
+			continue
+		}
+		if prop == "text-transform" && !allowedTextTransformValues[strings.ToLower(val)] {
+			continue
+		}
+		if prop == "flex-direction" && !allowedFlexDirectionValues[strings.ToLower(val)] {
+			continue
+		}
+		if prop == "float" && !allowedFloatValues[strings.ToLower(val)] {
 			continue
 		}
 		parts = append(parts, prop+": "+val)
