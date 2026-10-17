@@ -113,6 +113,9 @@ func Register(c *gin.Context, db *sql.DB) {
 		defaultLang = *user.InterfaceLanguage
 	}
 	defaultTZ := "Europe/London"
+	if user.InterfaceTimezone != nil && *user.InterfaceTimezone != "" {
+		defaultTZ = *user.InterfaceTimezone
+	}
 
 	query := "INSERT INTO users (username, password, date_registered, interface_language, interface_timezone) VALUES (?, ?, ?, ?, ?)"
 	res, err := db.Exec(query, user.Username, user.Password, time.Now(), defaultLang, defaultTZ)
