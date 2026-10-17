@@ -1268,18 +1268,21 @@ func PreviewPost(c *gin.Context, db *sql.DB) {
 
 	if req.UseCharacterProfile && req.CharacterProfileID != nil {
 		row := db.QueryRow(`
-			SELECT cp.id, cp.character_id, cb.name, cp.avatar, cp.mask_name, cp.is_mask
+			SELECT cp.id, cp.character_id, COALESCE(cb.name, ''), cp.avatar, cp.mask_name, cp.is_mask
 			FROM character_profile_base cp
-			JOIN character_base cb ON cp.character_id = cb.id
+			LEFT JOIN character_base cb ON cp.character_id = cb.id
 			WHERE cp.id = ?`, *req.CharacterProfileID)
 
 		var charProfile Entities.CharacterProfile
 		var isMask bool
 		var maskName, avatar sql.NullString
-		var charID int
+		var charID sql.NullInt64
 		var charName string
 		if err := row.Scan(&charProfile.Id, &charID, &charName, &avatar, &maskName, &isMask); err == nil {
-			charProfile.CharacterId = &charID
+			if charID.Valid {
+				id := int(charID.Int64)
+				charProfile.CharacterId = &id
+			}
 			charProfile.CharacterName = charName
 			if avatar.Valid {
 				charProfile.Avatar = &avatar.String
@@ -1288,6 +1291,11 @@ func PreviewPost(c *gin.Context, db *sql.DB) {
 				charProfile.MaskName = &maskName.String
 			}
 			charProfile.IsMask = &isMask
+			if entity, err := Services.GetEntity(int64(charProfile.Id), "character_profile", db); err == nil {
+				if fullProfile, ok := entity.(*Entities.CharacterProfile); ok {
+					charProfile.CustomFields = fullProfile.CustomFields
+				}
+			}
 		}
 		post.CharacterProfile = &charProfile
 	} else {
