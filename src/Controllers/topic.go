@@ -52,7 +52,8 @@ type CreateTopicRequest struct {
 }
 
 type CreatePostRequest struct {
-	TopicID             int     `json:"topic_id" binding:"required"`
+	TopicID             int     `json:"topic_id"`
+	SubforumID          *int    `json:"subforum_id"`
 	Content             string  `json:"content" binding:"required"`
 	UseCharacterProfile bool    `json:"use_character_profile"`
 	CharacterProfileID  *int    `json:"character_profile_id"`
@@ -1251,8 +1252,17 @@ func PreviewPost(c *gin.Context, db *sql.DB) {
 
 	var topicType int
 	var previewSubforumID int
-	if err := db.QueryRow("SELECT type, COALESCE(subforum_id, 0) FROM topics WHERE id = ?", req.TopicID).Scan(&topicType, &previewSubforumID); err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Topic not found"})
+	if req.TopicID != 0 {
+		if err := db.QueryRow("SELECT type, COALESCE(subforum_id, 0) FROM topics WHERE id = ?", req.TopicID).Scan(&topicType, &previewSubforumID); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Topic not found"})
+			c.Abort()
+			return
+		}
+	} else if req.SubforumID != nil {
+		previewSubforumID = *req.SubforumID
+		topicType = int(Entities.GeneralTopic)
+	} else {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "topic_id or subforum_id is required"})
 		c.Abort()
 		return
 	}
@@ -1274,7 +1284,7 @@ func PreviewPost(c *gin.Context, db *sql.DB) {
 			WHERE cp.id = ?`, *req.CharacterProfileID)
 
 		var charProfile Entities.CharacterProfile
-		var isMask bool
+		var isMask sql.NullBool
 		var maskName, avatar sql.NullString
 		var charID sql.NullInt64
 		var charName string
@@ -1290,7 +1300,9 @@ func PreviewPost(c *gin.Context, db *sql.DB) {
 			if maskName.Valid {
 				charProfile.MaskName = &maskName.String
 			}
-			charProfile.IsMask = &isMask
+			if isMask.Valid {
+				charProfile.IsMask = &isMask.Bool
+			}
 			if entity, err := Services.GetEntity(int64(charProfile.Id), "character_profile", db); err == nil {
 				if fullProfile, ok := entity.(*Entities.CharacterProfile); ok {
 					charProfile.CustomFields = fullProfile.CustomFields
