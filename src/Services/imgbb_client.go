@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
 var imgbbImageExts = map[string]bool{
@@ -27,39 +26,93 @@ func (c ImgbbClient) UploadImage(imageData []byte, db *sql.DB) (*ImageUploadResu
 }
 
 func (c ImgbbClient) BulkUpload(folderPath string, db *sql.DB) ([]BulkUploadFileResult, error) {
+	apiKey, err := GetGlobalSetting("imgbb_api_key", db)
+	if err != nil || apiKey == "" {
+		return nil, fmt.Errorf("imgbb_api_key is not configured")
+	}
+
 	entries, err := os.ReadDir(folderPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read folder: %w", err)
 	}
 
-	type job struct{ name, path string }
-	var jobs []job
+	var fileNames []string
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() || !imgbbImageExts[filepath.Ext(e.Name())] {
 			continue
 		}
-		if imgbbImageExts[filepath.Ext(e.Name())] {
-			jobs = append(jobs, job{e.Name(), filepath.Join(folderPath, e.Name())})
+		data, err := os.ReadFile(filepath.Join(folderPath, e.Name()))
+		if err != nil {
+			return nil, fmt.Errorf("failed to read %s: %w", e.Name(), err)
+		}
+		part, err := writer.CreateFormFile("image[]", e.Name())
+		if err != nil {
+			return nil, err
+		}
+		if _, err = part.Write(data); err != nil {
+			return nil, err
+		}
+		fileNames = append(fileNames, e.Name())
+	}
+	writer.Close()
+
+	if len(fileNames) == 0 {
+		return nil, nil
+	}
+
+	req, err := http.NewRequest("POST", "https://api.imgbb.com/1/upload?key="+apiKey, &body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var bulkResp struct {
+		Data []struct {
+			URL       string `json:"url"`
+			DeleteURL string `json:"delete_url"`
+			Thumb     struct {
+				URL string `json:"url"`
+			} `json:"thumb"`
+		} `json:"data"`
+		Success bool `json:"success"`
+		Status  int  `json:"status"`
+	}
+	if err := json.Unmarshal(respBody, &bulkResp); err != nil {
+		return nil, fmt.Errorf("failed to parse bulk response: %w", err)
+	}
+	if !bulkResp.Success {
+		return nil, fmt.Errorf("imgbb bulk upload failed with status %d", bulkResp.Status)
+	}
+
+	results := make([]BulkUploadFileResult, len(bulkResp.Data))
+	for i, d := range bulkResp.Data {
+		name := ""
+		if i < len(fileNames) {
+			name = fileNames[i]
+		}
+		results[i] = BulkUploadFileResult{
+			FileName: name,
+			Result: &ImageUploadResult{
+				URL:          d.URL,
+				ThumbnailURL: d.Thumb.URL,
+				DeleteURL:    d.DeleteURL,
+			},
 		}
 	}
-
-	results := make([]BulkUploadFileResult, len(jobs))
-	var wg sync.WaitGroup
-	for i, j := range jobs {
-		wg.Add(1)
-		go func(idx int, j job) {
-			defer wg.Done()
-			data, err := os.ReadFile(j.path)
-			if err != nil {
-				results[idx] = BulkUploadFileResult{FileName: j.name, Err: err}
-				return
-			}
-			res, err := UploadImageToImgbb(data, db)
-			results[idx] = BulkUploadFileResult{FileName: j.name, Result: res, Err: err}
-		}(i, j)
-	}
-	wg.Wait()
-
 	return results, nil
 }
 
