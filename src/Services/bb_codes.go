@@ -120,6 +120,7 @@ var allowedDivStyleProps = map[string]bool{
 	"gap":             true,
 	"line-height":     true,
 	"float":           true,
+	"transform":       true,
 }
 
 var allowedDisplayValues = map[string]bool{
@@ -146,6 +147,8 @@ var allowedFloatValues = map[string]bool{
 }
 
 var unsafeCSSRe = regexp.MustCompile(`(?i)(javascript\s*:|expression\s*\(|behavior\s*:|vbscript\s*:|-moz-binding)`)
+
+var transformRe = regexp.MustCompile(`(?i)^(?:(?:rotate|scale[XY]?|skew[XY]?)\([-\d.,\s%degratun]+\)\s*)+$`)
 
 // getRawArg extracts a named arg directly from the raw tag string, bypassing
 // the bbcode library's quoted-value parser which corrupts multi-byte UTF-8.
@@ -424,6 +427,9 @@ func sanitizeStyle(raw string) string {
 			continue
 		}
 		if prop == "float" && !allowedFloatValues[strings.ToLower(val)] {
+			continue
+		}
+		if prop == "transform" && !transformRe.MatchString(val) {
 			continue
 		}
 		parts = append(parts, prop+": "+val)
