@@ -19,10 +19,12 @@ type ImageClient interface {
 	BulkUploadSupport() bool
 }
 
-// BulkImageClient is implemented by clients that support uploading an entire
-// folder of images. Callers should check BulkUploadSupport() or type-assert
-// to this interface before using it.
+// BulkImageClient is implemented by clients that can upload a folder of images.
+// BulkUploadSupport() indicates whether the provider has a native batch API;
+// if false, uploads are performed one at a time.
+// onProgress is called after each file with (completed, total) counts so the
+// caller can stream progress to the frontend.
 type BulkImageClient interface {
 	ImageClient
-	BulkUpload(folderPath string, db *sql.DB) ([]BulkUploadFileResult, error)
+	BulkUpload(folderPath string, db *sql.DB, onProgress func(completed, total int)) ([]BulkUploadFileResult, error)
 }
