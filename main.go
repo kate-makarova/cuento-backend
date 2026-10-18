@@ -827,6 +827,9 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	protectedRouter.POST("/reaction/create", "Upload and create a new reaction", func(c *gin.Context) {
 		Controllers.CreateReaction(c, Services.DB)
 	})
+	protectedRouter.POST("/reaction/bulk-upload", "Bulk upload reactions from a ZIP archive", func(c *gin.Context) {
+		Controllers.BulkUploadReactions(c, Services.DB)
+	})
 	protectedRouter.POST("/reaction/deactivate/:id", "Deactivate a reaction by ID", func(c *gin.Context) {
 		Controllers.DeactivateReaction(c, Services.DB)
 	})
@@ -901,6 +904,9 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	})
 	protectedRouter.POST("/admin/smile/upload", "Upload a smile image", func(c *gin.Context) {
 		Controllers.UploadSmile(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/smile/bulk-upload", "Bulk upload smiles from a ZIP archive", func(c *gin.Context) {
+		Controllers.BulkUploadSmiles(c, Services.DB)
 	})
 	protectedRouter.GET("/admin/smile/delete/:id", "Delete smile by ID", func(c *gin.Context) {
 		Controllers.DeleteSmile(c, Services.DB)
