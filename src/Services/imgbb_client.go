@@ -10,10 +10,12 @@ import (
 	"net/http"
 )
 
-type ImgbbUploadResult struct {
-	URL          string
-	ThumbnailURL string
-	DeleteURL    string
+type ImgbbClient struct{}
+
+func (ImgbbClient) BulkUploadSupport() bool { return false }
+
+func (c ImgbbClient) UploadImage(imageData []byte, db *sql.DB) (*ImageUploadResult, error) {
+	return UploadImageToImgbb(imageData, db)
 }
 
 type ImgbbResponse struct {
@@ -28,7 +30,7 @@ type ImgbbResponse struct {
 	Status  int  `json:"status"`
 }
 
-func UploadImageToImgbb(imageData []byte, db *sql.DB) (*ImgbbUploadResult, error) {
+func UploadImageToImgbb(imageData []byte, db *sql.DB) (*ImageUploadResult, error) {
 	apiKey, err := GetGlobalSetting("imgbb_api_key", db)
 	if err != nil || apiKey == "" {
 		return nil, fmt.Errorf("imgbb_api_key is not configured")
@@ -73,7 +75,7 @@ func UploadImageToImgbb(imageData []byte, db *sql.DB) (*ImgbbUploadResult, error
 		return nil, fmt.Errorf("imgbb upload failed with status %d", imgbbResp.Status)
 	}
 
-	return &ImgbbUploadResult{
+	return &ImageUploadResult{
 		URL:          imgbbResp.Data.URL,
 		ThumbnailURL: imgbbResp.Data.Thumb.URL,
 		DeleteURL:    imgbbResp.Data.DeleteURL,
