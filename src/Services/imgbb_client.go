@@ -8,14 +8,59 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"os"
+	"path/filepath"
+	"sync"
 )
+
+var imgbbImageExts = map[string]bool{
+	".jpg": true, ".jpeg": true, ".png": true,
+	".gif": true, ".webp": true, ".bmp": true,
+}
 
 type ImgbbClient struct{}
 
-func (ImgbbClient) BulkUploadSupport() bool { return false }
+func (ImgbbClient) BulkUploadSupport() bool { return true }
 
 func (c ImgbbClient) UploadImage(imageData []byte, db *sql.DB) (*ImageUploadResult, error) {
 	return UploadImageToImgbb(imageData, db)
+}
+
+func (c ImgbbClient) BulkUpload(folderPath string, db *sql.DB) ([]BulkUploadFileResult, error) {
+	entries, err := os.ReadDir(folderPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read folder: %w", err)
+	}
+
+	type job struct{ name, path string }
+	var jobs []job
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if imgbbImageExts[filepath.Ext(e.Name())] {
+			jobs = append(jobs, job{e.Name(), filepath.Join(folderPath, e.Name())})
+		}
+	}
+
+	results := make([]BulkUploadFileResult, len(jobs))
+	var wg sync.WaitGroup
+	for i, j := range jobs {
+		wg.Add(1)
+		go func(idx int, j job) {
+			defer wg.Done()
+			data, err := os.ReadFile(j.path)
+			if err != nil {
+				results[idx] = BulkUploadFileResult{FileName: j.name, Err: err}
+				return
+			}
+			res, err := UploadImageToImgbb(data, db)
+			results[idx] = BulkUploadFileResult{FileName: j.name, Result: res, Err: err}
+		}(i, j)
+	}
+	wg.Wait()
+
+	return results, nil
 }
 
 type ImgbbResponse struct {
