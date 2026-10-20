@@ -100,12 +100,9 @@ func runAutoArchiving(db *sql.DB) {
 	}
 
 	type charRow struct {
-		id         int
-		name       string
-		userID     int
-		topicID    int
-		subforumID int
-		topicStatus int
+		id     int
+		name   string
+		userID int
 	}
 
 	var chars []charRow
@@ -114,10 +111,6 @@ func runAutoArchiving(db *sql.DB) {
 		if err := rows.Scan(&ch.id, &ch.name, &ch.userID); err != nil {
 			continue
 		}
-		_ = db.QueryRow(
-			"SELECT t.id, t.subforum_id, t.status FROM topics t JOIN character_base cb ON cb.topic_id = t.id WHERE cb.id = ?",
-			ch.id,
-		).Scan(&ch.topicID, &ch.subforumID, &ch.topicStatus)
 		chars = append(chars, ch)
 	}
 	rows.Close()
@@ -129,33 +122,15 @@ func runAutoArchiving(db *sql.DB) {
 			continue
 		}
 
-		if _, err := tx.Exec(
-			"UPDATE character_base SET character_status = ? WHERE id = ?",
-			Entities.InactiveCharacter, ch.id,
-		); err != nil {
+		res, found, err := DeactivateCharacterInTx(tx, db, ch.id)
+		if err != nil {
 			log.Printf("Auto archiving: failed to deactivate character %d: %v", ch.id, err)
 			tx.Rollback()
 			continue
 		}
-
-		if ch.topicID > 0 {
-			if _, err := tx.Exec("UPDATE topics SET status = ? WHERE id = ?", Entities.InactiveTopic, ch.topicID); err != nil {
-				log.Printf("Auto archiving: failed to deactivate topic %d for character %d: %v", ch.topicID, ch.id, err)
-				tx.Rollback()
-				continue
-			}
-		}
-
-		if _, err := tx.Exec("UPDATE character_profile_base SET is_archived = 1 WHERE character_id = ?", ch.id); err != nil {
-			log.Printf("Auto archiving: failed to archive profiles for character %d: %v", ch.id, err)
+		if !found {
 			tx.Rollback()
 			continue
-		}
-
-		var claimID int
-		if err := tx.QueryRow("SELECT claim_id FROM claim_record WHERE character_id = ? ORDER BY claim_date DESC LIMIT 1", ch.id).Scan(&claimID); err == nil {
-			_, _ = tx.Exec("UPDATE character_claim SET is_claimed = false WHERE id = ?", claimID)
-			_, _ = tx.Exec("UPDATE wanted_character_base SET is_claimed = false WHERE character_claim_id = ?", claimID)
 		}
 
 		if err := tx.Commit(); err != nil {
@@ -163,21 +138,7 @@ func runAutoArchiving(db *sql.DB) {
 			continue
 		}
 
-		Events.Publish(db, Events.CharacterStatusChanged, Events.CharacterStatusChangedEvent{
-			CharacterID: ch.id,
-			UserID:      ch.userID,
-			OldStatus:   Entities.ActiveCharacter,
-			NewStatus:   Entities.InactiveCharacter,
-		})
-		Events.Publish(db, Events.CharacterDeactivated, Events.CharacterDeactivatedEvent{CharacterID: ch.id})
-		if ch.topicID > 0 && ch.topicStatus != int(Entities.InactiveTopic) {
-			Events.Publish(db, Events.TopicStatusChanged, Events.TopicStatusChangedEvent{
-				TopicID:    int64(ch.topicID),
-				SubforumID: ch.subforumID,
-				OldStatus:  ch.topicStatus,
-				NewStatus:  int(Entities.InactiveTopic),
-			})
-		}
+		PublishCharacterDeactivatedEvents(db, res)
 
 		lang := GetUserLanguage(ch.userID, db)
 		localizer := NewLocalizer(lang)
