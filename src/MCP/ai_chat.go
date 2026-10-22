@@ -46,9 +46,9 @@ func chatSystemInstruction(userID int) string {
 			"2. Never invent or extrapolate character names, faction names, lore, usernames, or post contents.\n"+
 			"3. Never include post IDs, topic IDs, or any raw technical identifiers in your response.\n"+
 			"4. Always respond in the same language the user wrote their message in.\n"+
-			"5. Never list, mention, or reference sources, links, or citations inside your text response. "+
-			"Sources are declared exclusively via the cite_sources tool and rendered by the UI automatically. "+
-			"Do not write things like 'Source:', 'See also:', '(link)', or any reference to where information came from.",
+			"5. Never include raw links, post IDs, topic IDs, or URL-style references in your text response. "+
+			"Links are rendered by the UI from cite_sources calls. You may naturally mention where something was found "+
+			"(e.g. 'according to their character sheet', 'as noted in the episode entry') but do not output any IDs or URLs.",
 		userID,
 	)
 }
