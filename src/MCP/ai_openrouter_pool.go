@@ -54,8 +54,10 @@ func (p *OpenRouterModelPool) ClientForMinSize(minSize Entities.AIModelSize, mod
 	return p.selectModel(minSize, modelType, "")
 }
 
-func (p *OpenRouterModelPool) ClientForMinSizeAndProtocol(minSize Entities.AIModelSize, modelType Entities.AIModelType, protocol Entities.AIModelProtocolType) (AIClient, error) {
-	return p.selectModel(minSize, modelType, providerPrefixForProtocol[protocol])
+func (p *OpenRouterModelPool) ClientForMinSizeAndProtocol(minSize Entities.AIModelSize, modelType Entities.AIModelType, _ Entities.AIModelProtocolType) (AIClient, error) {
+	// OpenRouter exposes all providers through one OpenAI-compat API, so
+	// protocol-based prefix filtering doesn't apply here.
+	return p.selectModel(minSize, modelType, "")
 }
 
 func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelType Entities.AIModelType, providerPrefix string) (AIClient, error) {
