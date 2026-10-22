@@ -2,56 +2,14 @@ package MCP
 
 import (
 	"context"
+	"cuento-backend/src/ToolCallParser"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 
 	openai "github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 )
-
-var (
-	reXMLToolCall = regexp.MustCompile(`(?s)<tool_call>(.*?)</tool_call>`)
-	reArgKey      = regexp.MustCompile(`<arg_key>(.*?)</arg_key>`)
-	reArgValue    = regexp.MustCompile(`<arg_value>(.*?)</arg_value>`)
-)
-
-type xmlToolCall struct {
-	Name string
-	Args map[string]any
-}
-
-func parseXMLToolCalls(content string) []xmlToolCall {
-	var calls []xmlToolCall
-	for _, m := range reXMLToolCall.FindAllStringSubmatch(content, -1) {
-		body := m[1]
-		// tool name is the text before the first <arg_key>
-		name := body
-		if idx := strings.Index(body, "<arg_key>"); idx >= 0 {
-			name = strings.TrimSpace(body[:idx])
-		}
-		if name == "" {
-			continue
-		}
-		keys := reArgKey.FindAllStringSubmatch(body, -1)
-		vals := reArgValue.FindAllStringSubmatch(body, -1)
-		args := make(map[string]any, len(keys))
-		for i, k := range keys {
-			if i >= len(vals) {
-				break
-			}
-			raw := vals[i][1]
-			var v any
-			if err := json.Unmarshal([]byte(raw), &v); err != nil {
-				v = raw // keep as string if not valid JSON
-			}
-			args[k[1]] = v
-		}
-		calls = append(calls, xmlToolCall{Name: name, Args: args})
-	}
-	return calls
-}
 
 // OpenAICompatClient works with any OpenAI-compatible API:
 // openai, deepseek, groq, mistral, etc.
@@ -112,17 +70,16 @@ func (o *OpenAICompatClient) Chat(ctx context.Context, history []ChatMessage, sy
 
 		msg := resp.Choices[0].Message
 
-		// Some models output tool calls as XML in content instead of tool_calls.
+		// Some models output tool calls in the content instead of tool_calls.
 		if len(msg.ToolCalls) == 0 {
-			xmlCalls := parseXMLToolCalls(msg.Content)
-			if len(xmlCalls) == 0 {
+			altCalls := toolcallparser.Parse(msg.Content)
+			if len(altCalls) == 0 {
 				return msg.Content, filterSourcesByCitations(collectedSources, citedPostIDs), nil
 			}
-			// Treat XML tool calls the same as standard ones.
 			toolRounds++
 			messages = append(messages, openai.AssistantMessage(msg.Content))
 			var resultParts []string
-			for _, xc := range xmlCalls {
+			for _, xc := range altCalls {
 				if xc.Name == "cite_sources" {
 					for _, id := range postIDsFromArgs(xc.Args) {
 						citedPostIDs[id] = true
