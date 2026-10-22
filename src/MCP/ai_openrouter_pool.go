@@ -127,6 +127,33 @@ func (p *OpenRouterModelPool) fetchModels() ([]openRouterModel, error) {
 	return result.Data, nil
 }
 
+// OpenRouterModelInfo is the public shape returned by FetchOpenRouterModels.
+type OpenRouterModelInfo struct {
+	ID         string `json:"id"`
+	ContextLen int    `json:"context_length"`
+	Modality   string `json:"modality"`
+	Price      string `json:"price_prompt"`
+}
+
+// FetchOpenRouterModels fetches the raw model catalogue from OpenRouter.
+func FetchOpenRouterModels(apiKey string) ([]OpenRouterModelInfo, error) {
+	pool := &OpenRouterModelPool{apiKey: apiKey}
+	raw, err := pool.fetchModels()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]OpenRouterModelInfo, 0, len(raw))
+	for _, m := range raw {
+		out = append(out, OpenRouterModelInfo{
+			ID:         m.ID,
+			ContextLen: m.ContextLen,
+			Modality:   m.Architecture.Modality,
+			Price:      m.Pricing.Prompt,
+		})
+	}
+	return out, nil
+}
+
 // modalityMatchesType checks whether a model's OpenRouter modality string
 // matches the requested AIModelType (text output vs. image output).
 func modalityMatchesType(modality string, modelType Entities.AIModelType) bool {

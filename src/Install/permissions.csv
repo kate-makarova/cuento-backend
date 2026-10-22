@@ -273,6 +273,9 @@ role_id,type,permission
 3,0,/admin/ai-agent-implementation/update/:id
 3,0,/admin/ai-agent-implementation/delete/:id
 3,0,/admin/ai-agent-implementation/:id/call
+3,0,/admin/ai-pool/switch
+3,0,/admin/ai-pool/status
+3,0,/admin/ai-pool/available-models
 3,0,/admin/ai-models
 3,0,/admin/ai-models/:id
 3,0,/admin/ai-models/create

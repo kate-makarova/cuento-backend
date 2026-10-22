@@ -209,8 +209,9 @@ func AdminSwitchAIPool(c *gin.Context, db *sql.DB) {
 	}
 
 	var req struct {
-		Source string `json:"source" binding:"required"`
-		APIKey string `json:"api_key"`
+		Source   string `json:"source" binding:"required"`
+		APIKey   string `json:"api_key"`
+		FreeOnly *bool  `json:"free_only"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
@@ -230,8 +231,16 @@ func AdminSwitchAIPool(c *gin.Context, db *sql.DB) {
 		}
 		db.Exec(`UPDATE global_settings SET setting_value = 'openrouter' WHERE setting_name = 'model_pool_source'`)
 		db.Exec(`UPDATE global_settings SET setting_value = ? WHERE setting_name = 'openrouter_api_key'`, req.APIKey)
-		freeOnly, _ := Services.GetGlobalSetting("openrouter_use_free_only", db)
-		MCP.SwitchPool(MCP.NewOpenRouterModelPool(req.APIKey, freeOnly != "n"))
+		freeOnlyStr := "n"
+		if req.FreeOnly != nil {
+			if *req.FreeOnly {
+				freeOnlyStr = "y"
+			}
+			db.Exec(`UPDATE global_settings SET setting_value = ? WHERE setting_name = 'openrouter_use_free_only'`, freeOnlyStr)
+		} else {
+			freeOnlyStr, _ = Services.GetGlobalSetting("openrouter_use_free_only", db)
+		}
+		MCP.SwitchPool(MCP.NewOpenRouterModelPool(req.APIKey, freeOnlyStr != "n"))
 	default:
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "unknown source: " + req.Source})
 		c.Abort()
@@ -239,6 +248,52 @@ func AdminSwitchAIPool(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"source": req.Source})
+}
+
+func AdminGetPoolStatus(c *gin.Context, db *sql.DB) {
+	if !Services.IsSuperuser(c) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "Superuser access required"})
+		c.Abort()
+		return
+	}
+
+	source, _ := Services.GetGlobalSetting("model_pool_source", db)
+	apiKey, _ := Services.GetGlobalSetting("openrouter_api_key", db)
+	freeOnly, _ := Services.GetGlobalSetting("openrouter_use_free_only", db)
+	c.JSON(http.StatusOK, gin.H{
+		"source":                   source,
+		"openrouter_api_key":       apiKey,
+		"openrouter_use_free_only": freeOnly,
+	})
+}
+
+func AdminListAvailablePoolModels(c *gin.Context, db *sql.DB) {
+	if !Services.IsSuperuser(c) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "Superuser access required"})
+		c.Abort()
+		return
+	}
+
+	source, _ := Services.GetGlobalSetting("model_pool_source", db)
+	if source != "openrouter" {
+		c.JSON(http.StatusOK, gin.H{"source": "db", "models": []any{}})
+		return
+	}
+
+	apiKey, _ := Services.GetGlobalSetting("openrouter_api_key", db)
+	if apiKey == "" {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "OpenRouter API key is not configured"})
+		c.Abort()
+		return
+	}
+
+	models, err := MCP.FetchOpenRouterModels(apiKey)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadGateway, Message: "Failed to fetch models from OpenRouter: " + err.Error()})
+		c.Abort()
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"source": "openrouter", "models": models})
 }
 
 func AdminDeleteAIModel(c *gin.Context, db *sql.DB) {
