@@ -125,6 +125,7 @@ func (g *GeminiClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 }
 
 // postIDsFromArgs extracts the post_ids array from a cite_sources tool call.
+// Handles numeric types and string-encoded integers (search results expose IDs as strings).
 func postIDsFromArgs(args map[string]any) []int64 {
 	raw, ok := args["post_ids"]
 	if !ok || raw == nil {
@@ -143,6 +144,10 @@ func postIDsFromArgs(args map[string]any) []int64 {
 			ids = append(ids, n)
 		case int:
 			ids = append(ids, int64(n))
+		case string:
+			if parsed, err := strconv.ParseInt(n, 10, 64); err == nil {
+				ids = append(ids, parsed)
+			}
 		}
 	}
 	return ids
