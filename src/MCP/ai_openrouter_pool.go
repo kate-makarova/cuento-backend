@@ -39,6 +39,7 @@ type openRouterModel struct {
 	Pricing struct {
 		Prompt string `json:"prompt"`
 	} `json:"pricing"`
+	SupportedParameters []string `json:"supported_parameters"`
 }
 
 type OpenRouterModelPool struct {
@@ -80,6 +81,9 @@ func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelTyp
 			continue
 		}
 		if p.useFreeOnly && !strings.HasSuffix(m.ID, ":free") {
+			continue
+		}
+		if !supportsTools(m.SupportedParameters) {
 			continue
 		}
 		candidates = append(candidates, m)
@@ -172,4 +176,13 @@ func modalityMatchesType(modality string, modelType Entities.AIModelType) bool {
 func parsePrice(s string) float64 {
 	f, _ := strconv.ParseFloat(s, 64)
 	return f
+}
+
+func supportsTools(params []string) bool {
+	for _, p := range params {
+		if p == "tools" {
+			return true
+		}
+	}
+	return false
 }
