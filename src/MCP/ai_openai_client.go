@@ -28,6 +28,8 @@ func NewOpenAICompatClient(apiKey, model, baseURL string) (*OpenAICompatClient, 
 	return &OpenAICompatClient{client: client, model: model}, nil
 }
 
+func (o *OpenAICompatClient) ModelID() string { return o.model }
+
 func (o *OpenAICompatClient) Chat(ctx context.Context, history []ChatMessage, systemInstruction string) (string, []ChatSource, error) {
 	messages := make([]openai.ChatCompletionMessageParamUnion, 0, len(history)+1)
 	if systemInstruction != "" {

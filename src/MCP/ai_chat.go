@@ -62,7 +62,6 @@ func executeChatTask(db *sql.DB, taskID, userID int) {
 		markFailed(db, taskID, userID, "no AI model available: "+err.Error())
 		return
 	}
-	agent := NewAIAgent(client)
 
 	// Read session_id and message_id from task payload.
 	var payloadStr string
@@ -92,9 +91,23 @@ func executeChatTask(db *sql.DB, taskID, userID int) {
 	var replyText string
 	var sources []ChatSource
 	var lastErr error
+	var excluded []string
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		replyText, sources, lastErr = agent.Chat(ctx, history, chatSystemInstruction(userID))
+		var attemptClient AIClient
+		if attempt == 0 {
+			attemptClient = client
+		} else {
+			attemptClient, lastErr = getActivePool().ClientExcluding(Entities.AIModelSizeSmall, Entities.AIModelTypeText, excluded)
+			if lastErr != nil {
+				markFailed(db, taskID, userID, lastErr.Error())
+				pushError(userID, lastErr.Error())
+				notifyQueuePositions(db, taskID)
+				return
+			}
+		}
+
+		replyText, sources, lastErr = NewAIAgent(attemptClient).Chat(ctx, history, chatSystemInstruction(userID))
 		if lastErr == nil {
 			break
 		}
@@ -107,9 +120,9 @@ func executeChatTask(db *sql.DB, taskID, userID int) {
 			return
 		}
 
+		excluded = append(excluded, attemptClient.ModelID())
 		_, _ = db.Exec(`UPDATE ai_task_queue SET retries = retries + 1 WHERE id = ?`, taskID)
-		log.Printf("AI queue: task %d rate-limited (attempt %d/%d), retrying in 30s", taskID, attempt+1, maxRetries)
-		time.Sleep(30 * time.Second)
+		log.Printf("AI queue: task %d rate-limited on %s (attempt %d/%d), trying next model", taskID, attemptClient.ModelID(), attempt+1, maxRetries)
 	}
 
 	replyText = Services.MarkdownToHTML(replyText)

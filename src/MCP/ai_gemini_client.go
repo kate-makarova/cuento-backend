@@ -24,6 +24,8 @@ func NewGeminiClient(apiKey string, model string) (*GeminiClient, error) {
 	return &GeminiClient{client: client, model: model}, nil
 }
 
+func (g *GeminiClient) ModelID() string { return g.model }
+
 func (g *GeminiClient) Chat(ctx context.Context, history []ChatMessage, systemInstruction string) (string, []ChatSource, error) {
 	contents := make([]*genai.Content, len(history))
 	for i, msg := range history {
