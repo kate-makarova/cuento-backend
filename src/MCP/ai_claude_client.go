@@ -40,7 +40,7 @@ func (c *ClaudeClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 	var collectedSources []ChatSource
 	citedPostIDs := make(map[int64]bool)
 
-	const maxRounds = 10
+	const maxRounds = 20
 	for round := 0; round < maxRounds; round++ {
 		params := anthropic.MessageNewParams{
 			Model:       anthropic.Model(c.model),
