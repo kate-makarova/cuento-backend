@@ -41,13 +41,17 @@ func (c *ClaudeClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 	citedPostIDs := make(map[int64]bool)
 
 	const maxRounds = 20
+	const toolBudget = 15
+	toolRounds := 0
 	for round := 0; round < maxRounds; round++ {
 		params := anthropic.MessageNewParams{
 			Model:       anthropic.Model(c.model),
 			Messages:    messages,
 			MaxTokens:   4096,
-			Tools:       toolUnions,
 			Temperature: anthropic.Float(0),
+		}
+		if toolRounds < toolBudget {
+			params.Tools = toolUnions
 		}
 		if systemInstruction != "" {
 			params.System = []anthropic.TextBlockParam{{Text: systemInstruction}}
@@ -74,6 +78,7 @@ func (c *ClaudeClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 			return textContent, filterSourcesByCitations(collectedSources, citedPostIDs), nil
 		}
 
+		toolRounds++
 		// Add assistant turn to history
 		messages = append(messages, resp.ToParam())
 
