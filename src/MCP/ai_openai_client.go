@@ -77,8 +77,12 @@ func (o *OpenAICompatClient) Chat(ctx context.Context, history []ChatMessage, sy
 				return msg.Content, filterSourcesByCitations(collectedSources, citedPostIDs), nil
 			}
 			if toolRounds >= toolBudget {
-				// Tool calls found but budget exhausted — strip markup and return.
-				return toolcallparser.Strip(msg.Content), filterSourcesByCitations(collectedSources, citedPostIDs), nil
+				// Tool calls found but budget exhausted — strip markup and return text.
+				text := toolcallparser.Strip(msg.Content)
+				if text == "" {
+					return "", nil, fmt.Errorf("model produced no text response after %d tool rounds", toolRounds)
+				}
+				return text, filterSourcesByCitations(collectedSources, citedPostIDs), nil
 			}
 			toolRounds++
 			messages = append(messages, openai.AssistantMessage(msg.Content))
