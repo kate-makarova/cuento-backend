@@ -79,7 +79,7 @@ func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelTyp
 		if providerPrefix != "" && !strings.HasPrefix(m.ID, providerPrefix) {
 			continue
 		}
-		if p.useFreeOnly && parsePrice(m.Pricing.Prompt) > 0 {
+		if p.useFreeOnly && !strings.HasSuffix(m.ID, ":free") {
 			continue
 		}
 		candidates = append(candidates, m)
