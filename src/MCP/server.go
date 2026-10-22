@@ -58,6 +58,7 @@ func StartMCPServer(db *sql.DB, addr string) error {
 
 	registerLoreTools(s, db)
 	registerSearchTools(s, db)
+	registerCitationTools(s)
 
 	StartQueueWorker(db)
 

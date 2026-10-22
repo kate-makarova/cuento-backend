@@ -177,7 +177,9 @@ func executeTask(db *sql.DB, taskID, userID int) {
 			"If no faction is obvious, skip this step entirely.\n"+
 			"Step 6. STOP searching. Do not loop back. "+
 			"From all results collected so far, keep only entries that directly answer the question.\n"+
-			"Step 7. Write your answer based on those entries. "+
+			"Step 7. Call cite_sources once with the 'id' values (as integers) of the specific entries you actually drew facts from. "+
+			"Do NOT include entries you retrieved but did not use in your answer. If nothing was relevant, pass an empty array.\n"+
+			"Step 8. Write your answer based on those entries. "+
 			"If nothing relevant was found, say so and suggest different search terms.\n\n"+
 			"HARD RULES:\n"+
 			"1. Never answer community questions from memory — always search first.\n"+
