@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -99,6 +100,7 @@ func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelTyp
 	})
 
 	chosen := candidates[0]
+	log.Printf("OpenRouter: selected model %s (context=%d, free=%v)", chosen.ID, chosen.ContextLen, p.useFreeOnly)
 	return NewOpenAICompatClient(p.apiKey, chosen.ID, openRouterBaseURL)
 }
 
