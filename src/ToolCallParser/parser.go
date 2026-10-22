@@ -87,6 +87,15 @@ func parseJSONInText(content string) []ToolCall {
 	return calls
 }
 
+// Strip removes all tool call markup from raw model content, returning only
+// the human-readable text. Call this when a model outputs tool calls past its
+// budget and you want a clean answer rather than raw XML/JSON fragments.
+func Strip(content string) string {
+	s := reXMLBlock.ReplaceAllString(content, "")
+	s = reJSONBlock.ReplaceAllString(s, "")
+	return strings.TrimSpace(s)
+}
+
 // decodeValue tries to JSON-decode a string value; falls back to the raw string.
 func decodeValue(raw string) any {
 	var v any
