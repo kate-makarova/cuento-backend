@@ -52,6 +52,8 @@ func (c *ClaudeClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 		}
 		if toolRounds < toolBudget {
 			params.Tools = toolUnions
+		} else if toolRounds == toolBudget {
+			messages = append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock("You have reached the search limit. Do not call any more tools. Write your final answer now based only on the results you have already gathered.")))
 		}
 		if systemInstruction != "" {
 			params.System = []anthropic.TextBlockParam{{Text: systemInstruction}}

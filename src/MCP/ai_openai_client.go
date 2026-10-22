@@ -54,6 +54,8 @@ func (o *OpenAICompatClient) Chat(ctx context.Context, history []ChatMessage, sy
 		}
 		if len(tools) > 0 && toolRounds < toolBudget {
 			params.Tools = tools
+		} else if toolRounds == toolBudget {
+			messages = append(messages, openai.UserMessage("You have reached the search limit. Do not call any more tools. Write your final answer now based only on the results you have already gathered."))
 		}
 
 		resp, err := o.client.Chat.Completions.New(ctx, params)
