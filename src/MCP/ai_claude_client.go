@@ -38,6 +38,7 @@ func (c *ClaudeClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 	}
 
 	var collectedSources []ChatSource
+	citedPostIDs := make(map[int64]bool)
 
 	const maxRounds = 10
 	for round := 0; round < maxRounds; round++ {
@@ -70,7 +71,7 @@ func (c *ClaudeClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 		}
 
 		if len(toolUseBlocks) == 0 {
-			return textContent, collectedSources, nil
+			return textContent, filterSourcesByCitations(collectedSources, citedPostIDs), nil
 		}
 
 		// Add assistant turn to history
@@ -82,6 +83,12 @@ func (c *ClaudeClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 			var args map[string]any
 			if err := json.Unmarshal(block.Input, &args); err != nil {
 				args = map[string]any{}
+			}
+
+			if block.Name == "cite_sources" {
+				for _, id := range postIDsFromArgs(args) {
+					citedPostIDs[id] = true
+				}
 			}
 
 			executor, ok := findExecutor(block.Name)

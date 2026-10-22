@@ -17,6 +17,31 @@ type bucketSearchResult struct {
 	Results []Services.SearchResultItem `json:"results"`
 }
 
+func registerCitationTools(s *server.MCPServer) {
+	registerTool(s,
+		mcp.NewTool("cite_sources",
+			mcp.WithDescription("Declare which post/entity IDs you actually used when writing your answer. Call this once before responding, with only the 'id' values of the search result entries you directly drew facts from."),
+			mcp.WithArray("post_ids",
+				mcp.Required(),
+				mcp.Description("The 'id' values (as integers) from the search results you referenced in your answer."),
+			),
+		),
+		ToolDefinition{
+			Name:        "cite_sources",
+			Description: "Declare which post/entity IDs you actually used when writing your answer.",
+			Schema: schemaObject(
+				[]string{"post_ids"},
+				map[string]*ToolProp{
+					"post_ids": schemaIntegerArray("The 'id' values (as integers) from the search results you referenced in your answer."),
+				},
+			),
+			Execute: func(ctx context.Context, args map[string]any) (string, error) {
+				return `{"ok":true}`, nil
+			},
+		},
+	)
+}
+
 func registerSearchTools(s *server.MCPServer, db *sql.DB) {
 	bucketsDesc := "Available buckets: " + strings.Join(Services.AllSonicBuckets, ", ")
 

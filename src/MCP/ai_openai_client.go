@@ -41,6 +41,7 @@ func (o *OpenAICompatClient) Chat(ctx context.Context, history []ChatMessage, sy
 
 	tools := buildOpenAITools()
 	var collectedSources []ChatSource
+	citedPostIDs := make(map[int64]bool)
 
 	const maxRounds = 10
 	for round := 0; round < maxRounds; round++ {
@@ -63,7 +64,7 @@ func (o *OpenAICompatClient) Chat(ctx context.Context, history []ChatMessage, sy
 
 		msg := resp.Choices[0].Message
 		if len(msg.ToolCalls) == 0 {
-			return msg.Content, collectedSources, nil
+			return msg.Content, filterSourcesByCitations(collectedSources, citedPostIDs), nil
 		}
 
 		// Add assistant turn to history using ToParam()
@@ -74,6 +75,12 @@ func (o *OpenAICompatClient) Chat(ctx context.Context, history []ChatMessage, sy
 			var args map[string]any
 			if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
 				args = map[string]any{}
+			}
+
+			if tc.Function.Name == "cite_sources" {
+				for _, id := range postIDsFromArgs(args) {
+					citedPostIDs[id] = true
+				}
 			}
 
 			executor, ok := findExecutor(tc.Function.Name)
