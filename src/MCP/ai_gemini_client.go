@@ -52,8 +52,17 @@ func (g *GeminiClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 	citedTopicIDs := make(map[int64]bool)
 
 	const maxRounds = 20
+	const toolBudget = 15
+	toolRounds := 0
 	for round := 0; round < maxRounds; round++ {
-		result, err := g.client.Models.GenerateContent(ctx, g.model, contents, cfg)
+		activeCfg := cfg
+		if toolRounds >= toolBudget {
+			activeCfg = &genai.GenerateContentConfig{
+				Temperature:       cfg.Temperature,
+				SystemInstruction: cfg.SystemInstruction,
+			}
+		}
+		result, err := g.client.Models.GenerateContent(ctx, g.model, contents, activeCfg)
 		if err != nil {
 			return "", nil, err
 		}
@@ -84,6 +93,7 @@ func (g *GeminiClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 			return "", nil, fmt.Errorf("empty response from Gemini (finish_reason=%v)", candidate.FinishReason)
 		}
 
+		toolRounds++
 		contents = append(contents, candidate.Content)
 
 		responseParts := make([]*genai.Part, 0, len(functionCalls))

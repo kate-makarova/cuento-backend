@@ -44,13 +44,15 @@ func (o *OpenAICompatClient) Chat(ctx context.Context, history []ChatMessage, sy
 	citedPostIDs := make(map[int64]bool)
 
 	const maxRounds = 20
+	const toolBudget = 15 // after this many tool-use rounds, force a text response
+	toolRounds := 0
 	for round := 0; round < maxRounds; round++ {
 		params := openai.ChatCompletionNewParams{
 			Model:       openai.ChatModel(o.model),
 			Messages:    messages,
 			Temperature: openai.Float(0),
 		}
-		if len(tools) > 0 {
+		if len(tools) > 0 && toolRounds < toolBudget {
 			params.Tools = tools
 		}
 
@@ -67,6 +69,7 @@ func (o *OpenAICompatClient) Chat(ctx context.Context, history []ChatMessage, sy
 			return msg.Content, filterSourcesByCitations(collectedSources, citedPostIDs), nil
 		}
 
+		toolRounds++
 		// Add assistant turn to history using ToParam()
 		messages = append(messages, msg.ToParam())
 
