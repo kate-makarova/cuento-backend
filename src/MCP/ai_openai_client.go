@@ -43,7 +43,7 @@ func (o *OpenAICompatClient) Chat(ctx context.Context, history []ChatMessage, sy
 	var collectedSources []ChatSource
 	citedPostIDs := make(map[int64]bool)
 
-	const maxRounds = 10
+	const maxRounds = 20
 	for round := 0; round < maxRounds; round++ {
 		params := openai.ChatCompletionNewParams{
 			Model:       openai.ChatModel(o.model),

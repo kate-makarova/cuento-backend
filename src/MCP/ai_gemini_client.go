@@ -51,7 +51,7 @@ func (g *GeminiClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 	var collectedSources []ChatSource
 	citedTopicIDs := make(map[int64]bool)
 
-	const maxRounds = 10
+	const maxRounds = 20
 	for round := 0; round < maxRounds; round++ {
 		result, err := g.client.Models.GenerateContent(ctx, g.model, contents, cfg)
 		if err != nil {
