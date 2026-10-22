@@ -2,8 +2,10 @@ package MCP
 
 import (
 	"context"
+	"cuento-backend/src/ToolCallParser"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	openai "github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
@@ -67,8 +69,39 @@ func (o *OpenAICompatClient) Chat(ctx context.Context, history []ChatMessage, sy
 		}
 
 		msg := resp.Choices[0].Message
+
+		// Some models output tool calls in the content instead of tool_calls.
 		if len(msg.ToolCalls) == 0 {
-			return msg.Content, filterSourcesByCitations(collectedSources, citedPostIDs), nil
+			altCalls := toolcallparser.Parse(msg.Content)
+			if len(altCalls) == 0 {
+				return msg.Content, filterSourcesByCitations(collectedSources, citedPostIDs), nil
+			}
+			toolRounds++
+			messages = append(messages, openai.AssistantMessage(msg.Content))
+			var resultParts []string
+			for _, xc := range altCalls {
+				if xc.Name == "cite_sources" {
+					for _, id := range postIDsFromArgs(xc.Args) {
+						citedPostIDs[id] = true
+					}
+				}
+				executor, ok := findExecutor(xc.Name)
+				var resultStr string
+				if !ok {
+					resultStr = fmt.Sprintf(`{"error":"unknown tool: %s"}`, xc.Name)
+				} else {
+					output, execErr := executor(ctx, xc.Args)
+					if execErr != nil {
+						resultStr = fmt.Sprintf(`{"error":%q}`, execErr.Error())
+					} else {
+						collectedSources = append(collectedSources, extractSources(xc.Name, output)...)
+						resultStr = output
+					}
+				}
+				resultParts = append(resultParts, fmt.Sprintf("<tool_response>%s</tool_response>", resultStr))
+			}
+			messages = append(messages, openai.UserMessage(strings.Join(resultParts, "\n")))
+			continue
 		}
 
 		toolRounds++
