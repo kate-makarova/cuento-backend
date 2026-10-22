@@ -8,6 +8,45 @@ import (
 	"time"
 )
 
+func runAbsenceStartedNotifications(db *sql.DB) {
+	rows, err := db.Query(`
+		SELECT au.id, au.user_id, au.absence_end_date
+		FROM absent_users au
+		WHERE DATE(au.absence_start_date) = CURDATE()
+		  AND au.is_deleted = 0
+		  AND au.start_notified = 0`,
+	)
+	if err != nil {
+		log.Printf("Absence started notifications: failed to query: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type absenceRow struct {
+		id             int
+		userID         int
+		absenceEndDate time.Time
+	}
+	var absences []absenceRow
+	for rows.Next() {
+		var a absenceRow
+		if rows.Scan(&a.id, &a.userID, &a.absenceEndDate) == nil {
+			absences = append(absences, a)
+		}
+	}
+
+	for _, a := range absences {
+		if _, err := db.Exec("UPDATE absent_users SET start_notified = 1 WHERE id = ?", a.id); err != nil {
+			log.Printf("Absence started notifications: failed to mark notified for absence %d: %v", a.id, err)
+			continue
+		}
+		Events.Publish(db, Events.UserAbsenceStarted, Events.UserAbsenceStartedEvent{
+			UserID:         a.userID,
+			AbsenceEndDate: a.absenceEndDate,
+		})
+	}
+}
+
 var archivingWarningThresholds = []int{10, 5, 3, 2, 1}
 
 func StartArchivingNotifier(db *sql.DB) {
@@ -21,12 +60,14 @@ func StartArchivingNotifier(db *sql.DB) {
 		time.Sleep(time.Until(next))
 		runAutoArchiving(db)
 		runArchivingNotifications(db)
+		runAbsenceStartedNotifications(db)
 
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 		for range ticker.C {
 			runAutoArchiving(db)
 			runArchivingNotifications(db)
+			runAbsenceStartedNotifications(db)
 		}
 	}()
 }
@@ -75,15 +116,29 @@ func runAutoArchiving(db *sql.DB) {
 	rows.Close()
 
 	for _, ch := range chars {
-		if _, err := db.Exec(
-			"UPDATE character_base SET character_status = ? WHERE id = ?",
-			Entities.InactiveCharacter, ch.id,
-		); err != nil {
-			log.Printf("Auto archiving: failed to deactivate character %d: %v", ch.id, err)
+		tx, err := db.Begin()
+		if err != nil {
+			log.Printf("Auto archiving: failed to begin transaction for character %d: %v", ch.id, err)
 			continue
 		}
 
-		_, _ = db.Exec("UPDATE global_stats SET stat_value = GREATEST(stat_value - 1, 0) WHERE stat_name = 'total_character_number'")
+		res, found, err := DeactivateCharacterInTx(tx, db, ch.id)
+		if err != nil {
+			log.Printf("Auto archiving: failed to deactivate character %d: %v", ch.id, err)
+			tx.Rollback()
+			continue
+		}
+		if !found {
+			tx.Rollback()
+			continue
+		}
+
+		if err := tx.Commit(); err != nil {
+			log.Printf("Auto archiving: failed to commit for character %d: %v", ch.id, err)
+			continue
+		}
+
+		PublishCharacterDeactivatedEvents(db, res)
 
 		lang := GetUserLanguage(ch.userID, db)
 		localizer := NewLocalizer(lang)

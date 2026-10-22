@@ -28,6 +28,7 @@ const (
 	EpisodeTopicsDeleted   EventType = "EpisodeTopicsDeleted"
 	CharacterActivated     EventType = "CharacterActivated"
 	CharacterDeactivated   EventType = "CharacterDeactivated"
+	CharacterStatusChanged EventType = "CharacterStatusChanged"
 	UserWiped              EventType = "UserWiped"
 	CharacterUpdated       EventType = "CharacterUpdated"
 	PostProfileChanged     EventType = "PostProfileChanged"
@@ -37,6 +38,12 @@ const (
 	PostCountUpdated       EventType = "PostCountUpdated"
 	TopicFull              EventType = "TopicFull"
 	TopicStatusChanged     EventType = "TopicStatusChanged"
+	PostsMoved             EventType = "PostsMoved"
+	GeneralPostsDeleted    EventType = "GeneralPostsDeleted"
+	UserAbsenceStarted     EventType = "UserAbsenceStarted"
+	ArcCreated             EventType = "ArcCreated"
+	ArcGMsUpdated          EventType = "ArcGMsUpdated"
+	NpcUsed                EventType = "NpcUsed"
 )
 
 type EventData interface{}
@@ -142,6 +149,13 @@ type CharacterDeactivatedEvent struct {
 	CharacterID int
 }
 
+type CharacterStatusChangedEvent struct {
+	CharacterID int
+	UserID      int
+	OldStatus   Entities.CharacterStatus
+	NewStatus   Entities.CharacterStatus
+}
+
 type TopicsMovedEvent struct {
 	SubforumIDs []int // all affected subforum IDs (sources + target)
 }
@@ -156,7 +170,14 @@ type EpisodeTopicsDeletedEvent struct {
 }
 
 type UserWipedEvent struct {
-	DeletedGeneralPostIDs []int
+	CharacterCount int
+}
+
+type GeneralPostsDeletedEvent struct {
+	TopicID    int
+	SubforumID int
+	Count      int
+	PostIDs    []int
 }
 
 type CharacterUpdatedEvent struct {
@@ -204,6 +225,30 @@ type TopicStatusChangedEvent struct {
 	NewStatus  int
 }
 
+type PostsMovedEvent struct {
+	PostIDs             []int
+	SourceTopicIDs      []int
+	TargetTopicID       int
+	AffectedSubforumIDs []int
+}
+
+type UserAbsenceStartedEvent struct {
+	UserID         int
+	AbsenceEndDate time.Time
+}
+
+type ArcCreatedEvent struct {
+	ArcID        int
+	Title        string
+	GMUserIDs    []int
+}
+
+type ArcGMsUpdatedEvent struct {
+	ArcID        int
+	PrevGMUserIDs []int
+	NewGMUserIDs  []int
+}
+
 type ReactionCreatedEvent struct {
 	TopicID      int64  `json:"topic_id"`
 	TopicName    string `json:"topic_name"`
@@ -213,6 +258,12 @@ type ReactionCreatedEvent struct {
 	Url          string `json:"url"`
 	UserID       int    `json:"user_id"`
 	UserName     string `json:"user_name"`
+}
+
+type NpcUsedEvent struct {
+	PostID   int
+	Content  string
+	IsUpdate bool
 }
 
 type EventHandler func(db *sql.DB, data EventData)

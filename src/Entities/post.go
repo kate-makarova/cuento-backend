@@ -17,6 +17,7 @@ type PostReaction struct {
 type Post struct {
 	Id                   int               `json:"id"`
 	TopicId              int               `json:"topic_id"`
+	TopicName            string            `json:"topic_name,omitempty"`
 	AuthorUserId         int               `json:"author_user_id"`
 	AuthorUserName       string            `json:"author_user_name"`
 	GuestName            *string           `json:"guest_name,omitempty"`
@@ -31,4 +32,5 @@ type Post struct {
 	CanEdit              *bool             `json:"can_edit,omitempty" db:"-"`
 	CanDelete            *bool             `json:"can_delete,omitempty" db:"-"`
 	Reactions            []PostReaction    `json:"reactions"`
+	IsGmPost             *bool             `json:"is_gm_post,omitempty"`
 }

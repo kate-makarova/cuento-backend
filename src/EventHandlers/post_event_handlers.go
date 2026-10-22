@@ -26,9 +26,12 @@ func RegisterPostEventHandlers() {
 			msgType = "post_created"
 		}
 
-		// Get all users currently reading this topic
+		// Get all users who have at least one connection on this topic page.
+		// Use the hub's per-connection tracking so multiple tabs work correctly:
+		// a user on the topic in Tab A still receives the event even if their most
+		// recent page_change came from Tab B on a different page.
 		topicIDStr := strconv.FormatInt(event.TopicID, 10)
-		users := Services.ActivityStorage.GetUsersOnPage("topic", topicIDStr)
+		userIDs := Websockets.MainHub.GetUserIDsOnPage("topic", topicIDStr)
 
 		var totalPosts int
 		db.QueryRow(
@@ -36,28 +39,33 @@ func RegisterPostEventHandlers() {
 			event.TopicID,
 		).Scan(&totalPosts)
 
+		// Render base HTML once (parse + NPC resolution + linkify), then apply hide blocks per user
+		domain, _ := Services.GetGlobalSetting("domain", db)
+		baseHtml := Services.LinkifyURLs(Services.ResolveNPCPlaceholders(Services.ParseBBCode(event.Post.Content), db), domain, db)
+
 		// Send to each user on the page with their localized date and per-user CanEdit
-		for _, u := range users {
+		for _, uid := range userIDs {
 			userPost := event.Post
-			userPost.DateCreatedLocalized = Services.LocalizeTime(userPost.DateCreated, Services.GetUserTimezone(u.UserID, db))
+			userPost.ContentHtml = Services.ProcessHideBlocks(baseHtml, uid, int(event.TopicID), db)
+			userPost.DateCreatedLocalized = Services.LocalizeTime(userPost.DateCreated, Services.GetUserTimezone(uid, db))
 
 			canEdit := false
-			if u.UserID != 0 {
-				if u.UserID == userPost.AuthorUserId {
+			if uid != 0 {
+				if uid == userPost.AuthorUserId {
 					perm := fmt.Sprintf("subforum_edit_own_post:%d", event.SubforumID)
-					if hasPerm, err := Services.HasPermission(u.UserID, perm, db); err == nil && hasPerm {
+					if hasPerm, err := Services.HasPermission(uid, perm, db); err == nil && hasPerm {
 						canEdit = true
 					}
 				} else {
 					perm := fmt.Sprintf("subforum_edit_others_post:%d", event.SubforumID)
-					if hasPerm, err := Services.HasPermission(u.UserID, perm, db); err == nil && hasPerm {
+					if hasPerm, err := Services.HasPermission(uid, perm, db); err == nil && hasPerm {
 						canEdit = true
 					}
 				}
 			}
 			userPost.CanEdit = &canEdit
 
-			Websockets.MainHub.SendNotification(u.UserID, map[string]interface{}{
+			Websockets.MainHub.SendNotification(uid, map[string]interface{}{
 				"type":        msgType,
 				"data":        userPost,
 				"total_posts": totalPosts,
@@ -68,7 +76,7 @@ func RegisterPostEventHandlers() {
 	// Subscriber 6: Update Stats on Post Created
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type == "post_updated" {
+		if !ok || event.Type != "post_created" {
 			return
 		}
 
@@ -140,7 +148,7 @@ func RegisterPostEventHandlers() {
 	// Subscriber: Update character stats on episode post created
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type == "post_updated" {
+		if !ok || event.Type != "post_created" {
 			return
 		}
 
@@ -167,7 +175,7 @@ func RegisterPostEventHandlers() {
 	// Subscriber: Increment post count, then emit PostCountUpdated.
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type == "post_updated" || event.Post.AuthorUserId == 0 {
+		if !ok || event.Type != "post_created" || event.Post.AuthorUserId == 0 {
 			return
 		}
 
@@ -296,7 +304,7 @@ func RegisterPostEventHandlers() {
 	// Subscriber 11: Send Game Notifications for Episode Posts
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type == "post_updated" {
+		if !ok || event.Type != "post_created" {
 			return
 		}
 
@@ -418,7 +426,7 @@ func RegisterPostEventHandlers() {
 	// Subscriber: Update mask stats on episode post created
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type == "post_updated" {
+		if !ok || event.Type != "post_created" {
 			return
 		}
 
@@ -451,7 +459,7 @@ func RegisterPostEventHandlers() {
 	// Subscriber: Award currency for episode post
 	Events.Subscribe(Events.PostCreated, func(db *sql.DB, data Events.EventData) {
 		event, ok := data.(Events.PostCreatedEvent)
-		if !ok || event.Type == "post_updated" {
+		if !ok || event.Type != "post_created" {
 			return
 		}
 
@@ -531,6 +539,51 @@ func RegisterPostEventHandlers() {
 				TopicId:       int(event.TopicID),
 			},
 		})
+	})
+
+	// Subscriber: Recalculate topic and subforum stats when posts are moved
+	Events.Subscribe(Events.PostsMoved, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.PostsMovedEvent)
+		if !ok {
+			return
+		}
+
+		allTopicIDs := append(event.SourceTopicIDs, event.TargetTopicID)
+		for _, topicID := range allTopicIDs {
+			_, _ = db.Exec(`
+				UPDATE topics SET
+					post_number              = (SELECT COUNT(*) FROM posts WHERE topic_id = ? AND COALESCE(is_deleted, 0) != 1),
+					date_last_post           = (SELECT MAX(date_created) FROM posts WHERE topic_id = ? AND COALESCE(is_deleted, 0) != 1),
+					last_post_author_user_id = (SELECT author_user_id FROM posts WHERE topic_id = ? AND COALESCE(is_deleted, 0) != 1 ORDER BY date_created DESC LIMIT 1)
+				WHERE id = ?`,
+				topicID, topicID, topicID, topicID)
+		}
+
+		// Mark target topic as full if the cap is now reached.
+		var targetPostNumber int
+		var targetTopicName string
+		var targetSubforumID int
+		if err := db.QueryRow(
+			"SELECT post_number, name, subforum_id FROM topics WHERE id = ?",
+			event.TargetTopicID,
+		).Scan(&targetPostNumber, &targetTopicName, &targetSubforumID); err == nil {
+			if targetPostNumber >= Entities.TopicPostCap {
+				_, _ = db.Exec(
+					"UPDATE topics SET status = ? WHERE id = ? AND status != ?",
+					Entities.FullTopic, event.TargetTopicID, Entities.FullTopic,
+				)
+				Events.Publish(db, Events.TopicFull, Events.TopicFullEvent{
+					TopicID:    int64(event.TargetTopicID),
+					SubforumID: targetSubforumID,
+					TopicName:  targetTopicName,
+				})
+			}
+		}
+
+		for _, subforumID := range event.AffectedSubforumIDs {
+			refreshSubforumStats(db, subforumID)
+			Events.Publish(db, Events.SubforumUpdated, Events.SubforumUpdatedEvent{SubforumID: subforumID})
+		}
 	})
 
 	// Subscriber: Adjust character stats when a post's character profile is changed

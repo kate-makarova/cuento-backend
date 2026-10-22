@@ -138,10 +138,24 @@ func RegisterTopicEventHandlers() {
 		}
 
 		indexUserIDs := Websockets.MainHub.GetUserIDsOnPageType("index")
-		if len(indexUserIDs) > 0 {
-			Websockets.MainHub.BroadcastToUsers(indexUserIDs, map[string]interface{}{
+		for _, uid := range indexUserIDs {
+			sfID := event.SubforumID
+			noHighlight := false
+			var h bool
+			if uid != 0 {
+				_ = db.QueryRow(
+					"SELECT hide_new_posts_index FROM user_subforum_settings WHERE user_id = ? AND subforum_id = ?",
+					uid, event.SubforumID,
+				).Scan(&h)
+				noHighlight = h
+			}
+			Websockets.MainHub.SendNotification(uid, map[string]interface{}{
 				"type": "page_changed",
-				"data": Entities.NotificationPageChanged{PageType: "index"},
+				"data": Entities.NotificationPageChanged{
+					PageType:    "index",
+					SubforumID:  &sfID,
+					NoHighlight: noHighlight,
+				},
 			})
 		}
 	})
@@ -180,5 +194,22 @@ func RegisterTopicEventHandlers() {
 		for _, u := range users {
 			Websockets.MainHub.SendNotification(u.UserID, notification)
 		}
+	})
+
+	// Subscriber: Broadcast topic_full to users currently viewing the topic
+	Events.Subscribe(Events.TopicFull, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.TopicFullEvent)
+		if !ok {
+			return
+		}
+		pageID := strconv.FormatInt(event.TopicID, 10)
+		userIDs := Websockets.MainHub.GetUserIDsOnPage("topic", pageID)
+		if len(userIDs) == 0 {
+			return
+		}
+		Websockets.MainHub.BroadcastToUsers(userIDs, map[string]interface{}{
+			"type":     "topic_full",
+			"topic_id": event.TopicID,
+		})
 	})
 }

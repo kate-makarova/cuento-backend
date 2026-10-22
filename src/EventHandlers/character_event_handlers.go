@@ -20,59 +20,110 @@ func RegisterCharacterEventHandlers() {
 			return
 		}
 
-		_, err := db.Exec("UPDATE global_stats SET stat_value = stat_value + 1 WHERE stat_name = 'total_topic_number'")
-		if err != nil {
+		if _, err := db.Exec("UPDATE global_stats SET stat_value = stat_value + 1 WHERE stat_name = 'total_character_number'"); err != nil {
+			fmt.Printf("Error updating total_character_number on create: %v\n", err)
+		}
+		if _, err := db.Exec("UPDATE global_stats SET stat_value = stat_value + 1 WHERE stat_name = 'total_topic_number'"); err != nil {
 			fmt.Printf("Error updating global topic stats on character created: %v\n", err)
 		}
 
 		var username string
 		_ = db.QueryRow("SELECT username FROM users WHERE id = ?", event.AuthorUserID).Scan(&username)
-		_, err = db.Exec("UPDATE subforums SET topic_number = COALESCE(topic_number, 0) + 1, show_last_topic = true, last_post_topic_id = ?, last_post_topic_name = ?, date_last_post = NOW(), last_post_author_user_name = ? WHERE id = ?", event.TopicID, event.TopicName, username, event.SubforumID)
-		if err != nil {
+		if _, err := db.Exec("UPDATE subforums SET topic_number = COALESCE(topic_number, 0) + 1, show_last_topic = true, last_post_topic_id = ?, last_post_topic_name = ?, date_last_post = NOW(), last_post_author_user_name = ? WHERE id = ?", event.TopicID, event.TopicName, username, event.SubforumID); err != nil {
 			fmt.Printf("Error updating subforum topic count for character: %v\n", err)
 		}
 	})
 
-	// Subscriber 12: Update Global Stats on Character Accepted
-	Events.Subscribe(Events.CharacterAccepted, func(db *sql.DB, data Events.EventData) {
-		_, ok := data.(Events.CharacterAcceptedEvent)
+	// Subscriber: Update active character count on status change
+	Events.Subscribe(Events.CharacterStatusChanged, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.CharacterStatusChangedEvent)
 		if !ok {
 			return
 		}
-
-		_, err := db.Exec("UPDATE global_stats SET stat_value = stat_value + 1 WHERE stat_name = 'total_character_number'")
-		if err != nil {
-			fmt.Printf("Error updating global character stats on accept: %v\n", err)
+		wasActive := event.OldStatus == Entities.ActiveCharacter
+		isActive := event.NewStatus == Entities.ActiveCharacter
+		if wasActive == isActive {
+			return
 		}
-
+		if isActive {
+			_, _ = db.Exec("UPDATE global_stats SET stat_value = stat_value + 1 WHERE stat_name = 'total_active_character_number'")
+		} else {
+			_, _ = db.Exec("UPDATE global_stats SET stat_value = GREATEST(stat_value - 1, 0) WHERE stat_name = 'total_active_character_number'")
+		}
 	})
 
-	// Subscriber: Update Global Stats on Character Activated
-	Events.Subscribe(Events.CharacterActivated, func(db *sql.DB, data Events.EventData) {
-		_, ok := data.(Events.CharacterActivatedEvent)
-		if !ok {
+	// Subscriber: Decrement total_character_number for all characters wiped with the user
+	Events.Subscribe(Events.UserWiped, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.UserWipedEvent)
+		if !ok || event.CharacterCount == 0 {
 			return
 		}
-
-		_, err := db.Exec("UPDATE global_stats SET stat_value = stat_value + 1 WHERE stat_name = 'total_character_number'")
-		if err != nil {
-			fmt.Printf("Error updating global character stats on activate: %v\n", err)
-		}
-
+		_, _ = db.Exec(
+			"UPDATE global_stats SET stat_value = GREATEST(stat_value - ?, 0) WHERE stat_name = 'total_character_number'",
+			event.CharacterCount,
+		)
 	})
 
-	// Subscriber: Update Global Stats on Character Deactivated
-	Events.Subscribe(Events.CharacterDeactivated, func(db *sql.DB, data Events.EventData) {
-		_, ok := data.(Events.CharacterDeactivatedEvent)
-		if !ok {
+	// Subscriber: Auto-deactivate episodes that had exactly 2 participants when one character is deactivated.
+	Events.Subscribe(Events.CharacterStatusChanged, func(db *sql.DB, data Events.EventData) {
+		event, ok := data.(Events.CharacterStatusChangedEvent)
+		if !ok || event.NewStatus != Entities.InactiveCharacter {
 			return
 		}
 
-		_, err := db.Exec("UPDATE global_stats SET stat_value = GREATEST(stat_value - 1, 0) WHERE stat_name = 'total_character_number'")
+		rows, err := db.Query(`
+			SELECT eb.id, eb.topic_id, t.subforum_id, t.status
+			FROM episode_base eb
+			JOIN topics t ON t.id = eb.topic_id
+			WHERE eb.episode_status = ?
+			  AND EXISTS (
+			      SELECT 1 FROM episode_character ec
+			      WHERE ec.episode_id = eb.id AND ec.character_id = ?
+			  )
+			  AND (SELECT COUNT(*) FROM episode_character ec2 WHERE ec2.episode_id = eb.id) = 2`,
+			Entities.ActiveEpisode, event.CharacterID,
+		)
 		if err != nil {
-			fmt.Printf("Error updating global character stats on deactivate: %v\n", err)
+			fmt.Printf("Error querying episodes for auto-deactivate on character %d: %v\n", event.CharacterID, err)
+			return
+		}
+		defer rows.Close()
+
+		type episodeRow struct {
+			id, topicID, subforumID, oldTopicStatus int
+		}
+		var episodes []episodeRow
+		for rows.Next() {
+			var r episodeRow
+			if rows.Scan(&r.id, &r.topicID, &r.subforumID, &r.oldTopicStatus) == nil {
+				episodes = append(episodes, r)
+			}
 		}
 
+		for _, ep := range episodes {
+			if _, err := db.Exec(
+				"UPDATE episode_base SET episode_status = ? WHERE id = ?",
+				Entities.InactiveEpisode, ep.id,
+			); err != nil {
+				fmt.Printf("Error deactivating episode %d: %v\n", ep.id, err)
+				continue
+			}
+			if _, err := db.Exec(
+				"UPDATE topics SET status = ? WHERE id = ?",
+				Entities.InactiveTopic, ep.topicID,
+			); err != nil {
+				fmt.Printf("Error deactivating topic %d for episode %d: %v\n", ep.topicID, ep.id, err)
+				continue
+			}
+			if ep.oldTopicStatus != int(Entities.InactiveTopic) {
+				Events.Publish(db, Events.TopicStatusChanged, Events.TopicStatusChangedEvent{
+					TopicID:    int64(ep.topicID),
+					SubforumID: ep.subforumID,
+					OldStatus:  ep.oldTopicStatus,
+					NewStatus:  int(Entities.InactiveTopic),
+				})
+			}
+		}
 	})
 
 	// Subscriber 13: Post Welcome Message on Character Accepted
@@ -99,9 +150,9 @@ func RegisterCharacterEventHandlers() {
 
 		postID, _ := res.LastInsertId()
 
-		// Notify anyone reading the topic
+		// Notify anyone reading the topic (per-connection hub tracking for multi-tab correctness)
 		topicIDStr := strconv.Itoa(topicID)
-		users := Services.ActivityStorage.GetUsersOnPage("topic", topicIDStr)
+		userIDs := Websockets.MainHub.GetUserIDsOnPage("topic", topicIDStr)
 
 		// Fetch full post data for WebSocket
 		fullPost, err := Services.GetPostById(int(postID), db, Features.IsCurrencyActive(db))
@@ -110,8 +161,8 @@ func RegisterCharacterEventHandlers() {
 				"type": "post_created",
 				"data": fullPost,
 			}
-			for _, u := range users {
-				Websockets.MainHub.SendNotification(u.UserID, notification)
+			for _, uid := range userIDs {
+				Websockets.MainHub.SendNotification(uid, notification)
 			}
 		}
 	})

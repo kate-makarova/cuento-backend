@@ -40,6 +40,9 @@ func main() {
 	// Start archiving warning notifier (checks daily, sends notifications at 10/5/3/2/1 days before archiving)
 	Services.StartArchivingNotifier(Services.DB)
 
+	// Start Google Drive backup scheduler (checks hourly, runs backup per configured frequency)
+	Services.StartBackupScheduler(Services.DB)
+
 	// Start WebSocket Hub
 	go Websockets.MainHub.Run()
 
@@ -195,7 +198,7 @@ func main() {
 		Controllers.GetActiveUserActivity(c, Services.DB)
 	})
 	publicRouter.POST("/guest/activity", "Update guest location for active users list", func(c *gin.Context) {
-		Controllers.UpdateGuestLocation(c)
+		Controllers.UpdateGuestLocation(c, Services.DB)
 	})
 	optionalAuthRouter.GET("/search", "Search across buckets", func(c *gin.Context) {
 		Controllers.Search(c, Services.DB)
@@ -271,6 +274,12 @@ func main() {
 	optionalAuthRouter.GET("/topic-posts/:id", "Get posts in a topic by page", func(c *gin.Context) {
 		Controllers.GetPostsByTopic(c, Services.DB)
 	})
+	optionalAuthRouter.GET("/user-posts/:user_id", "Get posts by a specific user", func(c *gin.Context) {
+		Controllers.GetPostsByUser(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/character-posts/:character_id", "Get posts written as a specific character", func(c *gin.Context) {
+		Controllers.GetPostsByCharacter(c, Services.DB)
+	})
 	optionalAuthRouter.GET("/users/page/:page_type/:page_id", "Get users currently viewing a page", func(c *gin.Context) {
 		Controllers.GetUsersByPage(c, Services.DB)
 	})
@@ -313,6 +322,18 @@ func main() {
 	authOnlyRouter.POST("/admin/backup/restore", "Restore the database from an uploaded SQL file", func(c *gin.Context) {
 		Controllers.RestoreDB(c)
 	})
+	authOnlyRouter.GET("/admin/backup/gdrive", "Get Google Drive backup settings and backup list", func(c *gin.Context) {
+		Controllers.GetGDriveBackupSettings(c, Services.DB)
+	})
+	authOnlyRouter.POST("/admin/backup/gdrive", "Save Google Drive backup settings", func(c *gin.Context) {
+		Controllers.UpdateGDriveBackupSettings(c, Services.DB)
+	})
+	authOnlyRouter.POST("/admin/backup/gdrive/trigger", "Trigger an immediate Google Drive backup", func(c *gin.Context) {
+		Controllers.TriggerGDriveBackup(c, Services.DB)
+	})
+	authOnlyRouter.GET("/admin/backup/gdrive/download/:fileId", "Download a backup file from Google Drive", func(c *gin.Context) {
+		Controllers.DownloadGDriveBackup(c, Services.DB)
+	})
 
 	// Protected routes
 	protectedGroup := r.Group("/")
@@ -341,6 +362,9 @@ func main() {
 
 	optionalAuthRouter.GET("/features", "Get list of all feature flags", func(c *gin.Context) {
 		Features.GetFeaturesHandler(c)
+	})
+	protectedRouter.GET("/subforum/list-episode", "Get list of subforums where user can create episode topics", func(c *gin.Context) {
+		Controllers.GetEpisodeSubforumList(c, Services.DB)
 	})
 	protectedRouter.POST("/features/:key/toggle", "Toggle a feature flag on or off", func(c *gin.Context) {
 		Features.ToggleFeatureHandler(c, Services.DB)
@@ -457,6 +481,9 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	protectedRouter.POST("/wanted-character/create", "Create a new wanted character", func(c *gin.Context) {
 		Controllers.CreateWantedCharacter(c, Services.DB)
 	})
+	protectedRouter.POST("/wanted-character/preview", "Preview a wanted character without saving", func(c *gin.Context) {
+		Controllers.PreviewWantedCharacter(c, Services.DB)
+	})
 	protectedRouter.POST("/wanted-character/update/:id", "Update a wanted character by ID", func(c *gin.Context) {
 		Controllers.UpdateWantedCharacter(c, Services.DB)
 	})
@@ -514,6 +541,15 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	protectedRouter.POST("/topic/update/:id", "Update topic by ID", func(c *gin.Context) {
 		Controllers.UpdateTopic(c, Services.DB)
 	})
+	protectedRouter.POST("/topic/:id/subscribe", "Subscribe to a topic", func(c *gin.Context) {
+		Controllers.SubscribeToTopic(c, Services.DB)
+	})
+	protectedRouter.POST("/topic/:id/unsubscribe", "Unsubscribe from a topic", func(c *gin.Context) {
+		Controllers.UnsubscribeFromTopic(c, Services.DB)
+	})
+	protectedRouter.GET("/user/subscribed-topics", "Get current user's topic subscriptions", func(c *gin.Context) {
+		Controllers.GetUserSubscribedTopics(c, Services.DB)
+	})
 	publicRouter.GET("/lore-topic/:id/pages", "Get lore pages by topic ID", func(c *gin.Context) {
 		Controllers.GetLorePagesByTopic(c, Services.DB)
 	})
@@ -537,6 +573,9 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	})
 	protectedRouter.POST("/topics/move", "Move topics to a different subforum", func(c *gin.Context) {
 		Controllers.MoveTopics(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/posts/move", "Move posts to a different topic", func(c *gin.Context) {
+		Controllers.MovePosts(c, Services.DB)
 	})
 	protectedRouter.POST("/topics/bulk-update", "Bulk update topics", func(c *gin.Context) {
 		Controllers.BulkUpdateTopics(c, Services.DB)
@@ -642,6 +681,9 @@ protectedRouter.GET("/character-claims", "Get list of all character claims group
 	})
 	protectedRouter.POST("/admin/user/reactivate/:id", "Reactivate an archived user by ID", func(c *gin.Context) {
 		Controllers.ReactivateUser(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/user/delete/:id", "Delete a user account: removes general posts, reassigns game posts, deletes the user", func(c *gin.Context) {
+		Controllers.AdminWipeUser(c, Services.DB)
 	})
 	protectedRouter.GET("/characters/archiving-warnings", "Get active characters approaching auto-archiving threshold", func(c *gin.Context) {
 		Controllers.GetArchivingWarnings(c, Services.DB)
@@ -785,6 +827,9 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	protectedRouter.POST("/reaction/create", "Upload and create a new reaction", func(c *gin.Context) {
 		Controllers.CreateReaction(c, Services.DB)
 	})
+	protectedRouter.POST("/reaction/bulk-upload", "Bulk upload reactions from a ZIP archive", func(c *gin.Context) {
+		Controllers.BulkUploadReactions(c, Services.DB)
+	})
 	protectedRouter.POST("/reaction/deactivate/:id", "Deactivate a reaction by ID", func(c *gin.Context) {
 		Controllers.DeactivateReaction(c, Services.DB)
 	})
@@ -802,6 +847,15 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	})
 	protectedRouter.POST("/static-file/revert", "Revert to a specific static file version", func(c *gin.Context) {
 		Controllers.AdminRevertStaticFile(c, Services.DB)
+	})
+	protectedRouter.POST("/asset/upload", "Upload a file to the public assets folder", func(c *gin.Context) {
+		Controllers.UploadAsset(c)
+	})
+	protectedRouter.GET("/asset/list", "List files in the public assets folder", func(c *gin.Context) {
+		Controllers.GetAssetList(c)
+	})
+	protectedRouter.POST("/asset/delete", "Delete a file from the public assets folder", func(c *gin.Context) {
+		Controllers.DeleteAsset(c)
 	})
 	protectedRouter.POST("/design-variation/create", "Create a new design variation", func(c *gin.Context) {
 		Controllers.CreateDesignVariation(c, Services.DB)
@@ -850,6 +904,9 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	})
 	protectedRouter.POST("/admin/smile/upload", "Upload a smile image", func(c *gin.Context) {
 		Controllers.UploadSmile(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/smile/bulk-upload", "Bulk upload smiles from a ZIP archive", func(c *gin.Context) {
+		Controllers.BulkUploadSmiles(c, Services.DB)
 	})
 	protectedRouter.GET("/admin/smile/delete/:id", "Delete smile by ID", func(c *gin.Context) {
 		Controllers.DeleteSmile(c, Services.DB)
@@ -1119,6 +1176,71 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	})
 	protectedRouter.POST("/user-data-migration/update-character-map", "Set character IDs for original user IDs in a processing record", func(c *gin.Context) {
 		Controllers.UpdateUserCharacterMap(c, Services.DB)
+	})
+
+	// User subforum settings routes
+	protectedRouter.GET("/user/subforum-settings", "Get current user's subforum settings", func(c *gin.Context) {
+		Controllers.GetUserSubforumSettings(c, Services.DB)
+	})
+protectedRouter.POST("/user/subforum-settings/update-all", "Replace all subforum settings for the current user", func(c *gin.Context) {
+		Controllers.UpdateAllUserSubforumSettings(c, Services.DB)
+	})
+
+	// Interactive map routes
+	optionalAuthRouter.GET("/interactive-map/list", "Get list of interactive maps (public only for guests)", func(c *gin.Context) {
+		Controllers.GetInteractiveMapList(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/interactive-map/:id", "Get an interactive map by ID (public check for guests)", func(c *gin.Context) {
+		Controllers.GetInteractiveMap(c, Services.DB)
+	})
+	protectedRouter.POST("/interactive-map/create", "Create a new interactive map", func(c *gin.Context) {
+		Controllers.CreateInteractiveMap(c, Services.DB)
+	})
+	protectedRouter.POST("/interactive-map/update/:id", "Update an interactive map by ID", func(c *gin.Context) {
+		Controllers.UpdateInteractiveMap(c, Services.DB)
+	})
+	protectedRouter.POST("/interactive-map/delete/:id", "Delete an interactive map by ID", func(c *gin.Context) {
+		Controllers.DeleteInteractiveMap(c, Services.DB)
+	})
+
+	optionalAuthRouter.POST("/arc/list", "Get list of arcs with filters (public only for guests)", func(c *gin.Context) {
+		Controllers.GetArcList(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/arc/:id", "Get an arc by ID (public check for guests)", func(c *gin.Context) {
+		Controllers.GetArc(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/arc/:id/episodes", "Get list of episodes for an arc", func(c *gin.Context) {
+		Controllers.GetArcEpisodes(c, Services.DB)
+	})
+	protectedRouter.POST("/arc/create", "Create a new arc", func(c *gin.Context) {
+		Controllers.CreateArc(c, Services.DB)
+	})
+	protectedRouter.POST("/arc/update/:id", "Update an arc by ID", func(c *gin.Context) {
+		Controllers.UpdateArc(c, Services.DB)
+	})
+	protectedRouter.DELETE("/arc/delete/:id", "Delete an arc by ID", func(c *gin.Context) {
+		Controllers.DeleteArc(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/npc/:id", "Get an NPC by ID", func(c *gin.Context) {
+		Controllers.GetNPC(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/npc/:id/topics", "Get topics where an NPC appears", func(c *gin.Context) {
+		Controllers.GetNPCTopics(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/arc/:id/npcs", "Get list of NPCs for an arc", func(c *gin.Context) {
+		Controllers.GetArcNPCs(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/arc/:id/npcs/search", "Search NPCs by name for an arc", func(c *gin.Context) {
+		Controllers.SearchNPCs(c, Services.DB)
+	})
+	protectedRouter.POST("/npc/create", "Create a new NPC for an arc", func(c *gin.Context) {
+		Controllers.CreateNPC(c, Services.DB)
+	})
+	protectedRouter.POST("/npc/update/:id", "Update an NPC by ID", func(c *gin.Context) {
+		Controllers.UpdateNPC(c, Services.DB)
+	})
+	protectedRouter.DELETE("/npc/delete/:id", "Delete an NPC by ID", func(c *gin.Context) {
+		Controllers.DeleteNPC(c, Services.DB)
 	})
 
 	// AI Agent routes (admin only)

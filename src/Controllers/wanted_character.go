@@ -26,10 +26,11 @@ type GetWantedCharacterListRequest struct {
 }
 
 type UpdateWantedCharacterRequest struct {
-	Name         string                 `json:"name" binding:"required"`
-	CustomFields map[string]interface{} `json:"custom_fields"`
-	Factions     []Entities.Faction     `json:"factions"`
-	RelationIds  []int                  `json:"relations"`
+	Name          string                 `json:"name" binding:"required"`
+	CustomFields  map[string]interface{} `json:"custom_fields"`
+	Factions      []Entities.Faction     `json:"factions"`
+	RelationIds   []int                  `json:"relations"`
+	BlockSettings map[string]string      `json:"block_settings"`
 }
 
 type CreateWantedCharacterRequest struct {
@@ -39,6 +40,7 @@ type CreateWantedCharacterRequest struct {
 	CustomFields     map[string]interface{} `json:"custom_fields"`
 	Factions         []Entities.Faction     `json:"factions"`
 	RelationIds      []int                  `json:"relations"`
+	BlockSettings    map[string]string      `json:"block_settings"`
 }
 
 func GetWantedCharacterList(c *gin.Context, db *sql.DB) {
@@ -398,6 +400,14 @@ func CreateWantedCharacter(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	if len(req.BlockSettings) > 0 {
+		if err := Services.SaveEntityBlockSettings(wantedCharacterID, "wanted_character", req.BlockSettings, tx); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save block settings: " + err.Error()})
+			c.Abort()
+			return
+		}
+	}
+
 	var claimID int64
 	if req.CharacterClaimId != nil {
 		claimID = int64(*req.CharacterClaimId)
@@ -544,6 +554,9 @@ func UpdateWantedCharacter(c *gin.Context, db *sql.DB) {
 		"name":          req.Name,
 		"custom_fields": req.CustomFields,
 	}
+	if req.BlockSettings != nil {
+		updates["block_settings"] = req.BlockSettings
+	}
 	_, err = Services.PatchEntity(int64(wantedCharacterID), "wanted_character", updates, tx)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update wanted character entity: " + err.Error()})
@@ -611,6 +624,52 @@ func UpdateWantedCharacter(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, updatedEntity)
 }
 
+type wantedCharDeactivationResult struct {
+	WantedCharID        int
+	TopicID             int64
+	SubforumID          int
+	OldTopicStatus      int
+	OldWantedCharStatus int
+}
+
+// deactivateWantedCharacterInTx sets a wanted character inactive within an existing transaction
+// and deactivates its topic. Returns (result, found, error).
+func deactivateWantedCharacterInTx(tx *sql.Tx, db *sql.DB, wantedCharID int) (wantedCharDeactivationResult, bool, error) {
+	var res wantedCharDeactivationResult
+	res.WantedCharID = wantedCharID
+	_ = db.QueryRow(`
+		SELECT t.id, t.subforum_id, t.status, wcb.wanted_character_status
+		FROM topics t JOIN wanted_character_base wcb ON wcb.topic_id = t.id
+		WHERE wcb.id = ?`, wantedCharID,
+	).Scan(&res.TopicID, &res.SubforumID, &res.OldTopicStatus, &res.OldWantedCharStatus)
+
+	result, err := tx.Exec("UPDATE wanted_character_base SET wanted_character_status = ? WHERE id = ?", Entities.InactiveWantedCharacter, wantedCharID)
+	if err != nil {
+		return res, false, fmt.Errorf("failed to deactivate wanted character: %w", err)
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return res, false, nil
+	}
+
+	if res.TopicID > 0 {
+		if _, err := tx.Exec("UPDATE topics SET status = ? WHERE id = ?", Entities.InactiveTopic, res.TopicID); err != nil {
+			return res, true, fmt.Errorf("failed to deactivate wanted character topic: %w", err)
+		}
+	}
+	return res, true, nil
+}
+
+func publishWantedCharDeactivatedEvents(db *sql.DB, res wantedCharDeactivationResult) {
+	if res.TopicID > 0 && res.OldTopicStatus != int(Entities.InactiveTopic) {
+		Events.Publish(db, Events.TopicStatusChanged, Events.TopicStatusChangedEvent{
+			TopicID:    res.TopicID,
+			SubforumID: res.SubforumID,
+			OldStatus:  res.OldTopicStatus,
+			NewStatus:  int(Entities.InactiveTopic),
+		})
+	}
+}
+
 func DeactivateWantedCharacter(c *gin.Context, db *sql.DB) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -618,11 +677,6 @@ func DeactivateWantedCharacter(c *gin.Context, db *sql.DB) {
 		c.Abort()
 		return
 	}
-
-	var wcDeactivateTopicID int64
-	var wcDeactivateOldTopicStatus int
-	var wcDeactivateOldWcStatus int
-	_ = db.QueryRow("SELECT t.id, t.status, wcb.wanted_character_status FROM topics t JOIN wanted_character_base wcb ON wcb.topic_id = t.id WHERE wcb.id = ?", id).Scan(&wcDeactivateTopicID, &wcDeactivateOldTopicStatus, &wcDeactivateOldWcStatus)
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -632,28 +686,20 @@ func DeactivateWantedCharacter(c *gin.Context, db *sql.DB) {
 	}
 	defer tx.Rollback()
 
-	result, err := tx.Exec("UPDATE wanted_character_base SET wanted_character_status = ? WHERE id = ?", Entities.InactiveWantedCharacter, id)
+	res, found, err := deactivateWantedCharacterInTx(tx, db, id)
 	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to deactivate wanted character: " + err.Error()})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: err.Error()})
 		c.Abort()
 		return
 	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
+	if !found {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Wanted character not found"})
 		c.Abort()
 		return
 	}
 
-	_, err = tx.Exec("UPDATE topics SET status = ? WHERE id = (SELECT topic_id FROM wanted_character_base WHERE id = ?)", Entities.InactiveTopic, id)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to deactivate wanted character topic: " + err.Error()})
-		c.Abort()
-		return
-	}
-
-	Services.AddTopicActivityLog(tx, 0, wcDeactivateTopicID, "wanted_character_status_changed", wcDeactivateOldWcStatus, int(Entities.InactiveWantedCharacter))
-	Services.AddTopicActivityLog(tx, 0, wcDeactivateTopicID, "topic_status_changed", wcDeactivateOldTopicStatus, int(Entities.InactiveTopic))
+	Services.AddTopicActivityLog(tx, 0, res.TopicID, "wanted_character_status_changed", res.OldWantedCharStatus, int(Entities.InactiveWantedCharacter))
+	Services.AddTopicActivityLog(tx, 0, res.TopicID, "topic_status_changed", res.OldTopicStatus, int(Entities.InactiveTopic))
 
 	if err := tx.Commit(); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
@@ -661,8 +707,10 @@ func DeactivateWantedCharacter(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	publishWantedCharDeactivatedEvents(db, res)
+
 	var topicStatus Entities.TopicStatus
-	_ = db.QueryRow("SELECT status FROM topics WHERE id = (SELECT topic_id FROM wanted_character_base WHERE id = ?)", id).Scan(&topicStatus)
+	_ = db.QueryRow("SELECT status FROM topics WHERE id = ?", res.TopicID).Scan(&topicStatus)
 
 	c.JSON(http.StatusOK, gin.H{
 		"wanted_character_status": Entities.InactiveWantedCharacter,
@@ -805,6 +853,88 @@ func GetClaimAutocomplete(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 	c.JSON(http.StatusOK, scanClaimAutocompleteRows(c, rows, "Failed to scan claim: "))
+}
+
+func PreviewWantedCharacter(c *gin.Context, db *sql.DB) {
+	var req struct {
+		Name         string                 `json:"name"`
+		CustomFields map[string]interface{} `json:"custom_fields"`
+		Factions     []Entities.Faction     `json:"factions"`
+		RelationIds  []int                  `json:"relations"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	cfMap := make(map[string]Entities.CustomFieldValue)
+	for k, v := range req.CustomFields {
+		var rawContent interface{}
+		if m, ok := v.(map[string]interface{}); ok {
+			rawContent = m["content"]
+		} else {
+			rawContent = v
+		}
+		cfMap[k] = Entities.CustomFieldValue{Content: rawContent}
+	}
+
+	fieldConfig, _ := Services.GetFieldConfig("wanted_character", db)
+	for _, conf := range fieldConfig {
+		if conf.FieldType == "text" {
+			if val, ok := cfMap[conf.MachineFieldName]; ok {
+				if s, ok := val.Content.(string); ok {
+					val.ContentHtml = Services.ParseBBCode(s)
+					cfMap[conf.MachineFieldName] = val
+				}
+			}
+		}
+	}
+
+	relations := fetchCharactersByIDs(req.RelationIds, db)
+
+	wantedCharacter := Entities.WantedCharacter{
+		Name:     req.Name,
+		Factions: req.Factions,
+		Relations: relations,
+		CustomFields: Entities.CustomFieldEntity{
+			CustomFields: cfMap,
+			FieldConfig:  fieldConfig,
+		},
+	}
+
+	c.JSON(http.StatusOK, wantedCharacter)
+}
+
+func fetchCharactersByIDs(ids []int, db *sql.DB) []Entities.ShortCharacter {
+	if len(ids) == 0 {
+		return []Entities.ShortCharacter{}
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	rows, err := db.Query(
+		"SELECT id, name, avatar FROM character_base WHERE id IN ("+strings.Join(placeholders, ",")+")",
+		args...,
+	)
+	if err != nil {
+		return []Entities.ShortCharacter{}
+	}
+	defer rows.Close()
+	var result []Entities.ShortCharacter
+	for rows.Next() {
+		var sc Entities.ShortCharacter
+		if rows.Scan(&sc.Id, &sc.Name, &sc.Avatar) == nil {
+			result = append(result, sc)
+		}
+	}
+	if result == nil {
+		return []Entities.ShortCharacter{}
+	}
+	return result
 }
 
 func fetchWantedCharacterRelations(wantedCharacterID int, db *sql.DB) []Entities.ShortCharacter {

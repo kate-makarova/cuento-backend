@@ -112,8 +112,10 @@ type UserNotificationSetting struct {
 }
 
 type NotificationPageChanged struct {
-	PageType string  `json:"page_type"`
-	Id       *string `json:"id,omitempty"`
+	PageType    string  `json:"page_type"`
+	Id          *string `json:"id,omitempty"`
+	SubforumID  *int    `json:"subforum_id,omitempty"`
+	NoHighlight bool    `json:"no_highlight,omitempty"`
 }
 
 type NotificationEpisodeStatusChange struct {
@@ -127,4 +129,27 @@ type NotificationEpisodeStatusChange struct {
 type EpisodeStatusChangeNotification struct {
 	NotificationBase
 	Data NotificationEpisodeStatusChange `json:"data"`
+}
+
+type NotificationTopicSubscription struct {
+	TopicId   int    `json:"topic_id"`
+	TopicName string `json:"topic_name"`
+	PostId    int    `json:"post_id"`
+}
+
+type TopicSubscriptionNotification struct {
+	NotificationBase
+	Data NotificationTopicSubscription `json:"data"`
+}
+
+type NotificationAbsenceStarted struct {
+	UserId          int      `json:"user_id"`
+	Username        string   `json:"username"`
+	AbsenceEndDate  string   `json:"absence_end_date"`
+	Characters      []string `json:"characters"`
+}
+
+type AbsenceStartedNotification struct {
+	NotificationBase
+	Data NotificationAbsenceStarted `json:"data"`
 }

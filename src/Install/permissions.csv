@@ -55,6 +55,8 @@ role_id,type,permission
 2,0,/template/:type/get
 2,0,/topic/create
 2,0,/topic/update/:id
+2,0,/topic/:id/subscribe
+2,0,/topic/:id/unsubscribe
 2,0,/lore-topic/:id/posts
 2,0,/lore-topic/create
 2,0,/lore-topic/update/:id
@@ -87,6 +89,7 @@ role_id,type,permission
 2,0,/wanted-character/activate/:id
 2,0,/wanted-character/create
 2,0,/wanted-character/deactivate/:id
+2,0,/wanted-character/preview
 2,0,/wanted-character/update/:id
 2,0,/puzzle/:id/achievement
 2,0,/puzzle/achievement/:id
@@ -100,6 +103,7 @@ role_id,type,permission
 3,0,/admin/additional-navlink/delete/:id
 3,0,/admin/smile/list
 3,0,/admin/smile/upload
+3,0,/admin/smile/bulk-upload
 3,0,/admin/smile/delete/:id
 3,0,/admin/smile/update-category/:id
 3,0,/admin/smile-category/list
@@ -145,11 +149,15 @@ role_id,type,permission
 3,0,/post-top/:id/update
 3,0,/post-top/create
 3,0,/reaction/activate/:id
+3,0,/reaction/bulk-upload
 3,0,/reaction/create
 3,0,/reaction/deactivate/:id
 3,0,/static-file/list/:file_type
 3,0,/static-file/revert
 3,0,/static-file/upload
+3,0,/asset/list
+3,0,/asset/upload
+3,0,/asset/delete
 3,0,/subforum/create
 3,0,/subforum/delete/:id
 3,0,/subforum/update/:id
@@ -169,6 +177,7 @@ role_id,type,permission
 3,0,/admin/user/update/:id
 3,0,/admin/user/ban/:id
 3,0,/admin/user/reactivate/:id
+3,0,/admin/user/delete/:id
 3,0,/admin/user/roles/update
 3,0,/admin/user/roles/:id
 3,0,/admin/home
@@ -187,6 +196,7 @@ role_id,type,permission
 3,0,/admin/qdrant/status
 3,0,/admin/qdrant/subforum-matrix
 3,0,/admin/qdrant/subforum-matrix/update
+3,0,/admin/smile/bulk-upload
 3,0,/admin/smile/upload
 3,0,/character-claim/delete/:id
 3,0,/admin/claim-record/:id/close
@@ -200,6 +210,15 @@ role_id,type,permission
 3,2,show_add_immunity_button
 3,2,show_character_sheet_admin_block
 3,2,show_ai_chat_navlink
+3,3,edit_others_maps
+3,2,can_create_story_arc
+3,0,/arc/create
+3,0,/arc/update/:id
+3,0,/arc/delete/:id
+2,0,/subforum/list-episode
+2,0,/npc/create
+2,0,/npc/update/:id
+2,0,/npc/delete/:id
 3,0,/ai-chat/message
 3,0,/ai-chat/history
 3,0,/ai-chat/models
@@ -282,3 +301,13 @@ role_id,type,permission
 3,0,/admin/workflow/update/:id
 3,0,/admin/workflow/delete/:id
 2,0,/ai/proofread
+3,0,/admin/posts/move
+2,0,/user/subforum-settings
+2,0,/user/subforum-settings/update-all
+2,0,/user/subscribed-topics
+2,0,/interactive-map/create
+2,0,/interactive-map/update/:id
+2,0,/interactive-map/delete/:id
+3,0,/interactive-map/create
+3,0,/interactive-map/update/:id
+3,0,/interactive-map/delete/:id

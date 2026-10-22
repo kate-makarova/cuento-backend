@@ -18,22 +18,24 @@ import (
 )
 
 type CreateCharacterRequest struct {
-	SubforumID   int                    `json:"subforum_id" binding:"required"`
-	Name         string                 `json:"name" binding:"required"`
-	Avatar       *string                `json:"avatar"`
-	CustomFields map[string]interface{} `json:"custom_fields"`
-	FactionIDs   []Entities.Faction     `json:"factions"`
-	ClaimId      *int                   `json:"claim_id"`
-	ClaimType    string                 `json:"claim_type"`
+	SubforumID    int                    `json:"subforum_id" binding:"required"`
+	Name          string                 `json:"name" binding:"required"`
+	Avatar        *string                `json:"avatar"`
+	CustomFields  map[string]interface{} `json:"custom_fields"`
+	FactionIDs    []Entities.Faction     `json:"factions"`
+	ClaimId       *int                   `json:"claim_id"`
+	ClaimType     string                 `json:"claim_type"`
+	BlockSettings map[string]string      `json:"block_settings"`
 }
 
 type UpdateCharacterRequest struct {
-	Name         string                 `json:"name" binding:"required"`
-	Avatar       *string                `json:"avatar"`
-	CustomFields map[string]interface{} `json:"custom_fields"`
-	FactionIDs   []Entities.Faction     `json:"factions"`
-	ClaimId      *int                   `json:"claim_id"`
-	ClaimType    string                 `json:"claim_type"`
+	Name          string                 `json:"name" binding:"required"`
+	Avatar        *string                `json:"avatar"`
+	CustomFields  map[string]interface{} `json:"custom_fields"`
+	FactionIDs    []Entities.Faction     `json:"factions"`
+	ClaimId       *int                   `json:"claim_id"`
+	ClaimType     string                 `json:"claim_type"`
+	BlockSettings map[string]string      `json:"block_settings"`
 }
 
 func attachPendingClaimRecord(tx *sql.Tx, claimId int, userId int, characterId int64) error {
@@ -248,6 +250,14 @@ func CreateCharacter(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	if len(req.BlockSettings) > 0 {
+		if err := Services.SaveEntityBlockSettings(characterID, "character", req.BlockSettings, tx); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save block settings: " + err.Error()})
+			c.Abort()
+			return
+		}
+	}
+
 	// Handle factions
 	for _, faction := range req.FactionIDs {
 		var factionID int
@@ -321,7 +331,13 @@ func PreviewCharacter(c *gin.Context, db *sql.DB) {
 
 	cfMap := make(map[string]Entities.CustomFieldValue)
 	for k, v := range req.CustomFields {
-		cfMap[k] = Entities.CustomFieldValue{Content: v}
+		var rawContent interface{}
+		if m, ok := v.(map[string]interface{}); ok {
+			rawContent = m["content"]
+		} else {
+			rawContent = v
+		}
+		cfMap[k] = Entities.CustomFieldValue{Content: rawContent}
 	}
 
 	fieldConfig, _ := Services.GetFieldConfig("character", db)
@@ -513,6 +529,9 @@ func UpdateCharacter(c *gin.Context, db *sql.DB) {
 		"name":          req.Name,
 		"avatar":        req.Avatar,
 		"custom_fields": req.CustomFields,
+	}
+	if req.BlockSettings != nil {
+		updates["block_settings"] = req.BlockSettings
 	}
 	_, err = Services.PatchEntity(int64(characterID), "character", updates, tx)
 	if err != nil {
@@ -1402,6 +1421,12 @@ func AcceptCharacter(c *gin.Context, db *sql.DB) {
 	}
 
 	// 3. Send event to EventBus
+	Events.Publish(db, Events.CharacterStatusChanged, Events.CharacterStatusChangedEvent{
+		CharacterID: id,
+		UserID:      userID,
+		OldStatus:   Entities.CharacterStatus(acceptOldCharStatus),
+		NewStatus:   Entities.ActiveCharacter,
+	})
 	Events.Publish(db, Events.CharacterAccepted, Events.CharacterAcceptedEvent{
 		CharacterID:   id,
 		CharacterName: name,
@@ -1802,20 +1827,20 @@ func DeleteCharacterClaim(c *gin.Context, db *sql.DB) {
 
 // CloseActiveClaimRecord expires the active claim record for a given claim and cleans up references on character_claim and wanted_character_base.
 func CloseActiveClaimRecord(c *gin.Context, db *sql.DB) {
-	claimID, err := strconv.Atoi(c.Param("id"))
+	recordID, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid claim ID"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid claim record ID"})
 		c.Abort()
 		return
 	}
 
-	var recordID int
-	err = db.QueryRow(
-		"SELECT id FROM claim_record WHERE claim_id = ? AND (claim_expiration_date IS NULL OR claim_expiration_date > NOW()) LIMIT 1",
-		claimID,
-	).Scan(&recordID)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "No active claim record found for this claim"})
+	var claimID int
+	if err := db.QueryRow("SELECT claim_id FROM claim_record WHERE id = ?", recordID).Scan(&claimID); err != nil {
+		if err == sql.ErrNoRows {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Claim record not found"})
+		} else {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch claim record: " + err.Error()})
+		}
 		c.Abort()
 		return
 	}
@@ -1855,6 +1880,7 @@ func CloseActiveClaimRecord(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, gin.H{"message": "Claim record closed"})
 }
 
+
 func DeactivateCharacter(c *gin.Context, db *sql.DB) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -1862,11 +1888,6 @@ func DeactivateCharacter(c *gin.Context, db *sql.DB) {
 		c.Abort()
 		return
 	}
-
-	var charDeactivateTopicID int64
-	var charDeactivateOldTopicStatus int
-	var charDeactivateOldCharStatus int
-	_ = db.QueryRow("SELECT t.id, t.status, cb.character_status FROM topics t JOIN character_base cb ON cb.topic_id = t.id WHERE cb.id = ?", id).Scan(&charDeactivateTopicID, &charDeactivateOldTopicStatus, &charDeactivateOldCharStatus)
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -1876,51 +1897,20 @@ func DeactivateCharacter(c *gin.Context, db *sql.DB) {
 	}
 	defer tx.Rollback()
 
-	result, err := tx.Exec("UPDATE character_base SET character_status = ? WHERE id = ?", Entities.InactiveCharacter, id)
+	res, found, err := Services.DeactivateCharacterInTx(tx, db, id)
 	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to deactivate character: " + err.Error()})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: err.Error()})
 		c.Abort()
 		return
 	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
+	if !found {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Character not found"})
 		c.Abort()
 		return
 	}
 
-	_, err = tx.Exec("UPDATE topics SET status = ? WHERE id = (SELECT topic_id FROM character_base WHERE id = ?)", Entities.InactiveTopic, id)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to deactivate character topic: " + err.Error()})
-		c.Abort()
-		return
-	}
-
-	Services.AddTopicActivityLog(tx, 0, charDeactivateTopicID, "character_status_changed", charDeactivateOldCharStatus, int(Entities.InactiveCharacter))
-	Services.AddTopicActivityLog(tx, 0, charDeactivateTopicID, "topic_status_changed", charDeactivateOldTopicStatus, int(Entities.InactiveTopic))
-
-	_, err = tx.Exec("UPDATE character_profile_base SET is_archived = true WHERE character_id = ?", id)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to archive character profiles: " + err.Error()})
-		c.Abort()
-		return
-	}
-
-	// If this character was accepted via a claim, free the wanted character again
-	var deactClaimRecordId int
-	var deactClaimId int
-	if err := tx.QueryRow("SELECT id, claim_id FROM claim_record WHERE character_id = ? ORDER BY claim_date DESC LIMIT 1", id).Scan(&deactClaimRecordId, &deactClaimId); err == nil {
-		if _, err := tx.Exec("UPDATE character_claim SET is_claimed = false WHERE id = ?", deactClaimId); err != nil {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to reset character claim: " + err.Error()})
-			c.Abort()
-			return
-		}
-		if _, err := tx.Exec("UPDATE wanted_character_base SET is_claimed = false WHERE character_claim_id = ?", deactClaimId); err != nil {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to free wanted character: " + err.Error()})
-			c.Abort()
-			return
-		}
-	}
+	Services.AddTopicActivityLog(tx, 0, res.TopicID, "character_status_changed", res.OldCharStatus, int(Entities.InactiveCharacter))
+	Services.AddTopicActivityLog(tx, 0, res.TopicID, "topic_status_changed", res.OldTopicStatus, int(Entities.InactiveTopic))
 
 	if err := tx.Commit(); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
@@ -1928,10 +1918,10 @@ func DeactivateCharacter(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	Events.Publish(db, Events.CharacterDeactivated, Events.CharacterDeactivatedEvent{CharacterID: id})
+	Services.PublishCharacterDeactivatedEvents(db, res)
 
 	var topicStatus Entities.TopicStatus
-	_ = db.QueryRow("SELECT status FROM topics WHERE id = (SELECT topic_id FROM character_base WHERE id = ?)", id).Scan(&topicStatus)
+	_ = db.QueryRow("SELECT status FROM topics WHERE id = ?", res.TopicID).Scan(&topicStatus)
 
 	c.JSON(http.StatusOK, gin.H{
 		"character_status": Entities.InactiveCharacter,
@@ -1950,7 +1940,8 @@ func DeclineCharacter(c *gin.Context, db *sql.DB) {
 	var charDeclineTopicID int64
 	var charDeclineOldTopicStatus int
 	var charDeclineOldCharStatus int
-	_ = db.QueryRow("SELECT t.id, t.status, cb.character_status FROM topics t JOIN character_base cb ON cb.topic_id = t.id WHERE cb.id = ?", id).Scan(&charDeclineTopicID, &charDeclineOldTopicStatus, &charDeclineOldCharStatus)
+	var charDeclineUserID int
+	_ = db.QueryRow("SELECT t.id, t.status, cb.character_status, cb.user_id FROM topics t JOIN character_base cb ON cb.topic_id = t.id WHERE cb.id = ?", id).Scan(&charDeclineTopicID, &charDeclineOldTopicStatus, &charDeclineOldCharStatus, &charDeclineUserID)
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -2010,6 +2001,13 @@ func DeclineCharacter(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	Events.Publish(db, Events.CharacterStatusChanged, Events.CharacterStatusChangedEvent{
+		CharacterID: id,
+		UserID:      charDeclineUserID,
+		OldStatus:   Entities.CharacterStatus(charDeclineOldCharStatus),
+		NewStatus:   Entities.DeclinedCharacter,
+	})
+
 	c.JSON(http.StatusOK, gin.H{"character_status": Entities.DeclinedCharacter})
 }
 
@@ -2022,7 +2020,8 @@ func PendingCharacter(c *gin.Context, db *sql.DB) {
 	}
 
 	var currentStatus Entities.CharacterStatus
-	if err := db.QueryRow("SELECT character_status FROM character_base WHERE id = ?", id).Scan(&currentStatus); err != nil {
+	var pendingUserID int
+	if err := db.QueryRow("SELECT character_status, user_id FROM character_base WHERE id = ?", id).Scan(&currentStatus, &pendingUserID); err != nil {
 		if err == sql.ErrNoRows {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Character not found"})
 		} else {
@@ -2075,6 +2074,13 @@ func PendingCharacter(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	Events.Publish(db, Events.CharacterStatusChanged, Events.CharacterStatusChangedEvent{
+		CharacterID: id,
+		UserID:      pendingUserID,
+		OldStatus:   currentStatus,
+		NewStatus:   Entities.PendingCharacter,
+	})
+
 	c.JSON(http.StatusOK, gin.H{"character_status": Entities.PendingCharacter})
 }
 
@@ -2089,7 +2095,8 @@ func ActivateCharacter(c *gin.Context, db *sql.DB) {
 	var charActivateTopicID int64
 	var charActivateOldTopicStatus int
 	var charActivateOldCharStatus int
-	_ = db.QueryRow("SELECT t.id, t.status, cb.character_status FROM topics t JOIN character_base cb ON cb.topic_id = t.id WHERE cb.id = ?", id).Scan(&charActivateTopicID, &charActivateOldTopicStatus, &charActivateOldCharStatus)
+	var charActivateUserID int
+	_ = db.QueryRow("SELECT t.id, t.status, cb.character_status, cb.user_id FROM topics t JOIN character_base cb ON cb.topic_id = t.id WHERE cb.id = ?", id).Scan(&charActivateTopicID, &charActivateOldTopicStatus, &charActivateOldCharStatus, &charActivateUserID)
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -2141,6 +2148,12 @@ func ActivateCharacter(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	Events.Publish(db, Events.CharacterStatusChanged, Events.CharacterStatusChangedEvent{
+		CharacterID: id,
+		UserID:      charActivateUserID,
+		OldStatus:   Entities.CharacterStatus(charActivateOldCharStatus),
+		NewStatus:   Entities.ActiveCharacter,
+	})
 	Events.Publish(db, Events.CharacterActivated, Events.CharacterActivatedEvent{CharacterID: id})
 
 	var topicStatus Entities.TopicStatus

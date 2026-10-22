@@ -13,6 +13,10 @@ import (
 )
 
 var youtubeRegexp = regexp.MustCompile(`(?i)(?:youtube\.com/(?:watch\?(?:.*&)?v=|embed/|shorts/)|youtu\.be/)([a-zA-Z0-9_-]{11})`)
+var soundcloudRe = regexp.MustCompile(`(?i)^https?://soundcloud\.com/`)
+var spotifyRe = regexp.MustCompile(`(?i)open\.spotify\.com/(track|album|playlist|episode)/([a-zA-Z0-9]+)`)
+var archiveRe = regexp.MustCompile(`(?i)archive\.org/(?:details|embed)/([^/?#\s]+)`)
+var bandcampEmbedRe = regexp.MustCompile(`(?i)^https?://bandcamp\.com/EmbeddedPlayer/`)
 
 // autoLinkRe matches either a full HTML tag (kept as-is) or a raw http(s) URL (linkified).
 // Matching tags first ensures URLs already inside href/src attributes are never touched.
@@ -25,6 +29,7 @@ var (
 	viewtopicRe = regexp.MustCompile(`^/viewtopic/(\d+)`)
 	profileRe   = regexp.MustCompile(`^/profile/(\d+)$`)
 	characterRe = regexp.MustCompile(`^/character/(\d+)$`)
+	arcRe       = regexp.MustCompile(`^/arc/(\d+)$`)
 )
 
 func resolveInternalLinkLabel(rawURL, domain string, db *sql.DB) string {
@@ -53,6 +58,8 @@ func resolveInternalLinkLabel(rawURL, domain string, db *sql.DB) string {
 		db.QueryRow("SELECT username FROM users WHERE id = ?", m[1]).Scan(&name)
 	} else if m := characterRe.FindStringSubmatch(path); m != nil {
 		db.QueryRow("SELECT name FROM character_base WHERE id = ?", m[1]).Scan(&name)
+	} else if m := arcRe.FindStringSubmatch(path); m != nil {
+		db.QueryRow("SELECT title FROM arcs WHERE id = ?", m[1]).Scan(&name)
 	} else {
 		name = strings.ReplaceAll(strings.Trim(path, "/"), "-", " ")
 	}
@@ -89,6 +96,59 @@ func LinkifyURLs(input, domain string, db *sql.DB) string {
 }
 var audioExtRegexp = regexp.MustCompile(`(?i)\.(mp3|ogg|wav|flac|aac|m4a|opus|webm)(\?.*)?$`)
 var cssDimensionRe = regexp.MustCompile(`^[a-zA-Z0-9.%\-]+$`)
+
+var allowedDivStyleProps = map[string]bool{
+	"border":          true,
+	"background":      true,
+	"width":           true,
+	"height":          true,
+	"max-height":      true,
+	"min-height":      true,
+	"max-width":       true,
+	"min-width":       true,
+	"display":         true,
+	"color":           true,
+	"font-family":     true,
+	"font-style":      true,
+	"text-decoration": true,
+	"text-shadow":     true,
+	"text-align":      true,
+	"text-transform":  true,
+	"padding":         true,
+	"margin":          true,
+	"flex-direction":  true,
+	"gap":             true,
+	"line-height":     true,
+	"float":           true,
+	"transform":       true,
+}
+
+var allowedDisplayValues = map[string]bool{
+	"inline":       true,
+	"block":        true,
+	"inline-block": true,
+	"flex":         true,
+}
+
+var allowedTextAlignValues = map[string]bool{
+	"left": true, "right": true, "center": true, "justify": true,
+}
+
+var allowedTextTransformValues = map[string]bool{
+	"none": true, "uppercase": true, "lowercase": true, "capitalize": true,
+}
+
+var allowedFlexDirectionValues = map[string]bool{
+	"row": true, "row-reverse": true, "column": true, "column-reverse": true,
+}
+
+var allowedFloatValues = map[string]bool{
+	"left": true, "right": true, "none": true,
+}
+
+var unsafeCSSRe = regexp.MustCompile(`(?i)(javascript\s*:|expression\s*\(|behavior\s*:|vbscript\s*:|-moz-binding)`)
+
+var transformRe = regexp.MustCompile(`(?i)^(?:(?:rotate|scale[XY]?|skew[XY]?)\([-\d.,\s%degratun]+\)\s*)+$`)
 
 // getRawArg extracts a named arg directly from the raw tag string, bypassing
 // the bbcode library's quoted-value parser which corrupts multi-byte UTF-8.
@@ -147,8 +207,242 @@ func getArgInt(node *bbcode.BBCodeNode, key string, min, max int) (int, bool) {
 
 var bbCompiler = GetBBCompiler()
 
+// Matches whitespace/newlines that sit between two structural grid/table BB
+// tags. Both neighbours must be structural so that newlines after [/table] or
+// before [table] (paragraph separators) are preserved.
+var structuralTagNewlineRe = regexp.MustCompile(`(?i)(\[/?(?:table|tr|td|grid(?:-item)?)[^\]]*\])([ \t]*\n)+[ \t]*(\[/?(?:table|tr|td|grid(?:-item)?)[^\]]*\])`)
+
 func ParseBBCode(text string) string {
+	// Each pass collapses one layer of whitespace; loop until nothing changes
+	// (needed because consuming the second tag as $3 prevents it from
+	// anchoring the next match in the same pass).
+	for {
+		stripped := structuralTagNewlineRe.ReplaceAllString(text, "$1$3")
+		if stripped == text {
+			break
+		}
+		text = stripped
+	}
 	return bbCompiler.Compile(text)
+}
+
+var hideBlockRe = regexp.MustCompile(`(?s)<hide-block data-users="([^"]*)">(.*?)</hide-block>`)
+
+func isArcGMForTopic(userID, topicID int, db *sql.DB) bool {
+	if userID == 0 || topicID == 0 {
+		return false
+	}
+	var count int
+	db.QueryRow(`
+		SELECT COUNT(*) FROM arc_game_masters agm
+		JOIN arc_episodes ae ON ae.arc_id = agm.arc_id
+		JOIN episode_base eb ON eb.id = ae.episode_id
+		WHERE eb.topic_id = ? AND agm.user_id = ?`, topicID, userID).Scan(&count)
+	if count > 0 {
+		return true
+	}
+	db.QueryRow(`
+		SELECT COUNT(*) FROM arcs a
+		JOIN arc_episodes ae ON ae.arc_id = a.id
+		JOIN episode_base eb ON eb.id = ae.episode_id
+		WHERE eb.topic_id = ? AND a.creator_id = ?`, topicID, userID).Scan(&count)
+	return count > 0
+}
+
+func ProcessHideBlocks(content string, userID int, topicID int, db *sql.DB) string {
+	isGM := isArcGMForTopic(userID, topicID, db)
+	return hideBlockRe.ReplaceAllStringFunc(content, func(match string) string {
+		sub := hideBlockRe.FindStringSubmatch(match)
+		if len(sub) < 3 {
+			return ""
+		}
+
+		allowed := isGM
+		var userIDs []int
+		for _, s := range strings.Split(sub[1], ",") {
+			s = strings.TrimSpace(s)
+			if id, err := strconv.Atoi(s); err == nil {
+				userIDs = append(userIDs, id)
+				if id == userID {
+					allowed = true
+				}
+			}
+		}
+		if !allowed {
+			return ""
+		}
+
+		// Fetch usernames for the header
+		placeholders := strings.Repeat("?,", len(userIDs)-1) + "?"
+		args := make([]interface{}, len(userIDs))
+		for i, id := range userIDs {
+			args[i] = id
+		}
+		type userLink struct{ id int; username string }
+		var users []userLink
+		if rows, err := db.Query("SELECT id, username FROM users WHERE id IN ("+placeholders+")", args...); err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var u userLink
+				if rows.Scan(&u.id, &u.username) == nil {
+					users = append(users, u)
+				}
+			}
+		}
+
+		var sb strings.Builder
+		sb.WriteString(`<div class="hide-block">`)
+		sb.WriteString(`<div class="hide-header">Visible to: `)
+		for i, u := range users {
+			if i > 0 {
+				sb.WriteString(", ")
+			}
+			sb.WriteString(`<a class="hide-user-link" href="/profile/`)
+			sb.WriteString(strconv.Itoa(u.id))
+			sb.WriteString(`" target="_blank">`)
+			sb.WriteString(html.EscapeString(u.username))
+			sb.WriteString(`</a>`)
+		}
+		sb.WriteString(`</div><div class="hide-body">`)
+		sb.WriteString(sub[2])
+		sb.WriteString(`</div></div>`)
+		return sb.String()
+	})
+}
+
+var npcLookupRe = regexp.MustCompile(`<npc-lookup data-id="(\d+)">(?:</npc-lookup>)?`)
+
+func ResolveNPCPlaceholders(content string, db *sql.DB) string {
+	matches := npcLookupRe.FindAllStringSubmatch(content, -1)
+	if len(matches) == 0 {
+		return content
+	}
+
+	ids := make([]interface{}, 0, len(matches))
+	seen := make(map[string]bool)
+	for _, m := range matches {
+		if !seen[m[1]] {
+			ids = append(ids, m[1])
+			seen[m[1]] = true
+		}
+	}
+
+	placeholders := strings.Repeat("?,", len(ids)-1) + "?"
+	rows, err := db.Query("SELECT id, name, avatar FROM npc WHERE id IN ("+placeholders+")", ids...)
+	if err != nil {
+		return content
+	}
+	defer rows.Close()
+
+	type npcData struct{ name, avatar string }
+	npcs := make(map[string]npcData)
+	for rows.Next() {
+		var id int
+		var name string
+		var avatar sql.NullString
+		if rows.Scan(&id, &name, &avatar) == nil {
+			n := npcData{name: name}
+			if avatar.Valid {
+				n.avatar = avatar.String
+			}
+			npcs[strconv.Itoa(id)] = n
+		}
+	}
+
+	return npcLookupRe.ReplaceAllStringFunc(content, func(match string) string {
+		sub := npcLookupRe.FindStringSubmatch(match)
+		if len(sub) < 2 {
+			return match
+		}
+		npc, ok := npcs[sub[1]]
+		if !ok {
+			return ""
+		}
+		var sb strings.Builder
+		sb.WriteString(`<a class="npc-link" href="/npc/`)
+		sb.WriteString(sub[1])
+		sb.WriteString(`" target="_blank">`)
+		if npc.avatar != "" {
+			sb.WriteString(`<img class="npc-avatar" src="`)
+			sb.WriteString(html.EscapeString(npc.avatar))
+			sb.WriteString(`" alt="`)
+			sb.WriteString(html.EscapeString(npc.name))
+			sb.WriteString(`">`)
+		}
+		sb.WriteString(`<span class="npc-name">`)
+		sb.WriteString(html.EscapeString(npc.name))
+		sb.WriteString(`</span></a>`)
+		return sb.String()
+	})
+}
+
+// collectNpcIDs recursively walks a BBCode node tree and returns the id
+// attribute of every [npc] tag found, in document order. This is needed
+// because [npc id=1][npc id=2] (without explicit closing tags) causes the
+// parser to nest id=2 inside id=1, so a flat children scan would miss it.
+func collectNpcIDs(node *bbcode.BBCodeNode) []string {
+	var ids []string
+	for _, child := range node.Children {
+		if openTag := child.GetOpeningTag(); openTag != nil && openTag.Name == "npc" {
+			if idStr, ok := getRawArg(child, "id"); ok {
+				if _, err := strconv.Atoi(idStr); err == nil {
+					ids = append(ids, idStr)
+				}
+			}
+		}
+		ids = append(ids, collectNpcIDs(child)...)
+	}
+	return ids
+}
+
+func sanitizeStyle(raw string) string {
+	var parts []string
+	for _, decl := range strings.Split(raw, ";") {
+		decl = strings.TrimSpace(decl)
+		if decl == "" {
+			continue
+		}
+		idx := strings.Index(decl, ":")
+		if idx < 0 {
+			continue
+		}
+		prop := strings.ToLower(strings.TrimSpace(decl[:idx]))
+		val := strings.TrimSpace(decl[idx+1:])
+		if val == "" || !allowedDivStyleProps[prop] {
+			continue
+		}
+		if unsafeCSSRe.MatchString(val) {
+			continue
+		}
+		if prop == "display" && !allowedDisplayValues[strings.ToLower(val)] {
+			continue
+		}
+		if prop == "text-align" && !allowedTextAlignValues[strings.ToLower(val)] {
+			continue
+		}
+		if prop == "text-transform" && !allowedTextTransformValues[strings.ToLower(val)] {
+			continue
+		}
+		if prop == "flex-direction" && !allowedFlexDirectionValues[strings.ToLower(val)] {
+			continue
+		}
+		if prop == "float" && !allowedFloatValues[strings.ToLower(val)] {
+			continue
+		}
+		if prop == "transform" && !transformRe.MatchString(val) {
+			continue
+		}
+		parts = append(parts, prop+": "+val)
+	}
+	return strings.Join(parts, "; ")
+}
+
+func applyStyle(node *bbcode.BBCodeNode, out *bbcode.HTMLTag) {
+	if raw, ok := getRawArg(node, "style"); ok {
+		if sanitized := sanitizeStyle(raw); sanitized != "" {
+			out.Attrs["style"] = html.EscapeString(sanitized)
+		}
+	}
 }
 
 func GetBBCompiler() bbcode.Compiler {
@@ -198,20 +492,15 @@ func GetBBCompiler() bbcode.Compiler {
 			out.Attrs["class"] = class
 		}
 
-		var style string
-		if border, ok := getArg(node, "border"); ok {
-			style += fmt.Sprintf("border: %s;", border)
-		}
-		if width, ok := getArg(node, "width"); ok {
-			style += fmt.Sprintf(" width: %s;", width)
-		}
-		if height, ok := getArg(node, "height"); ok {
-			style += fmt.Sprintf(" height: %s;", height)
-		}
-		if style != "" {
-			out.Attrs["style"] = style
-		}
+		applyStyle(node, out)
 
+		return out, true
+	})
+
+	compiler.SetTag("span", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "span"
+		applyStyle(node, out)
 		return out, true
 	})
 
@@ -375,14 +664,79 @@ func GetBBCompiler() bbcode.Compiler {
 
 	compiler.SetTag("audio", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
 		out := bbcode.NewHTMLTag("")
-		url := strings.TrimSpace(bbcode.CompileText(node))
-		if !audioExtRegexp.MatchString(url) {
+		rawURL := strings.TrimSpace(bbcode.CompileText(node))
+
+		sourceSite, hasSourceSite := getRawArg(node, "source_site")
+		if !hasSourceSite {
+			// File-based audio (<audio> element)
+			if !audioExtRegexp.MatchString(rawURL) {
+				return out, false
+			}
+			out.Name = "audio"
+			out.Attrs["src"] = html.EscapeString(rawURL)
+			out.Attrs["controls"] = "true"
+			out.Attrs["preload"] = "metadata"
+			return out, true
+		}
+
+		// Streaming service embeds (<iframe>)
+		type embedCfg struct {
+			src    string
+			height string
+			allow  string
+		}
+		var cfg embedCfg
+
+		switch strings.ToLower(sourceSite) {
+		case "soundcloud":
+			if !soundcloudRe.MatchString(rawURL) {
+				return out, false
+			}
+			cfg = embedCfg{
+				src:    "https://w.soundcloud.com/player/?url=" + url.QueryEscape(rawURL),
+				height: "166",
+				allow:  "autoplay",
+			}
+		case "spotify":
+			m := spotifyRe.FindStringSubmatch(rawURL)
+			if len(m) < 3 {
+				return out, false
+			}
+			cfg = embedCfg{
+				src:    "https://open.spotify.com/embed/" + m[1] + "/" + m[2],
+				height: "152",
+				allow:  "autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture",
+			}
+		case "archive":
+			m := archiveRe.FindStringSubmatch(rawURL)
+			if len(m) < 2 {
+				return out, false
+			}
+			cfg = embedCfg{
+				src:    "https://archive.org/embed/" + m[1],
+				height: "60",
+				allow:  "autoplay",
+			}
+		case "bandcamp":
+			if !bandcampEmbedRe.MatchString(rawURL) {
+				return out, false
+			}
+			cfg = embedCfg{
+				src:    rawURL,
+				height: "120",
+				allow:  "autoplay",
+			}
+		default:
 			return out, false
 		}
-		out.Name = "audio"
-		out.Attrs["src"] = html.EscapeString(url)
-		out.Attrs["controls"] = "true"
-		out.Attrs["preload"] = "metadata"
+
+		out.Name = "iframe"
+		out.Attrs["src"] = html.EscapeString(cfg.src)
+		out.Attrs["width"] = "100%"
+		out.Attrs["height"] = cfg.height
+		out.Attrs["frameborder"] = "0"
+		out.Attrs["allow"] = cfg.allow
+		out.Attrs["loading"] = "lazy"
 		return out, true
 	})
 
@@ -444,6 +798,71 @@ func GetBBCompiler() bbcode.Compiler {
 		return out, true
 	})
 
+	compiler.SetTag("quote", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "blockquote"
+
+		// Extract the tag value (author name), stripping surrounding quotes if present.
+		author := node.GetOpeningTag().Value
+		if raw := node.GetOpeningTag().Raw; strings.Contains(raw, "=") {
+			rest := raw[strings.Index(raw, "=")+1:]
+			if len(rest) > 0 && (rest[0] == '"' || rest[0] == '\'') {
+				quoteChar := rest[0]
+				if end := strings.IndexByte(rest[1:], quoteChar); end >= 0 {
+					author = rest[1 : end+1]
+				}
+			}
+		}
+
+		var href string
+		topicID, hasTopicID := getRawArg(node, "topic-id")
+		postID, hasPostID := getRawArg(node, "post-id")
+		if author != "" && hasTopicID && hasPostID {
+			if _, err := strconv.Atoi(topicID); err == nil {
+				if _, err := strconv.Atoi(postID); err == nil {
+					href = "/viewtopic/" + topicID + "?post_id=" + postID
+				}
+			}
+		}
+
+		cite := bbcode.NewHTMLTag("")
+		cite.Name = "cite"
+		if author != "" {
+			if href != "" {
+				link := bbcode.NewHTMLTag("")
+				link.Name = "a"
+				link.Attrs["href"] = href
+				link.AppendChild(bbcode.NewHTMLTag(author))
+				cite.AppendChild(link)
+				cite.AppendChild(bbcode.NewHTMLTag(" said:"))
+			} else {
+				cite.AppendChild(bbcode.NewHTMLTag(author + " said:"))
+			}
+		} else {
+			cite.AppendChild(bbcode.NewHTMLTag("Quote"))
+		}
+
+		return out.AppendChild(cite), true
+	})
+
+	compiler.SetTag("url", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "a"
+		value := node.GetOpeningTag().Value
+		if value == "" {
+			text := bbcode.CompileText(node)
+			if len(text) > 0 {
+				out.Attrs["href"] = bbcode.ValidURL(text)
+			}
+		} else {
+			out.Attrs["href"] = bbcode.ValidURL(value)
+		}
+		if target, ok := getRawArg(node, "target"); ok && target == "_blank" {
+			out.Attrs["target"] = "_blank"
+		}
+		return out, true
+	})
+
 	compiler.SetTag("img", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
 		out := bbcode.NewHTMLTag("")
 		out.Name = "img"
@@ -471,6 +890,63 @@ func GetBBCompiler() bbcode.Compiler {
 		out.Attrs["loading"] = "lazy"
 		out.Attrs["referrerpolicy"] = "no-referrer"
 
+		return out, false
+	})
+
+	compiler.SetTag("hide", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "hide-block"
+		if users, ok := getRawArg(node, "users"); ok {
+			// Allow only digits and commas
+			safe := true
+			for _, ch := range users {
+				if (ch < '0' || ch > '9') && ch != ',' {
+					safe = false
+					break
+				}
+			}
+			if safe {
+				out.Attrs["data-users"] = users
+			}
+		}
+		return out, true
+	})
+
+	compiler.SetTag("npc-block", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "div"
+		out.Attrs["class"] = "npc-block"
+		return out, true
+	})
+
+	compiler.SetTag("npc-header", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "div"
+		out.Attrs["class"] = "npc-header"
+		for _, idStr := range collectNpcIDs(node) {
+			lookup := bbcode.NewHTMLTag("")
+			lookup.Name = "npc-lookup"
+			lookup.Attrs["data-id"] = idStr
+			out.AppendChild(lookup)
+		}
+		return out, false
+	})
+
+	compiler.SetTag("npc-body", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "div"
+		out.Attrs["class"] = "npc-body"
+		return out, true
+	})
+
+	compiler.SetTag("npc", func(node *bbcode.BBCodeNode) (*bbcode.HTMLTag, bool) {
+		out := bbcode.NewHTMLTag("")
+		out.Name = "npc-lookup"
+		if idStr, ok := getRawArg(node, "id"); ok {
+			if _, err := strconv.Atoi(idStr); err == nil {
+				out.Attrs["data-id"] = idStr
+			}
+		}
 		return out, false
 	})
 

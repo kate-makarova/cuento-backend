@@ -38,6 +38,8 @@ type ViewforumRow struct {
 	IsSticky               bool                 `json:"is_sticky"`
 	IsStickyFirstPost      bool                 `json:"is_sticky_first_post"`
 	FirstPostId            *int                 `json:"first_post_id"`
+	SubforumId             int                  `json:"subforum_id,omitempty"`
+	SubforumName           string               `json:"subforum_name,omitempty"`
 }
 
 type CreateTopicRequest struct {
@@ -50,12 +52,15 @@ type CreateTopicRequest struct {
 }
 
 type CreatePostRequest struct {
-	TopicID             int     `json:"topic_id" binding:"required"`
+	TopicID             int     `json:"topic_id"`
+	SubforumID          *int    `json:"subforum_id"`
 	Content             string  `json:"content" binding:"required"`
 	UseCharacterProfile bool    `json:"use_character_profile"`
 	CharacterProfileID  *int    `json:"character_profile_id"`
 	GuestName           *string `json:"guest_name"`
 	FromDraftID         *string `json:"from_draft_id"`
+	IdempotencyKey      *string `json:"idempotency_key"`
+	IsGmPost            bool    `json:"is_gm_post"`
 }
 
 type UpdatePostRequest struct {
@@ -104,6 +109,19 @@ func GetTopicsBySubforum(c *gin.Context, db *sql.DB) {
 
 	userTimezone := Services.GetUserTimezone(userID, db)
 
+	// If the user has opted out of tracking new posts for this subforum, suppress the not_viewed marker.
+	notViewedUserID := userID
+	if userID != 0 {
+		var hideIndex bool
+		_ = db.QueryRow(
+			"SELECT hide_new_posts_index FROM user_subforum_settings WHERE user_id = ? AND subforum_id = ?",
+			userID, subforum,
+		).Scan(&hideIndex)
+		if hideIndex {
+			notViewedUserID = 0
+		}
+	}
+
 	var topics []ViewforumRow
 
 	limit := 30
@@ -125,7 +143,7 @@ func GetTopicsBySubforum(c *gin.Context, db *sql.DB) {
 		ORDER BY COALESCE(topics.is_sticky, false) DESC, topics.date_last_post DESC
 		LIMIT ? OFFSET ?
 	`
-	rows, err := db.Query(query, userID, userID, subforum, Entities.DeletedTopic, limit, page*limit)
+	rows, err := db.Query(query, notViewedUserID, userID, subforum, Entities.DeletedTopic, limit, page*limit)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get topics: " + err.Error()})
@@ -353,7 +371,8 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 			cp.id as character_profile_id, cp.character_id, cb.name as character_name, cp.avatar as character_avatar, cp.mask_name, cp.is_mask, cp.signature as character_signature,
 			u.signature as user_signature,
 			t.subforum_id, t.type as topic_type,
-			ec.custom_avatar as episode_custom_avatar
+			ec.custom_avatar as episode_custom_avatar,
+			p.is_gm_post
 			%s
 		FROM posts p
 		JOIN topics t ON p.topic_id = t.id
@@ -442,8 +461,12 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 		post.DateCreated = dateCreated
 		post.DateCreatedLocalized = Services.LocalizeTime(post.DateCreated, userTimezone)
 		post.Content = rowMap["content"].(string)
-		post.ContentHtml = Services.LinkifyURLs(Services.ParseBBCode(post.Content), domain, db)
+		post.ContentHtml = Services.ProcessHideBlocks(Services.LinkifyURLs(Services.ResolveNPCPlaceholders(Services.ParseBBCode(post.Content), db), domain, db), currentUserID, topicID, db)
 		post.UseCharacterProfile, _ = strconv.ParseBool(rowMap["use_character_profile"].(string))
+		if v, ok := rowMap["is_gm_post"]; ok {
+			b, _ := strconv.ParseBool(v.(string))
+			post.IsGmPost = &b
+		}
 		subforumID, _ = strconv.Atoi(rowMap["subforum_id"].(string))
 		topicTypeInt, _ := strconv.Atoi(rowMap["topic_type"].(string))
 		if Entities.TopicType(topicTypeInt) != Entities.EpisodeTopic {
@@ -738,6 +761,12 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 
 	topic.CanEdit = &canEdit
 
+	if currentUserID != 0 {
+		var subCount int
+		db.QueryRow("SELECT COUNT(*) FROM user_topic_subscription WHERE user_id = ? AND topic_id = ?", currentUserID, topic.Id).Scan(&subCount)
+		topic.IsSubscribed = subCount > 0
+	}
+
 	if topic.Type == Entities.EpisodeTopic {
 		var episodeID int
 		err := db.QueryRow("SELECT id FROM episode_base WHERE topic_id = ?", topic.Id).Scan(&episodeID)
@@ -809,6 +838,22 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 				var hasConsent bool
 				_ = db.QueryRow("SELECT EXISTS(SELECT 1 FROM user_episode_warnings_consent WHERE episode_id = ? AND user_id = ?)", episode.Id, currentUserID).Scan(&hasConsent)
 				episode.WarningsConsent = hasConsent
+			}
+
+			// Arc membership
+			var arcID int
+			var arcTitle string
+			if err := db.QueryRow(
+				"SELECT a.id, a.title FROM arcs a JOIN arc_episodes ae ON ae.arc_id = a.id WHERE ae.episode_id = ? LIMIT 1",
+				episode.Id,
+			).Scan(&arcID, &arcTitle); err == nil {
+				episode.IsArc = true
+				episode.Arc = &Entities.EpisodeArc{ID: arcID, Title: arcTitle}
+				if currentUserID != 0 {
+					var gmCount int
+					db.QueryRow("SELECT COUNT(*) FROM arc_game_masters WHERE arc_id = ? AND user_id = ?", arcID, currentUserID).Scan(&gmCount)
+					episode.IsGM = gmCount > 0
+				}
 			}
 
 			topic.Episode = episode
@@ -1008,13 +1053,50 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 		}
 	}
 
-	// Insert Post
-	res, err := tx.Exec("INSERT INTO posts (topic_id, author_user_id, content, date_created, use_character_profile, character_profile_id, guest_name) VALUES (?, ?, ?, NOW(), ?, ?, ?)",
-		req.TopicID, userID, req.Content, req.UseCharacterProfile, req.CharacterProfileID, guestName)
+	// Validate is_gm_post: only allowed if user is a GM of the arc this episode belongs to
+	var isGmPost *bool
+	if req.IsGmPost {
+		var episodeID int
+		var arcID int
+		if err := tx.QueryRow("SELECT eb.id FROM episode_base eb JOIN topics t ON t.id = eb.topic_id WHERE t.id = ?", req.TopicID).Scan(&episodeID); err == nil {
+			if err := tx.QueryRow("SELECT arc_id FROM arc_episodes WHERE episode_id = ?", episodeID).Scan(&arcID); err == nil {
+				var gmCount int
+				tx.QueryRow("SELECT COUNT(*) FROM arc_game_masters WHERE arc_id = ? AND user_id = ?", arcID, userID).Scan(&gmCount)
+				if gmCount > 0 {
+					t := true
+					isGmPost = &t
+				}
+			}
+		}
+		if isGmPost == nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You are not a game master of the arc this episode belongs to"})
+			return
+		}
+	}
+
+	// Insert Post — INSERT IGNORE deduplicates via idempotency_key unique constraint
+	res, err := tx.Exec("INSERT IGNORE INTO posts (topic_id, author_user_id, content, date_created, use_character_profile, character_profile_id, guest_name, idempotency_key, is_gm_post) VALUES (?, ?, ?, NOW(), ?, ?, ?, ?, ?)",
+		req.TopicID, userID, req.Content, req.UseCharacterProfile, req.CharacterProfileID, guestName, req.IdempotencyKey, isGmPost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert post: " + err.Error()})
 		return
 	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get rows affected"})
+		return
+	}
+	if rowsAffected == 0 {
+		// Duplicate idempotency_key — request already processed
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"deduplicated": true})
+		return
+	}
+
 	postID, err := res.LastInsertId()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get post ID"})
@@ -1131,6 +1213,12 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 				Post:       *fullPost,
 			})
 		}
+		if req.IsGmPost {
+			Events.Publish(db, Events.NpcUsed, Events.NpcUsedEvent{
+				PostID:  int(postID),
+				Content: req.Content,
+			})
+		}
 	}
 
 	if req.FromDraftID != nil && *req.FromDraftID != "" {
@@ -1164,8 +1252,17 @@ func PreviewPost(c *gin.Context, db *sql.DB) {
 
 	var topicType int
 	var previewSubforumID int
-	if err := db.QueryRow("SELECT type, COALESCE(subforum_id, 0) FROM topics WHERE id = ?", req.TopicID).Scan(&topicType, &previewSubforumID); err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Topic not found"})
+	if req.TopicID != 0 {
+		if err := db.QueryRow("SELECT type, COALESCE(subforum_id, 0) FROM topics WHERE id = ?", req.TopicID).Scan(&topicType, &previewSubforumID); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Topic not found"})
+			c.Abort()
+			return
+		}
+	} else if req.SubforumID != nil {
+		previewSubforumID = *req.SubforumID
+		topicType = int(Entities.GeneralTopic)
+	} else {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "topic_id or subforum_id is required"})
 		c.Abort()
 		return
 	}
@@ -1181,18 +1278,21 @@ func PreviewPost(c *gin.Context, db *sql.DB) {
 
 	if req.UseCharacterProfile && req.CharacterProfileID != nil {
 		row := db.QueryRow(`
-			SELECT cp.id, cp.character_id, cb.name, cp.avatar, cp.mask_name, cp.is_mask
+			SELECT cp.id, cp.character_id, COALESCE(cb.name, ''), cp.avatar, cp.mask_name, cp.is_mask
 			FROM character_profile_base cp
-			JOIN character_base cb ON cp.character_id = cb.id
+			LEFT JOIN character_base cb ON cp.character_id = cb.id
 			WHERE cp.id = ?`, *req.CharacterProfileID)
 
 		var charProfile Entities.CharacterProfile
-		var isMask bool
+		var isMask sql.NullBool
 		var maskName, avatar sql.NullString
-		var charID int
+		var charID sql.NullInt64
 		var charName string
 		if err := row.Scan(&charProfile.Id, &charID, &charName, &avatar, &maskName, &isMask); err == nil {
-			charProfile.CharacterId = &charID
+			if charID.Valid {
+				id := int(charID.Int64)
+				charProfile.CharacterId = &id
+			}
 			charProfile.CharacterName = charName
 			if avatar.Valid {
 				charProfile.Avatar = &avatar.String
@@ -1200,7 +1300,14 @@ func PreviewPost(c *gin.Context, db *sql.DB) {
 			if maskName.Valid {
 				charProfile.MaskName = &maskName.String
 			}
-			charProfile.IsMask = &isMask
+			if isMask.Valid {
+				charProfile.IsMask = &isMask.Bool
+			}
+			if entity, err := Services.GetEntity(int64(charProfile.Id), "character_profile", db); err == nil {
+				if fullProfile, ok := entity.(*Entities.CharacterProfile); ok {
+					charProfile.CustomFields = fullProfile.CustomFields
+				}
+			}
 		}
 		post.CharacterProfile = &charProfile
 	} else {
@@ -1415,6 +1522,13 @@ func UpdatePost(c *gin.Context, db *sql.DB) {
 			SubforumID: subforumID,
 			Post:       *updatedPost,
 		})
+		if updatedPost.IsGmPost != nil && *updatedPost.IsGmPost {
+			Events.Publish(db, Events.NpcUsed, Events.NpcUsedEvent{
+				PostID:   postID,
+				Content:  req.Content,
+				IsUpdate: true,
+			})
+		}
 	}
 
 	c.JSON(http.StatusOK, updatedPost)
@@ -1818,23 +1932,31 @@ func GetActiveTopics(c *gin.Context, db *sql.DB) {
 		       t.author_user_id, u.username as author_username,
 		       t.last_post_author_user_id, u2.username as last_post_author_username,
 		       (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0)) as last_post_id,
-		       (CASE WHEN ? != 0 AND (utv.post_id IS NULL OR utv.post_id < (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0))) THEN 1 ELSE 0 END) as not_viewed,
-		       utv.post_id as last_viewed_id
+		       (CASE WHEN ? != 0 AND COALESCE(uss.hide_new_posts_index, 0) = 0 AND (utv.post_id IS NULL OR utv.post_id < (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0))) THEN 1 ELSE 0 END) as not_viewed,
+		       utv.post_id as last_viewed_id,
+		       t.subforum_id, s.name as subforum_name
 		FROM topics t
 		JOIN users u ON t.author_user_id = u.id
 		LEFT JOIN users u2 ON t.last_post_author_user_id = u2.id
 		LEFT JOIN user_topic_view utv ON t.id = utv.topic_id AND utv.user_id = ?
+		LEFT JOIN user_subforum_settings uss ON uss.subforum_id = t.subforum_id AND uss.user_id = ?
+		JOIN subforums s ON t.subforum_id = s.id
 		WHERE t.subforum_id IN (%s)
 	`, placeholders)
 
 	var args []interface{}
-	args = append(args, userID, userID)
+	args = append(args, userID, userID, userID)
 	for _, id := range filteredSubforumIDs {
 		args = append(args, id)
 	}
 
 	if notViewed && userID != 0 {
 		query += " AND (utv.post_id IS NULL OR utv.post_id < (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0)))"
+	}
+
+	if userID != 0 {
+		query += " AND t.subforum_id NOT IN (SELECT subforum_id FROM user_subforum_settings WHERE user_id = ? AND hide_new_posts_active_page = 1)"
+		args = append(args, userID)
 	}
 
 	query += " AND t.date_last_post >= DATE_SUB(NOW(), INTERVAL 10 DAY)"
@@ -1871,6 +1993,79 @@ func GetActiveTopics(c *gin.Context, db *sql.DB) {
 			&topic.LastPostId,
 			&topic.NotViewed,
 			&topic.LastViewedId,
+			&topic.SubforumId,
+			&topic.SubforumName,
+		); err != nil {
+			continue
+		}
+		if topic.DateLastPost != nil {
+			localized := Services.LocalizeTime(*topic.DateLastPost, userTimezone)
+			topic.DateLastPostLocalized = &localized
+		}
+		topics = append(topics, topic)
+	}
+
+	if topics == nil {
+		topics = []ViewforumRow{}
+	}
+
+	c.JSON(http.StatusOK, topics)
+}
+
+func GetUserSubscribedTopics(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	if userID == 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	userTimezone := Services.GetUserTimezone(userID, db)
+
+	query := `
+		SELECT t.id, t.status, t.name, t.type, t.date_last_post, t.post_number,
+		       t.author_user_id, u.username as author_username,
+		       t.last_post_author_user_id, u2.username as last_post_author_username,
+		       (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0)) as last_post_id,
+		       (CASE WHEN utv.post_id IS NULL OR utv.post_id < (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0)) THEN 1 ELSE 0 END) as not_viewed,
+		       utv.post_id as last_viewed_id,
+		       t.subforum_id, s.name as subforum_name
+		FROM topics t
+		JOIN users u ON t.author_user_id = u.id
+		LEFT JOIN users u2 ON t.last_post_author_user_id = u2.id
+		LEFT JOIN user_topic_view utv ON t.id = utv.topic_id AND utv.user_id = ?
+		JOIN user_topic_subscription uts ON t.id = uts.topic_id AND uts.user_id = ?
+		JOIN subforums s ON t.subforum_id = s.id
+		WHERE t.status != ?
+		ORDER BY t.date_last_post DESC
+	`
+
+	rows, err := db.Query(query, userID, userID, Entities.DeletedTopic)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get subscribed topics: " + err.Error()})
+		c.Abort()
+		return
+	}
+	defer rows.Close()
+
+	var topics []ViewforumRow
+	for rows.Next() {
+		var topic ViewforumRow
+		if err := rows.Scan(
+			&topic.Id,
+			&topic.Status,
+			&topic.Name,
+			&topic.Type,
+			&topic.DateLastPost,
+			&topic.PostNumber,
+			&topic.AuthorUserId,
+			&topic.AuthorUsername,
+			&topic.LastPostAuthorUserId,
+			&topic.LastPostAuthorUsername,
+			&topic.LastPostId,
+			&topic.NotViewed,
+			&topic.LastViewedId,
+			&topic.SubforumId,
+			&topic.SubforumName,
 		); err != nil {
 			continue
 		}
@@ -1956,6 +2151,11 @@ func GetActiveTopicCount(c *gin.Context, db *sql.DB) {
 		query += " AND (utv.post_id IS NULL OR utv.post_id < (SELECT MAX(id) FROM posts WHERE topic_id = t.id AND (is_deleted IS NULL OR is_deleted = 0)))"
 	}
 
+	if userID != 0 {
+		query += " AND t.subforum_id NOT IN (SELECT subforum_id FROM user_subforum_settings WHERE user_id = ? AND hide_new_posts_active_page = 1)"
+		args = append(args, userID)
+	}
+
 	query += " AND t.date_last_post >= DATE_SUB(NOW(), INTERVAL 10 DAY)"
 	query += " AND t.status != ?"
 	args = append(args, Entities.DeletedTopic)
@@ -2007,6 +2207,103 @@ func MoveTopics(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"moved": len(req.TopicIDs)})
+}
+
+func MovePosts(c *gin.Context, db *sql.DB) {
+	var req struct {
+		PostIDs       []int `json:"post_ids" binding:"required"`
+		TargetTopicID int   `json:"target_topic_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+	if len(req.PostIDs) == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "post_ids must not be empty"})
+		c.Abort()
+		return
+	}
+
+	// Verify target topic exists, is not deleted, and has room for the incoming posts.
+	var targetStatus Entities.TopicStatus
+	var targetSubforumID, targetPostNumber int
+	if err := db.QueryRow(
+		"SELECT status, subforum_id, post_number FROM topics WHERE id = ?",
+		req.TargetTopicID,
+	).Scan(&targetStatus, &targetSubforumID, &targetPostNumber); err != nil {
+		if err == sql.ErrNoRows {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Target topic not found"})
+		} else {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to verify target topic: " + err.Error()})
+		}
+		c.Abort()
+		return
+	}
+	if targetStatus == Entities.DeletedTopic {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Target topic is deleted"})
+		c.Abort()
+		return
+	}
+	if targetPostNumber+len(req.PostIDs) > Entities.TopicPostCap {
+		_ = c.Error(&Middlewares.AppError{
+			Code:    http.StatusUnprocessableEntity,
+			Message: fmt.Sprintf("Moving %d posts would exceed the topic limit of %d (current: %d)", len(req.PostIDs), Entities.TopicPostCap, targetPostNumber),
+		})
+		c.Abort()
+		return
+	}
+
+	// Collect source topic and subforum IDs before moving.
+	placeholders := strings.Repeat("?,", len(req.PostIDs)-1) + "?"
+	postIDArgs := make([]interface{}, len(req.PostIDs))
+	for i, id := range req.PostIDs {
+		postIDArgs[i] = id
+	}
+
+	sourceRows, err := db.Query(
+		fmt.Sprintf("SELECT DISTINCT t.id, t.subforum_id FROM posts p JOIN topics t ON p.topic_id = t.id WHERE p.id IN (%s)", placeholders),
+		postIDArgs...,
+	)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch source topics: " + err.Error()})
+		c.Abort()
+		return
+	}
+	var sourceTopicIDs []int
+	subforumSeen := map[int]bool{targetSubforumID: true}
+	affectedSubforumIDs := []int{targetSubforumID}
+	for sourceRows.Next() {
+		var topicID, subforumID int
+		if sourceRows.Scan(&topicID, &subforumID) == nil {
+			sourceTopicIDs = append(sourceTopicIDs, topicID)
+			if !subforumSeen[subforumID] {
+				subforumSeen[subforumID] = true
+				affectedSubforumIDs = append(affectedSubforumIDs, subforumID)
+			}
+		}
+	}
+	sourceRows.Close()
+
+	// Move the posts.
+	moveArgs := append([]interface{}{req.TargetTopicID}, postIDArgs...)
+	if _, err := db.Exec(
+		fmt.Sprintf("UPDATE posts SET topic_id = ? WHERE id IN (%s)", placeholders),
+		moveArgs...,
+	); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to move posts: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	Events.Publish(db, Events.PostsMoved, Events.PostsMovedEvent{
+		PostIDs:             req.PostIDs,
+		SourceTopicIDs:      sourceTopicIDs,
+		TargetTopicID:       req.TargetTopicID,
+		AffectedSubforumIDs: affectedSubforumIDs,
+	})
+
+	c.JSON(http.StatusOK, gin.H{"moved": len(req.PostIDs)})
 }
 
 func BatchDeleteTopics(c *gin.Context, db *sql.DB) {
@@ -2132,4 +2429,49 @@ func GetPostById(c *gin.Context, db *sql.DB) {
 	post.DateCreatedLocalized = Services.LocalizeTime(post.DateCreated, Services.GetUserTimezone(userID, db))
 
 	c.JSON(http.StatusOK, post)
+}
+
+func SubscribeToTopic(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	topicID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid topic ID"})
+		c.Abort()
+		return
+	}
+
+	var exists int
+	if err := db.QueryRow("SELECT COUNT(*) FROM topics WHERE id = ?", topicID).Scan(&exists); err != nil || exists == 0 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Topic not found"})
+		c.Abort()
+		return
+	}
+
+	_, err = db.Exec("INSERT IGNORE INTO user_topic_subscription (user_id, topic_id) VALUES (?, ?)", userID, topicID)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to subscribe: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Subscribed"})
+}
+
+func UnsubscribeFromTopic(c *gin.Context, db *sql.DB) {
+	userID := Services.GetUserIdFromContext(c)
+	topicID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid topic ID"})
+		c.Abort()
+		return
+	}
+
+	_, err = db.Exec("DELETE FROM user_topic_subscription WHERE user_id = ? AND topic_id = ?", userID, topicID)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to unsubscribe: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Unsubscribed"})
 }

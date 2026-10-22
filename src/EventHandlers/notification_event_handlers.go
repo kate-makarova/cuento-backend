@@ -38,6 +38,8 @@ func RegisterNotificationEventHandlers() {
 			title = "Auto Archiving"
 		case "episode_status_change":
 			title = "Episode Status Changed"
+		case "topic_subscriptions":
+			title = "New Post in Subscribed Topic"
 		}
 
 		res, err := db.Exec("INSERT INTO notifications (user_id, type, title, message, data, date_created, is_read) VALUES (?, ?, ?, ?, ?, NOW(), FALSE)",
@@ -93,6 +95,14 @@ func RegisterNotificationEventHandlers() {
 			n := Entities.EpisodeStatusChangeNotification{NotificationBase: base}
 			json.Unmarshal(dataJSON, &n.Data)
 			notification = n
+		case "topic_subscriptions":
+			n := Entities.TopicSubscriptionNotification{NotificationBase: base}
+			json.Unmarshal(dataJSON, &n.Data)
+			notification = n
+		case "absence_started":
+			n := Entities.AbsenceStartedNotification{NotificationBase: base}
+			json.Unmarshal(dataJSON, &n.Data)
+			notification = n
 		default:
 			notification = base
 		}
@@ -113,7 +123,7 @@ func RegisterNotificationEventHandlers() {
 			).Scan(&disablePush)
 			Services.LogPush("user %d disablePush=%v", event.UserID, disablePush)
 			if !disablePush {
-				go Services.SendPushToUser(db, event.UserID, event.Type, title, event.Message)
+				go Services.SendPushToUser(db, event.UserID, event.Type, title, event.Message, event.Data)
 			}
 		}
 	})
