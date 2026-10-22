@@ -70,6 +70,9 @@ func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelTyp
 
 	minCtx := minContextForSize[minSize]
 
+	// Providers known to output only XML tool calls and never produce text responses.
+	brokenProviders := []string{"recursive/"}
+
 	var candidates []openRouterModel
 	for _, m := range models {
 		if m.ContextLen < minCtx {
@@ -85,6 +88,16 @@ func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelTyp
 			continue
 		}
 		if !supportsTools(m.SupportedParameters) {
+			continue
+		}
+		broken := false
+		for _, prefix := range brokenProviders {
+			if strings.HasPrefix(m.ID, prefix) {
+				broken = true
+				break
+			}
+		}
+		if broken {
 			continue
 		}
 		candidates = append(candidates, m)
