@@ -61,6 +61,12 @@ func (g *GeminiClient) Chat(ctx context.Context, history []ChatMessage, systemIn
 				Temperature:       cfg.Temperature,
 				SystemInstruction: cfg.SystemInstruction,
 			}
+			if toolRounds == toolBudget {
+				contents = append(contents, &genai.Content{
+					Role:  "user",
+					Parts: []*genai.Part{{Text: "You have reached the search limit. Do not call any more tools. Write your final answer now based only on the results you have already gathered."}},
+				})
+			}
 		}
 		result, err := g.client.Models.GenerateContent(ctx, g.model, contents, activeCfg)
 		if err != nil {
