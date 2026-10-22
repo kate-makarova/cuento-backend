@@ -343,13 +343,10 @@ func extractMatchingParagraphs(text, query string) string {
 		return strings.Join(matched, "\n")
 	}
 
-	// Fallback: first non-empty paragraph
-	for _, p := range paragraphs {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			return p
-		}
-	}
+	// Fallback: Sonic/Qdrant matched via stemming or fuzzy — the post is relevant
+	// even though the query string doesn't appear verbatim (e.g. Russian inflections).
+	// Return full content so the AI has access to the actual data.
+	return strings.TrimSpace(text)
 	return text
 }
 
