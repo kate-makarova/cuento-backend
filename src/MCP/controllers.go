@@ -106,7 +106,11 @@ func GetAIChatHistory(c *gin.Context, db *sql.DB) {
 	}
 
 	rows, err := db.Query(
-		"SELECT id, user_id, role, content, sources, date_created FROM ai_chat_messages WHERE user_id = ? ORDER BY date_created ASC LIMIT ?",
+		`SELECT id, user_id, role, content, sources, date_created FROM (
+			SELECT id, user_id, role, content, sources, date_created
+			FROM ai_chat_messages WHERE user_id = ?
+			ORDER BY date_created DESC LIMIT ?
+		) sub ORDER BY date_created ASC`,
 		userID, limit,
 	)
 	if err != nil {
