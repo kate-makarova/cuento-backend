@@ -165,9 +165,13 @@ func executeTask(db *sql.DB, taskID, userID int) {
 			"3. Call search_content once per keyword phrase. "+
 			"Target only the buckets relevant to the question type "+
 			"(e.g. 'characters' for character questions, 'game_posts' for episode events).\n"+
-			"4. From all returned results, keep ONLY the entries that directly answer the question. "+
+			"4. FACTION DETECTION: if the question involves characters or episodes, call get_factions to get "+
+			"the full faction list. Then check whether any faction name appears in the top results' content. "+
+			"If you can identify a relevant faction, re-run the searches for 'characters' and/or 'episodes' "+
+			"with that faction_id — this filters results to only members/episodes of that faction.\n"+
+			"5. From all returned results, keep ONLY the entries that directly answer the question. "+
 			"Discard anything tangentially related or on a different topic entirely.\n"+
-			"5. Build your answer from those relevant entries only. "+
+			"6. Build your answer from those relevant entries only. "+
 			"If no relevant results were found after searching, say so honestly and suggest the user try different terms.\n\n"+
 			"HARD RULES:\n"+
 			"1. Never answer community questions from memory — always search first.\n"+
