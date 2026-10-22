@@ -53,16 +53,20 @@ func NewOpenRouterModelPool(apiKey string, useFreeOnly bool) *OpenRouterModelPoo
 }
 
 func (p *OpenRouterModelPool) ClientForMinSize(minSize Entities.AIModelSize, modelType Entities.AIModelType) (AIClient, error) {
-	return p.selectModel(minSize, modelType, "")
+	return p.selectModel(minSize, modelType, "", nil)
 }
 
 func (p *OpenRouterModelPool) ClientForMinSizeAndProtocol(minSize Entities.AIModelSize, modelType Entities.AIModelType, _ Entities.AIModelProtocolType) (AIClient, error) {
 	// OpenRouter exposes all providers through one OpenAI-compat API, so
 	// protocol-based prefix filtering doesn't apply here.
-	return p.selectModel(minSize, modelType, "")
+	return p.selectModel(minSize, modelType, "", nil)
 }
 
-func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelType Entities.AIModelType, providerPrefix string) (AIClient, error) {
+func (p *OpenRouterModelPool) ClientExcluding(minSize Entities.AIModelSize, modelType Entities.AIModelType, excluded []string) (AIClient, error) {
+	return p.selectModel(minSize, modelType, "", excluded)
+}
+
+func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelType Entities.AIModelType, providerPrefix string, excluded []string) (AIClient, error) {
 	models, err := p.fetchModels()
 	if err != nil {
 		return nil, fmt.Errorf("openrouter: failed to fetch models: %w", err)
@@ -72,6 +76,11 @@ func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelTyp
 
 	// Providers known to output only XML tool calls and never produce text responses.
 	brokenProviders := []string{"recursive/"}
+
+	excludedSet := make(map[string]bool, len(excluded))
+	for _, id := range excluded {
+		excludedSet[id] = true
+	}
 
 	var candidates []openRouterModel
 	for _, m := range models {
@@ -88,6 +97,9 @@ func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelTyp
 			continue
 		}
 		if !supportsTools(m.SupportedParameters) {
+			continue
+		}
+		if excludedSet[m.ID] {
 			continue
 		}
 		broken := false

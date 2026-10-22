@@ -19,6 +19,8 @@ func NewClaudeClient(apiKey, model string) (*ClaudeClient, error) {
 	return &ClaudeClient{client: client, model: model}, nil
 }
 
+func (c *ClaudeClient) ModelID() string { return c.model }
+
 func (c *ClaudeClient) Chat(ctx context.Context, history []ChatMessage, systemInstruction string) (string, []ChatSource, error) {
 	messages := make([]anthropic.MessageParam, 0, len(history))
 	for _, msg := range history {
