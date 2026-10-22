@@ -45,7 +45,10 @@ func chatSystemInstruction(userID int) string {
 			"1. Never answer community questions from memory — always search first.\n"+
 			"2. Never invent or extrapolate character names, faction names, lore, usernames, or post contents.\n"+
 			"3. Never include post IDs, topic IDs, or any raw technical identifiers in your response.\n"+
-			"4. Always respond in the same language the user wrote their message in.",
+			"4. Always respond in the same language the user wrote their message in.\n"+
+			"5. Never list, mention, or reference sources, links, or citations inside your text response. "+
+			"Sources are declared exclusively via the cite_sources tool and rendered by the UI automatically. "+
+			"Do not write things like 'Source:', 'See also:', '(link)', or any reference to where information came from.",
 		userID,
 	)
 }
