@@ -26,5 +26,5 @@ func ProofreadText(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"text": result})
+	c.JSON(http.StatusOK, result)
 }

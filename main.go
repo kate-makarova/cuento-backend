@@ -994,9 +994,11 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 	})
 
 	// AI Chat routes
-	protectedRouter.POST("/ai-chat/message", "Send a message to the AI", func(c *gin.Context) {
-		MCP.SendMessage(c, Services.DB)
-	})
+	protectedRouter.POST("/ai-chat/message", "Send a message to the AI",
+		MCP.InjectionCheckMiddleware(Services.DB, "content"),
+		func(c *gin.Context) {
+			MCP.SendMessage(c, Services.DB)
+		})
 	protectedRouter.GET("/ai-chat/history", "Get AI chat history for the current user", func(c *gin.Context) {
 		MCP.GetAIChatHistory(c, Services.DB)
 	})
@@ -1269,9 +1271,11 @@ protectedRouter.GET("/admin/ai-agent-implementation/list", "Get list of all AI a
 		Controllers.AdminCallAiAgentImplementation(c, Services.DB)
 	})
 
-	protectedRouter.POST("/ai/proofread", "Proofread text: fix typos, grammar and punctuation", func(c *gin.Context) {
-		Controllers.ProofreadText(c, Services.DB)
-	})
+	protectedRouter.POST("/ai/proofread", "Proofread text: fix typos, grammar and punctuation",
+		MCP.InjectionCheckMiddleware(Services.DB, "text"),
+		func(c *gin.Context) {
+			Controllers.ProofreadText(c, Services.DB)
+		})
 
 	protectedRouter.POST("/admin/ai-pool/switch", "Switch the active AI model pool at runtime", func(c *gin.Context) {
 		Controllers.AdminSwitchAIPool(c, Services.DB)
