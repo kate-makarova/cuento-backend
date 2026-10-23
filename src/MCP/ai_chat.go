@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strings"
 	"time"
 )
 
@@ -87,42 +86,28 @@ func executeChatTask(db *sql.DB, taskID, userID int) {
 	copy(history, sess.messages)
 	sess.mu.Unlock()
 
-	const maxRetries = 4
 	var replyText string
 	var sources []ChatSource
-	var lastErr error
-	var excluded []string
 
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		var attemptClient AIClient
-		if attempt == 0 {
-			attemptClient = client
-		} else {
-			attemptClient, lastErr = getActivePool().ClientExcluding(Entities.AIModelSizeSmall, Entities.AIModelTypeText, excluded)
-			if lastErr != nil {
-				markFailed(db, taskID, userID, lastErr.Error())
-				pushError(userID, lastErr.Error())
-				notifyQueuePositions(db, taskID)
-				return
-			}
-		}
-
-		replyText, sources, lastErr = NewAIAgent(attemptClient).Chat(ctx, history, chatSystemInstruction(userID))
-		if lastErr == nil {
-			break
-		}
-
-		is429 := strings.Contains(lastErr.Error(), "429") || strings.Contains(lastErr.Error(), "quota")
-		if !is429 || attempt == maxRetries {
-			markFailed(db, taskID, userID, lastErr.Error())
-			pushError(userID, lastErr.Error())
-			notifyQueuePositions(db, taskID)
-			return
-		}
-
-		excluded = append(excluded, attemptClient.ModelID())
-		_, _ = db.Exec(`UPDATE ai_task_queue SET retries = retries + 1 WHERE id = ?`, taskID)
-		log.Printf("AI queue: task %d rate-limited on %s (attempt %d/%d), trying next model", taskID, attemptClient.ModelID(), attempt+1, maxRetries)
+	err = withModelRetry(
+		getActivePool(),
+		Entities.AIModelSizeSmall, Entities.AIModelTypeText,
+		client,
+		func(c AIClient) error {
+			var e error
+			replyText, sources, e = NewAIAgent(c).Chat(ctx, history, chatSystemInstruction(userID))
+			return e
+		},
+		func(modelID string) {
+			_, _ = db.Exec(`UPDATE ai_task_queue SET retries = retries + 1 WHERE id = ?`, taskID)
+			log.Printf("AI queue: task %d rate-limited on %s, trying next model", taskID, modelID)
+		},
+	)
+	if err != nil {
+		markFailed(db, taskID, userID, err.Error())
+		pushError(userID, err.Error())
+		notifyQueuePositions(db, taskID)
+		return
 	}
 
 	replyText = Services.MarkdownToHTML(replyText)

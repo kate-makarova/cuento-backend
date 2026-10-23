@@ -41,34 +41,27 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 		return nil, fmt.Errorf("AI is not configured")
 	}
 
-	const maxRetries = 4
+	client, err := pool.ClientForMinSize(Entities.AIModelSizeLarge, Entities.AIModelTypeText)
+	if err != nil {
+		return nil, fmt.Errorf("no AI model available: %w", err)
+	}
+
 	var reply string
-	var excluded []string
-	var lastErr error
-
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		var client AIClient
-		if attempt == 0 {
-			client, lastErr = pool.ClientForMinSize(Entities.AIModelSizeLarge, Entities.AIModelTypeText)
-		} else {
-			client, lastErr = pool.ClientExcluding(Entities.AIModelSizeLarge, Entities.AIModelTypeText, excluded)
-		}
-		if lastErr != nil {
-			return nil, fmt.Errorf("no AI model available: %w", lastErr)
-		}
-
-		reply, _, lastErr = client.Chat(context.Background(), []ChatMessage{
-			{Role: "user", Content: text},
-		}, proofreadSystemInstruction)
-		if lastErr == nil {
-			break
-		}
-
-		is429 := strings.Contains(lastErr.Error(), "429") || strings.Contains(lastErr.Error(), "quota")
-		if !is429 || attempt == maxRetries {
-			return nil, fmt.Errorf("proofreading failed: %w", lastErr)
-		}
-		excluded = append(excluded, client.ModelID())
+	err = withModelRetry(
+		pool,
+		Entities.AIModelSizeLarge, Entities.AIModelTypeText,
+		client,
+		func(c AIClient) error {
+			var e error
+			reply, _, e = c.Chat(context.Background(), []ChatMessage{
+				{Role: "user", Content: text},
+			}, proofreadSystemInstruction)
+			return e
+		},
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("proofreading failed: %w", err)
 	}
 
 	// Strip accidental markdown fences the model may add.
