@@ -153,3 +153,10 @@ type AbsenceStartedNotification struct {
 	NotificationBase
 	Data NotificationAbsenceStarted `json:"data"`
 }
+
+type NotificationAiMessage struct{}
+
+type AiMessageNotification struct {
+	NotificationBase
+	Data NotificationAiMessage `json:"data"`
+}

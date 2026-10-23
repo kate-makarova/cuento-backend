@@ -1208,6 +1208,51 @@ INSERT IGNORE INTO ai_agents (id, title, short_description, handler) VALUES (
     'GameDigest'
 );
 
+INSERT IGNORE INTO features (`key`, is_active) VALUES ('game_digest', false);
+
+CREATE TABLE game_digests
+(
+    id                int          not null auto_increment primary key,
+    implementation_id int          not null,
+    datetime          datetime     not null,
+    text              longtext     not null,
+    is_published      boolean      not null default false,
+    published_post_id int          null,
+    published_user_id int          null,
+    constraint fk_gd_implementation foreign key (implementation_id) references ai_agent_implementation (id) on delete cascade
+);
+
+CREATE TABLE game_digest_episode_notes
+(
+    episode_id         bigint unsigned not null primary key,
+    notes              json            null,
+    additional_context text            null,
+    constraint fk_gden_episode foreign key (episode_id) references episode_base (id) on delete cascade
+);
+
+CREATE TABLE game_digest_settings
+(
+    setting_name  varchar(255) not null primary key,
+    setting_value json         null
+);
+
+INSERT IGNORE INTO game_digest_settings (setting_name, setting_value) VALUES ('excluded_subforums', '[]');
+INSERT IGNORE INTO game_digest_settings (setting_name, setting_value) VALUES ('summary_language', null);
+INSERT IGNORE INTO game_digest_settings (setting_name, setting_value) VALUES ('model_requirements', '{"min_size": 2}');
+INSERT IGNORE INTO game_digest_settings (setting_name, setting_value) VALUES ('notify_user_id', null);
+
+CREATE TABLE game_digest_weekly_post_notes
+(
+    post_id           int          not null primary key,
+    week_start        date         not null,
+    is_deleted        boolean      not null default false,
+    is_complete       boolean      not null default false,
+    post_summary      text         null,
+    pending_questions json         null,
+    constraint fk_gdwpn_post foreign key (post_id) references posts (id) on delete cascade,
+    key idx_gdwpn_week_start (week_start)
+);
+
 CREATE TABLE custom_templates
 (
     id                 INT AUTO_INCREMENT PRIMARY KEY,

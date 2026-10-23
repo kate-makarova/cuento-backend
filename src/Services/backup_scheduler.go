@@ -38,18 +38,8 @@ func resolveBackupProvider(db *sql.DB) BackupStorageProvider {
 	return nil
 }
 
-func StartBackupScheduler(db *sql.DB) {
-	go func() {
-		runScheduledBackupIfDue(db)
-		ticker := time.NewTicker(1 * time.Hour)
-		defer ticker.Stop()
-		for range ticker.C {
-			runScheduledBackupIfDue(db)
-		}
-	}()
-}
-
-func runScheduledBackupIfDue(db *sql.DB) {
+// RunBackupIfDue checks whether a cloud backup is due and runs it if so.
+func RunBackupIfDue(db *sql.DB) {
 	enabled, _ := GetBackupSetting("gdrive_backup_enabled", db)
 	if enabled != "y" {
 		return

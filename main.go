@@ -37,11 +37,11 @@ func main() {
 	go Services.InitializeAbsenceTimerStart(Services.DB)
 	go Services.GetOrCreateVAPIDKeys(Services.DB)
 
-	// Start archiving warning notifier (checks daily, sends notifications at 10/5/3/2/1 days before archiving)
-	Services.StartArchivingNotifier(Services.DB)
-
-	// Start Google Drive backup scheduler (checks hourly, runs backup per configured frequency)
-	Services.StartBackupScheduler(Services.DB)
+	Services.StartScheduler(Services.DB, []Services.ScheduledJob{
+		{Name: "archiving", Run: Services.RunArchivingIfDue},
+		{Name: "backup", Run: Services.RunBackupIfDue},
+		{Name: "game_digest", Run: MCP.RunGameDigestIfDue},
+	})
 
 	// Start WebSocket Hub
 	go Websockets.MainHub.Run()
@@ -407,6 +407,27 @@ func main() {
 	})
 	protectedRouter.POST("/currency/user/:user_id/transactions/add", "Add a currency transaction for a user", func(c *gin.Context) {
 		Features.AddUserCurrencyTransactionHandler(c, Services.DB)
+	})
+	protectedRouter.GET("/game-digest/digests", "List game digests", func(c *gin.Context) {
+		Features.GetGameDigestsHandler(c, Services.DB)
+	})
+	protectedRouter.GET("/game-digest/digests/:id", "Get a game digest by ID", func(c *gin.Context) {
+		Features.GetGameDigestHandler(c, Services.DB)
+	})
+	protectedRouter.POST("/game-digest/digests/:id/update", "Update a game digest", func(c *gin.Context) {
+		Features.UpdateGameDigestHandler(c, Services.DB)
+	})
+	protectedRouter.GET("/game-digest/episode/:episode_id/notes", "Get notes for a digest episode", func(c *gin.Context) {
+		Features.GetEpisodeNotesHandler(c, Services.DB)
+	})
+	protectedRouter.POST("/game-digest/episode/:episode_id/notes", "Save notes for a digest episode", func(c *gin.Context) {
+		Features.SaveEpisodeNotesHandler(c, Services.DB)
+	})
+	protectedRouter.GET("/game-digest/settings", "Get all game digest settings", func(c *gin.Context) {
+		Features.GetGameDigestSettingsHandler(c, Services.DB)
+	})
+	protectedRouter.POST("/game-digest/settings", "Save a game digest setting", func(c *gin.Context) {
+		Features.SaveGameDigestSettingHandler(c, Services.DB)
 	})
 	protectedRouter.POST("/character/create", "Create a new character", func(c *gin.Context) {
 		Controllers.CreateCharacter(c, Services.DB)

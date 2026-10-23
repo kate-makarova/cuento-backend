@@ -8,38 +8,32 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 )
 
-const gameDigestInstructions = `You are the Game Digest agent for a roleplay forum. Your task is to read all the posts of one episode and write a single cohesive summary for that episode, formatted in BB tags.
+const gameDigestInstructions = `You are the Game Digest agent for a roleplay forum. Your task is to write a structured weekly digest from a set of episode summaries.
 
-You will receive:
-- In-world header fields (date, time, location, and other metadata set by the players)
-- A previous summary describing what happened in this episode before the current period
-- All new posts written during the current period, each with the character name and content
+You will receive a list of episodes. Each episode entry includes:
+- Its name
+- Custom fields set by the players: in-game date, time, location, and any other header fields
+- The factions whose characters participate in this episode
+- Short summaries of individual posts from this episode during the period
+- A previous context note describing what happened before this period (if any)
 
-Your task:
-1. Read all the new posts together. Ignore any out-of-character content marked with [OOC], (OOC), or similar tags.
-2. Synthesize the posts into one unified picture of what happened in this episode during the period.
-3. Use the previous summary as backstory context — do not repeat events already covered there.
-4. Write in the voice of an in-world chronicler: immersive, present-tense, as if reporting from within the game world.
-5. Format the output with BB tags:
-   [b]Location — In-world date[/b] as the header (use the header fields if available, otherwise the episode name)
-   [list][*] one bullet per meaningful story beat — not per post [/list]
-   A "story beat" is a turning point, decision, conflict, discovery, or encounter that has the potential to affect the global plot — a shift in power, an alliance formed or broken, a secret revealed, a threat emerging, a critical choice made. Skip small personal moments, idle conversation, or routine actions that have no broader consequences.
-   You may also merge events from different posts into a single bullet if — and only if — they share the same in-world date, time, and faction. Do not merge events that differ in any of these three dimensions.
-   Keep each bullet to one–three sentences: vivid but concise.
-6. If there are no new meaningful events, return only: [i]No new events recorded for this episode.[/i]
+Format rules:
+1. Organise the digest into sections — one per faction. Use [b]Faction Name[/b] as the section header.
+   If an episode involves characters from multiple factions, include a short mention in each relevant faction's section.
+   Episodes with no clear faction alignment go into a separate [b]General[/b] section.
+2. Within a faction section, write one concise paragraph per episode (2–4 sentences) that synthesises the post summaries into a coherent in-world account. Do not retell individual posts — write as a unified narrative.
+3. If two or more episodes in the same section share the same in-game time period (same date, approximate time, or same named moment), group them under a single time marker formatted as [i]time, place[/i] and write one combined paragraph.
+4. Use the in-game date, time, and location from each episode's custom fields as the primary source for the time marker. If those fields are absent, omit the marker.
+5. Write in the specified output language.
+6. Do not mention usernames, post counts, or any out-of-character details.
+7. Do not invent events — only use what the summaries describe.
+8. If there are no meaningful events for a faction, omit that section entirely.
 
-Rules:
-- Synthesize across posts — do not write one bullet per post.
-- Do not mention usernames, post counts, or any out-of-character details.
-- Do not invent events — only summarize what the posts actually describe.
-- Do not call any tools. All the data you need is provided in this message.
-
-Return only the BB-formatted section text, nothing else.`
+Return only the BB-formatted digest text, no commentary.`
 
 type gameDigestConfig struct {
 	Period        string `json:"period"`
@@ -49,24 +43,19 @@ type gameDigestConfig struct {
 	Language      string `json:"language"`
 }
 
-type digestEpisode struct {
-	EpisodeID    int64
-	TopicID      int64
-	TopicName    string
-	HeaderFields []digestHeaderField
-	Posts        []digestPost
-	PrevContext  string
-}
-
 type digestHeaderField struct {
 	MachineName string
 	Value       string
 }
 
-type digestPost struct {
-	AuthorName  string
-	Content     string
-	DateCreated time.Time
+type weeklyEpisodeData struct {
+	EpisodeID    int64
+	TopicID      int64
+	TopicName    string
+	HeaderFields []digestHeaderField
+	Factions     []string
+	Summaries    []string
+	PrevContext  string
 }
 
 func executeGameDigestTask(db *sql.DB, taskID int) {
@@ -78,7 +67,6 @@ func executeGameDigestTask(db *sql.DB, taskID int) {
 		return
 	}
 
-	// Load payload
 	var payloadStr string
 	if err := db.QueryRow(`SELECT COALESCE(payload, '{}') FROM ai_task_queue WHERE id = ?`, taskID).Scan(&payloadStr); err != nil {
 		markFailed(db, taskID, 0, "failed to read payload: "+err.Error())
@@ -92,7 +80,6 @@ func executeGameDigestTask(db *sql.DB, taskID int) {
 		return
 	}
 
-	// Load config
 	var configStr sql.NullString
 	if err := db.QueryRow(`SELECT config FROM ai_agent_implementation WHERE id = ?`, payload.ImplementationID).Scan(&configStr); err != nil {
 		markFailed(db, taskID, 0, "implementation not found")
@@ -108,10 +95,9 @@ func executeGameDigestTask(db *sql.DB, taskID int) {
 
 	since := periodToTime(config.Period)
 
-	// Find matching episodes with new posts
-	episodes, err := findDigestEpisodes(db, config, since, payload.ImplementationID)
+	episodes, err := loadWeeklyEpisodes(db, config, since, payload.ImplementationID)
 	if err != nil {
-		markFailed(db, taskID, 0, "failed to find episodes: "+err.Error())
+		markFailed(db, taskID, 0, "failed to load weekly episodes: "+err.Error())
 		return
 	}
 	if len(episodes) == 0 {
@@ -119,30 +105,28 @@ func executeGameDigestTask(db *sql.DB, taskID int) {
 		return
 	}
 
-	// Generate one digest section per episode and update context
-	var sections []string
-	for i := range episodes {
-		ep := &episodes[i]
-		section, err := generateEpisodeDigestSection(ctx, ep, config.Language, client)
-		if err != nil {
-			log.Printf("game_digest: episode %d: %v", ep.EpisodeID, err)
-			continue
-		}
-		sections = append(sections, section)
-		updateDigestContext(db, payload.ImplementationID, ep.TopicID, section)
-	}
-
-	if len(sections) == 0 {
-		_, _ = db.Exec(`UPDATE ai_task_queue SET status = 'done', date_completed = NOW() WHERE id = ?`, taskID)
+	userMsg := buildWeeklyDigestPrompt(config.Language, episodes)
+	var digest string
+	err = withModelRetry(
+		getActivePool(),
+		Entities.AIModelSizeMedium, Entities.AIModelTypeText,
+		client,
+		func(c AIClient) error {
+			var e error
+			digest, _, e = NewAIAgent(c).Chat(ctx, []ChatMessage{{Role: "user", Content: userMsg}}, gameDigestInstructions)
+			return e
+		},
+		nil,
+	)
+	if err != nil {
+		markFailed(db, taskID, 0, "AI call failed: "+err.Error())
 		return
 	}
 
-	// Post combined digest to target topic
 	if config.TargetTopicID != nil {
-		fullDigest := strings.Join(sections, "\n\n")
 		res, err := db.Exec(
 			`INSERT INTO posts (topic_id, author_user_id, content, date_created, use_character_profile) VALUES (?, 1, ?, NOW(), 0)`,
-			*config.TargetTopicID, fullDigest,
+			*config.TargetTopicID, digest,
 		)
 		if err == nil {
 			postID, _ := res.LastInsertId()
@@ -156,49 +140,65 @@ func executeGameDigestTask(db *sql.DB, taskID int) {
 					Post:       *fullPost,
 				})
 			}
+
+			_, _ = db.Exec(
+				`INSERT INTO game_digests (implementation_id, datetime, text, is_published, published_post_id) VALUES (?, NOW(), ?, 1, ?)`,
+				payload.ImplementationID, digest, postID,
+			)
+		}
+	} else {
+		_, _ = db.Exec(
+			`INSERT INTO game_digests (implementation_id, datetime, text, is_published) VALUES (?, NOW(), ?, 0)`,
+			payload.ImplementationID, digest,
+		)
+	}
+
+	// Update per-episode context with the summaries covered this period.
+	for i := range episodes {
+		ep := &episodes[i]
+		if len(ep.Summaries) > 0 {
+			updateDigestContext(db, payload.ImplementationID, ep.TopicID, strings.Join(ep.Summaries, "\n"))
 		}
 	}
 
 	_, _ = db.Exec(`UPDATE ai_task_queue SET status = 'done', date_completed = NOW() WHERE id = ?`, taskID)
 }
 
-// findDigestEpisodes returns all episode topics that have new posts since `since`,
-// filtered by the subforum and faction lists in the config.
-func findDigestEpisodes(db *sql.DB, config gameDigestConfig, since time.Time, implementationID int) ([]digestEpisode, error) {
+// loadWeeklyEpisodes returns all episodes that have non-deleted post summaries since `since`,
+// filtered by the config's subforum and faction lists.
+func loadWeeklyEpisodes(db *sql.DB, config gameDigestConfig, since time.Time, implementationID int) ([]weeklyEpisodeData, error) {
 	query := `
-		SELECT eb.id, t.id, t.name
-		FROM episode_base eb
-		JOIN topics t ON t.id = eb.topic_id
-		WHERE t.status != ?
-		  AND t.type = ?
-		  AND EXISTS (
-		      SELECT 1 FROM posts p
-		      WHERE p.topic_id = t.id
-		        AND p.date_created >= ?
-		        AND COALESCE(p.is_deleted, 0) != 1
-		  )`
+		SELECT DISTINCT eb.id, t.id, t.name
+		FROM game_digest_weekly_post_notes wpn
+		JOIN posts p ON p.id = wpn.post_id
+		JOIN topics t ON t.id = p.topic_id
+		JOIN episode_base eb ON eb.topic_id = t.id
+		WHERE wpn.is_deleted = 0
+		  AND wpn.is_complete = 1
+		  AND wpn.post_summary IS NOT NULL AND wpn.post_summary != ''
+		  AND p.date_created >= ?
+		  AND t.status != ?
+		  AND t.type = ?`
 
-	args := []interface{}{Entities.DeletedTopic, Entities.EpisodeTopic, since}
+	args := []interface{}{since, Entities.DeletedTopic, Entities.EpisodeTopic}
 
 	if len(config.SubforumIDs) > 0 {
-		ph := make([]string, len(config.SubforumIDs))
-		for i, id := range config.SubforumIDs {
-			ph[i] = "?"
+		ph := strings.Repeat("?,", len(config.SubforumIDs)-1) + "?"
+		query += " AND t.subforum_id IN (" + ph + ")"
+		for _, id := range config.SubforumIDs {
 			args = append(args, id)
 		}
-		query += " AND t.subforum_id IN (" + strings.Join(ph, ",") + ")"
 	}
 
 	if len(config.FactionIDs) > 0 {
-		ph := make([]string, len(config.FactionIDs))
-		for i, id := range config.FactionIDs {
-			ph[i] = "?"
+		ph := strings.Repeat("?,", len(config.FactionIDs)-1) + "?"
+		query += ` AND EXISTS (
+			SELECT 1 FROM episode_character ec
+			JOIN character_faction cf ON cf.character_id = ec.character_id
+			WHERE ec.episode_id = eb.id AND cf.faction_id IN (` + ph + `))`
+		for _, id := range config.FactionIDs {
 			args = append(args, id)
 		}
-		query += " AND EXISTS (" +
-			"SELECT 1 FROM episode_character ec " +
-			"JOIN character_faction cf ON cf.character_id = ec.character_id " +
-			"WHERE ec.episode_id = eb.id AND cf.faction_id IN (" + strings.Join(ph, ",") + "))"
 	}
 
 	rows, err := db.Query(query, args...)
@@ -207,9 +207,9 @@ func findDigestEpisodes(db *sql.DB, config gameDigestConfig, since time.Time, im
 	}
 	defer rows.Close()
 
-	var episodes []digestEpisode
+	var episodes []weeklyEpisodeData
 	for rows.Next() {
-		var ep digestEpisode
+		var ep weeklyEpisodeData
 		if err := rows.Scan(&ep.EpisodeID, &ep.TopicID, &ep.TopicName); err != nil {
 			continue
 		}
@@ -219,17 +219,106 @@ func findDigestEpisodes(db *sql.DB, config gameDigestConfig, since time.Time, im
 	for i := range episodes {
 		ep := &episodes[i]
 		ep.HeaderFields = loadEpisodeHeaderFields(db, ep.EpisodeID)
-		ep.Posts = loadNewPosts(db, ep.TopicID, since)
+		ep.Factions = loadEpisodeFactions(db, ep.EpisodeID)
+		ep.Summaries = loadWeeklyPostSummaries(db, ep.TopicID, since)
 		ep.PrevContext = loadDigestContext(db, implementationID, ep.TopicID)
 	}
 
 	return episodes, nil
 }
 
+// loadEpisodeFactions returns the names of all factions represented in the episode.
+func loadEpisodeFactions(db *sql.DB, episodeID int64) []string {
+	rows, err := db.Query(`
+		SELECT DISTINCT f.name
+		FROM episode_character ec
+		JOIN character_faction cf ON cf.character_id = ec.character_id
+		JOIN factions f ON f.id = cf.faction_id
+		WHERE ec.episode_id = ?`, episodeID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err == nil {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+// loadWeeklyPostSummaries returns all non-deleted post summaries for a topic since `since`.
+func loadWeeklyPostSummaries(db *sql.DB, topicID int64, since time.Time) []string {
+	rows, err := db.Query(`
+		SELECT wpn.post_summary
+		FROM game_digest_weekly_post_notes wpn
+		JOIN posts p ON p.id = wpn.post_id
+		WHERE p.topic_id = ?
+		  AND wpn.is_deleted = 0
+		  AND wpn.is_complete = 1
+		  AND wpn.post_summary IS NOT NULL AND wpn.post_summary != ''
+		  AND p.date_created >= ?
+		ORDER BY p.date_created ASC`, topicID, since)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var summaries []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err == nil {
+			summaries = append(summaries, s)
+		}
+	}
+	return summaries
+}
+
+// buildWeeklyDigestPrompt assembles the user message sent to the AI.
+func buildWeeklyDigestPrompt(language string, episodes []weeklyEpisodeData) string {
+	var sb strings.Builder
+
+	if language != "" {
+		sb.WriteString(fmt.Sprintf("Output language: %s\n\n", language))
+	}
+
+	sb.WriteString("## Episodes this period\n\n")
+
+	for _, ep := range episodes {
+		sb.WriteString(fmt.Sprintf("### %s\n", ep.TopicName))
+
+		if len(ep.Factions) > 0 {
+			sb.WriteString(fmt.Sprintf("Factions: %s\n", strings.Join(ep.Factions, ", ")))
+		}
+
+		for _, f := range ep.HeaderFields {
+			sb.WriteString(fmt.Sprintf("%s: %s\n", f.MachineName, f.Value))
+		}
+
+		if ep.PrevContext != "" {
+			sb.WriteString(fmt.Sprintf("Previous context: %s\n", ep.PrevContext))
+		}
+
+		sb.WriteString("Post summaries:\n")
+		for _, s := range ep.Summaries {
+			sb.WriteString(fmt.Sprintf("- %s\n", s))
+		}
+
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}
+
+// ── Unchanged utility functions ────────────────────────────────────────────────
+
 func loadEpisodeHeaderFields(db *sql.DB, episodeID int64) []digestHeaderField {
 	rows, err := db.Query(`
 		SELECT field_machine_name,
-		       COALESCE(value_string, value_text, CAST(value_int AS CHAR), value_date, '') as value
+		       COALESCE(value_string, value_text, CAST(value_int AS CHAR), value_date, '') AS value
 		FROM episode_main
 		WHERE entity_id = ? AND field_machine_name IS NOT NULL AND (
 		      value_string IS NOT NULL OR value_text IS NOT NULL OR
@@ -248,33 +337,6 @@ func loadEpisodeHeaderFields(db *sql.DB, episodeID int64) []digestHeaderField {
 		}
 	}
 	return fields
-}
-
-func loadNewPosts(db *sql.DB, topicID int64, since time.Time) []digestPost {
-	rows, err := db.Query(`
-		SELECT p.content, p.date_created,
-		       COALESCE(cp.mask_name, cb.name, u.username, 'Unknown') as author_name
-		FROM posts p
-		LEFT JOIN users u ON u.id = p.author_user_id
-		LEFT JOIN character_profile_base cp ON cp.id = p.character_profile_id
-		LEFT JOIN character_base cb ON cb.id = cp.character_id
-		WHERE p.topic_id = ?
-		  AND p.date_created >= ?
-		  AND COALESCE(p.is_deleted, 0) != 1
-		ORDER BY p.date_created ASC`, topicID, since)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-
-	var posts []digestPost
-	for rows.Next() {
-		var p digestPost
-		if err := rows.Scan(&p.Content, &p.DateCreated, &p.AuthorName); err == nil {
-			posts = append(posts, p)
-		}
-	}
-	return posts
 }
 
 func loadDigestContext(db *sql.DB, implementationID int, topicID int64) string {
@@ -298,46 +360,6 @@ func updateDigestContext(db *sql.DB, implementationID int, topicID int64, contex
 	)
 }
 
-// generateEpisodeDigestSection calls the AI to produce one BB-tagged digest section for an episode.
-func generateEpisodeDigestSection(ctx context.Context, ep *digestEpisode, language string, client AIClient) (string, error) {
-	var sb strings.Builder
-
-	if language != "" {
-		sb.WriteString(fmt.Sprintf("Output language: %s\n\n", language))
-	}
-
-	sb.WriteString(fmt.Sprintf("## Episode: %s\n\n", ep.TopicName))
-
-	if len(ep.HeaderFields) > 0 {
-		sb.WriteString("### In-world header fields:\n")
-		for _, f := range ep.HeaderFields {
-			sb.WriteString(fmt.Sprintf("- %s: %s\n", f.MachineName, f.Value))
-		}
-		sb.WriteString("\n")
-	}
-
-	if ep.PrevContext != "" {
-		sb.WriteString("### Previous summary (backstory):\n")
-		sb.WriteString(ep.PrevContext)
-		sb.WriteString("\n\n")
-	} else {
-		sb.WriteString("### Previous summary (backstory):\nNo previous events recorded.\n\n")
-	}
-
-	sb.WriteString("### New posts this period:\n\n")
-	for _, p := range ep.Posts {
-		sb.WriteString(fmt.Sprintf("**%s** (%s):\n%s\n\n---\n\n",
-			p.AuthorName,
-			p.DateCreated.Format("2006-01-02 15:04"),
-			p.Content,
-		))
-	}
-
-	history := []ChatMessage{{Role: "user", Content: sb.String()}}
-	result, _, err := NewAIAgent(client).Chat(ctx, history, gameDigestInstructions)
-	return result, err
-}
-
 func periodToTime(period string) time.Time {
 	now := time.Now()
 	switch period {
@@ -351,3 +373,4 @@ func periodToTime(period string) time.Time {
 		return now.Add(-7 * 24 * time.Hour)
 	}
 }
+

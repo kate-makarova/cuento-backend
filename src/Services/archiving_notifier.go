@@ -5,6 +5,7 @@ import (
 	"cuento-backend/src/Events"
 	"database/sql"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -49,27 +50,30 @@ func runAbsenceStartedNotifications(db *sql.DB) {
 
 var archivingWarningThresholds = []int{10, 5, 3, 2, 1}
 
-func StartArchivingNotifier(db *sql.DB) {
-	go func() {
-		now := time.Now().UTC()
-		next := time.Date(now.Year(), now.Month(), now.Day(), 9, 0, 0, 0, time.UTC)
-		if !next.After(now) {
-			next = next.Add(24 * time.Hour)
-		}
+var (
+	archivingMu      sync.Mutex
+	lastArchivingRun time.Time
+)
 
-		time.Sleep(time.Until(next))
-		runAutoArchiving(db)
-		runArchivingNotifications(db)
-		runAbsenceStartedNotifications(db)
-
-		ticker := time.NewTicker(24 * time.Hour)
-		defer ticker.Stop()
-		for range ticker.C {
-			runAutoArchiving(db)
-			runArchivingNotifications(db)
-			runAbsenceStartedNotifications(db)
-		}
-	}()
+// RunArchivingIfDue runs auto-archiving and absence notifications once per day at or after 09:00 UTC.
+func RunArchivingIfDue(db *sql.DB) {
+	now := time.Now().UTC()
+	if now.Hour() < 9 {
+		return
+	}
+	today := now.Truncate(24 * time.Hour)
+	archivingMu.Lock()
+	alreadyRan := !lastArchivingRun.IsZero() && lastArchivingRun.UTC().Truncate(24*time.Hour).Equal(today)
+	if !alreadyRan {
+		lastArchivingRun = now
+	}
+	archivingMu.Unlock()
+	if alreadyRan {
+		return
+	}
+	runAutoArchiving(db)
+	runArchivingNotifications(db)
+	runAbsenceStartedNotifications(db)
 }
 
 func runAutoArchiving(db *sql.DB) {

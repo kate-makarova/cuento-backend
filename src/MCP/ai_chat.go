@@ -1,15 +1,9 @@
 package MCP
 
 import (
-	"context"
-	"cuento-backend/src/Entities"
-	"cuento-backend/src/Services"
-	"cuento-backend/src/Websockets"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
-	"time"
 )
 
 // chatSystemInstruction builds the system prompt for AI chat tasks.
@@ -52,17 +46,9 @@ func chatSystemInstruction(userID int) string {
 	)
 }
 
-// executeChatTask runs the AI chat pipeline for one queued task and delivers the result.
+// executeChatTask loads the task context, appends the user message to the session,
+// and hands off to the router.
 func executeChatTask(db *sql.DB, taskID, userID int) {
-	ctx := context.Background()
-
-	client, err := getActivePool().ClientForMinSizeAndProtocol(Entities.AIModelSizeSmall, Entities.AIModelTypeText, Entities.AIModelProtocolOpenAI)
-	if err != nil {
-		markFailed(db, taskID, userID, "no AI model available: "+err.Error())
-		return
-	}
-
-	// Read session_id and message_id from task payload.
 	var payloadStr string
 	_ = db.QueryRow(`SELECT COALESCE(payload, '{}') FROM ai_task_queue WHERE id = ?`, taskID).Scan(&payloadStr)
 	var taskPayload struct {
@@ -71,14 +57,12 @@ func executeChatTask(db *sql.DB, taskID, userID int) {
 	}
 	_ = json.Unmarshal([]byte(payloadStr), &taskPayload)
 
-	// Load the specific user message that triggered this task.
 	userMsg, err := loadMessageByID(taskPayload.MessageID, db)
 	if err != nil {
 		markFailed(db, taskID, userID, "failed to load message: "+err.Error())
 		return
 	}
 
-	// Append the new user message to the session and snapshot the history.
 	sess := getOrCreateChatSession(taskPayload.SessionID)
 	sess.mu.Lock()
 	sess.messages = append(sess.messages, userMsg)
@@ -86,90 +70,7 @@ func executeChatTask(db *sql.DB, taskID, userID int) {
 	copy(history, sess.messages)
 	sess.mu.Unlock()
 
-	var replyText string
-	var sources []ChatSource
-
-	err = withModelRetry(
-		getActivePool(),
-		Entities.AIModelSizeSmall, Entities.AIModelTypeText,
-		client,
-		func(c AIClient) error {
-			var e error
-			replyText, sources, e = NewAIAgent(c).Chat(ctx, history, chatSystemInstruction(userID))
-			return e
-		},
-		func(modelID string) {
-			_, _ = db.Exec(`UPDATE ai_task_queue SET retries = retries + 1 WHERE id = ?`, taskID)
-			log.Printf("AI queue: task %d rate-limited on %s, trying next model", taskID, modelID)
-		},
-	)
-	if err != nil {
-		markFailed(db, taskID, userID, err.Error())
-		pushError(userID, err.Error())
-		notifyQueuePositions(db, taskID)
-		return
-	}
-
-	replyText = Services.MarkdownToHTML(replyText)
-
-	// Append assistant reply to the session.
-	sess.mu.Lock()
-	sess.messages = append(sess.messages, ChatMessage{Role: "assistant", Content: replyText})
-	sess.mu.Unlock()
-
-	// Deduplicate sources by PostID before saving.
-	sources = uniqueSources(sources)
-
-	// Serialize sources.
-	var sourcesJSON []byte
-	if len(sources) > 0 {
-		sourcesJSON, _ = json.Marshal(sources)
-	}
-
-	// Save assistant reply.
-	var replyID int64
-	r, err := db.Exec(
-		"INSERT INTO ai_chat_messages (user_id, role, content, sources, date_created) VALUES (?, 'assistant', ?, ?, NOW())",
-		userID, replyText, sourcesJSON,
-	)
-	if err == nil {
-		replyID, _ = r.LastInsertId()
-	}
-
-	// Mark task done.
-	_, _ = db.Exec(
-		`UPDATE ai_task_queue SET status = 'done', date_completed = NOW() WHERE id = ?`,
-		taskID,
-	)
-
-	// Build the reply entity.
-	entitySources := make([]Entities.AISource, len(sources))
-	for i, s := range sources {
-		entitySources[i] = Entities.AISource{
-			PostID:    s.PostID,
-			TopicID:   s.TopicID,
-			TopicName: s.TopicName,
-			TopicType: s.TopicType,
-		}
-	}
-	msg := Entities.AIChatMessage{
-		Id:          int(replyID),
-		UserId:      userID,
-		Role:        "assistant",
-		Content:     replyText,
-		Sources:     entitySources,
-		DateCreated: time.Now(),
-	}
-
-	// Notify subscribers and determine how to deliver the reply.
-	wasSubscriber := notifySubscribersOnCompletion(db, taskID, userID, msg)
-
-	if !wasSubscriber {
-		Websockets.MainHub.SendNotification(userID, map[string]interface{}{
-			"type": "ai_message",
-			"data": msg,
-		})
-	}
+	routeChatMessage(db, taskID, userID, userMsg, history, sess)
 }
 
 // uniqueSources removes duplicate ChatSource entries, keeping the first

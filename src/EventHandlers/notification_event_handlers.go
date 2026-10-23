@@ -40,6 +40,8 @@ func RegisterNotificationEventHandlers() {
 			title = "Episode Status Changed"
 		case "topic_subscriptions":
 			title = "New Post in Subscribed Topic"
+		case "ai_message":
+			title = "AI Chat"
 		}
 
 		res, err := db.Exec("INSERT INTO notifications (user_id, type, title, message, data, date_created, is_read) VALUES (?, ?, ?, ?, ?, NOW(), FALSE)",
@@ -103,6 +105,8 @@ func RegisterNotificationEventHandlers() {
 			n := Entities.AbsenceStartedNotification{NotificationBase: base}
 			json.Unmarshal(dataJSON, &n.Data)
 			notification = n
+		case "ai_message":
+			notification = Entities.AiMessageNotification{NotificationBase: base}
 		default:
 			notification = base
 		}

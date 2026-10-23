@@ -21,6 +21,7 @@ func (Features) Get() []Feature {
 	return []Feature{
 		CurrencyFeature{},
 		PostTopFeature{},
+		GameDigestFeature{},
 	}
 }
 
