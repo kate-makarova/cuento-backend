@@ -114,9 +114,11 @@ func RegisterPostEventHandlers() {
 		if err := db.QueryRow("SELECT post_number, name FROM topics WHERE id = ?", event.TopicID).Scan(&newPostNumber, &topicName); err == nil {
 			if newPostNumber == Entities.TopicPostCap {
 				Events.Publish(db, Events.TopicFull, Events.TopicFullEvent{
-					TopicID:    event.TopicID,
-					SubforumID: event.SubforumID,
-					TopicName:  topicName,
+					TopicID:             event.TopicID,
+					SubforumID:          event.SubforumID,
+					TopicName:           topicName,
+					TriggeredByUser:     event.Post.AuthorUserId,
+					TriggeredByPostDate: event.Post.DateCreated,
 				})
 			}
 		}

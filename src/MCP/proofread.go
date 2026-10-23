@@ -40,14 +40,26 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 	if pool == nil {
 		return nil, fmt.Errorf("AI is not configured")
 	}
+
 	client, err := pool.ClientForMinSize(Entities.AIModelSizeLarge, Entities.AIModelTypeText)
 	if err != nil {
 		return nil, fmt.Errorf("no AI model available: %w", err)
 	}
 
-	reply, _, err := client.Chat(context.Background(), []ChatMessage{
-		{Role: "user", Content: text},
-	}, proofreadSystemInstruction)
+	var reply string
+	err = withModelRetry(
+		pool,
+		Entities.AIModelSizeLarge, Entities.AIModelTypeText,
+		client,
+		func(c AIClient) error {
+			var e error
+			reply, _, e = c.Chat(context.Background(), []ChatMessage{
+				{Role: "user", Content: text},
+			}, proofreadSystemInstruction)
+			return e
+		},
+		nil,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("proofreading failed: %w", err)
 	}
