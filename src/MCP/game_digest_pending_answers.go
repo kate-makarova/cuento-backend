@@ -42,20 +42,8 @@ type digestAnswerResult struct {
 	} `json:"episode_updates"`
 }
 
-// loadNotifyUserID reads the notify_user_id setting from game_digest_settings.
-func loadNotifyUserID(db *sql.DB) int {
-	var val sql.NullString
-	_ = db.QueryRow(`SELECT setting_value FROM game_digest_settings WHERE setting_name = 'notify_user_id'`).Scan(&val)
-	if !val.Valid || val.String == "" || val.String == "null" {
-		return 0
-	}
-	var userID int
-	_ = json.Unmarshal([]byte(val.String), &userID)
-	return userID
-}
-
-// postDigestPendingQuestionsToChat injects an AI chat message for the digest manager
-// listing questions the summarizer could not answer.
+// postDigestPendingQuestionsToChat injects an AI chat message for the post author
+// listing questions the summariser could not answer.
 func postDigestPendingQuestionsToChat(db *sql.DB, notifyUserID int, postID int, episodeID int64, questions []string) {
 	var episodeName string
 	_ = db.QueryRow(
@@ -103,25 +91,20 @@ func postDigestPendingQuestionsToChat(db *sql.DB, notifyUserID int, postID int, 
 	})
 }
 
-// loadPendingDigestRequests returns all posts with unresolved pending questions
-// if the given user is the configured digest manager. Returns nil otherwise.
+// loadPendingDigestRequests returns all posts authored by userID that have unresolved pending questions.
 func loadPendingDigestRequests(db *sql.DB, userID int) []pendingAnswerRequest {
-	notifyUserID := loadNotifyUserID(db)
-	if notifyUserID == 0 || userID != notifyUserID {
-		return nil
-	}
-
 	rows, err := db.Query(`
 		SELECT wpn.post_id, eb.id, wpn.pending_questions
 		FROM game_digest_weekly_post_notes wpn
 		JOIN posts p ON p.id = wpn.post_id
 		JOIN topics t ON t.id = p.topic_id
 		JOIN episode_base eb ON eb.topic_id = t.id
-		WHERE wpn.is_deleted = 0
+		WHERE p.user_id = ?
+		  AND wpn.is_deleted = 0
 		  AND wpn.is_complete = 0
 		  AND wpn.pending_questions IS NOT NULL
 		  AND JSON_LENGTH(wpn.pending_questions) > 0
-		ORDER BY p.date_created ASC`)
+		ORDER BY p.date_created ASC`, userID)
 	if err != nil {
 		return nil
 	}

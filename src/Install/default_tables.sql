@@ -1238,7 +1238,7 @@ CREATE TABLE game_digest_settings
 INSERT IGNORE INTO game_digest_settings (setting_name, setting_value) VALUES ('excluded_subforums', '[]');
 INSERT IGNORE INTO game_digest_settings (setting_name, setting_value) VALUES ('summary_language', null);
 INSERT IGNORE INTO game_digest_settings (setting_name, setting_value) VALUES ('model_requirements', '{"min_size": 2}');
-INSERT IGNORE INTO game_digest_settings (setting_name, setting_value) VALUES ('notify_user_id', null);
+INSERT IGNORE INTO game_digest_settings (setting_name, setting_value) VALUES ('publish_user_id', null);
 
 CREATE TABLE game_digest_weekly_post_notes
 (

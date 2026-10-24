@@ -140,11 +140,12 @@ func SummarizeEpisodePost(db *sql.DB, postID int, topicID int64, subforumID int)
 		return
 	}
 
-	// 11. If there are pending questions, notify the digest manager via AI chat.
+	// 11. If there are pending questions, notify the post author via AI chat.
 	if len(result.PendingQuestions) > 0 {
-		notifyUserID := loadNotifyUserID(db)
-		if notifyUserID > 0 {
-			go postDigestPendingQuestionsToChat(db, notifyUserID, postID, episodeID, result.PendingQuestions)
+		var authorUserID int
+		_ = db.QueryRow(`SELECT user_id FROM posts WHERE id = ?`, postID).Scan(&authorUserID)
+		if authorUserID > 0 {
+			go postDigestPendingQuestionsToChat(db, authorUserID, postID, episodeID, result.PendingQuestions)
 		}
 	}
 }
