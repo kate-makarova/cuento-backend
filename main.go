@@ -429,6 +429,12 @@ func main() {
 	protectedRouter.POST("/game-digest/settings", "Save a game digest setting", func(c *gin.Context) {
 		Features.SaveGameDigestSettingHandler(c, Services.DB)
 	})
+	protectedRouter.GET("/game-digest/weekly-posts", "Get weekly post notes for the digest", func(c *gin.Context) {
+		Features.GetWeeklyPostNotesHandler(c, Services.DB)
+	})
+	protectedRouter.POST("/game-digest/weekly-posts/:post_id/resolve", "Resolve pending questions for a post and re-summarize", func(c *gin.Context) {
+		Features.ResolvePostPendingQuestionsHandler(c, Services.DB, MCP.SummarizeEpisodePost)
+	})
 	protectedRouter.POST("/character/create", "Create a new character", func(c *gin.Context) {
 		Controllers.CreateCharacter(c, Services.DB)
 	})
