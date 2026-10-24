@@ -5,12 +5,13 @@ import (
 	"strings"
 )
 
-// withModelRetry calls fn with a client from pool, retrying with a fresh model on
-// 429 rate-limit errors. The first attempt uses initialClient; subsequent attempts
-// call pool.ClientExcluding with the accumulated list of failed model IDs.
+// withModelRetry calls fn with a client from pool, retrying with a fresh model when
+// shouldRetry returns true for the error. The first attempt uses initialClient;
+// subsequent attempts call pool.ClientExcluding with the accumulated list of failed
+// model IDs.
 //
-// onRetry is called before each retry with the model ID that was rate-limited; pass
-// nil if no side effects are needed. Returns the first non-429 error, or nil on success.
+// Pass nil for shouldRetry to use the default (retry on 429 / quota errors only).
+// onRetry is called before each retry with the failing model ID; pass nil if not needed.
 func withModelRetry(
 	pool ModelPool,
 	minSize Entities.AIModelSize,
@@ -18,7 +19,13 @@ func withModelRetry(
 	initialClient AIClient,
 	fn func(AIClient) error,
 	onRetry func(modelID string),
+	shouldRetry ...func(error) bool,
 ) error {
+	retryable := defaultShouldRetry
+	if len(shouldRetry) > 0 && shouldRetry[0] != nil {
+		retryable = shouldRetry[0]
+	}
+
 	const maxRetries = 4
 	excluded := make([]string, 0, maxRetries)
 	client := initialClient
@@ -37,8 +44,7 @@ func withModelRetry(
 			return nil
 		}
 
-		is429 := strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "quota")
-		if !is429 || attempt == maxRetries {
+		if !retryable(err) || attempt == maxRetries {
 			return err
 		}
 
@@ -49,4 +55,8 @@ func withModelRetry(
 	}
 
 	return nil
+}
+
+func defaultShouldRetry(err error) bool {
+	return strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "quota")
 }
