@@ -844,6 +844,7 @@ CREATE TABLE features
 
 INSERT IGNORE INTO features (`key`, is_active) VALUES ('currency', false);
 INSERT IGNORE INTO features (`key`, is_active) VALUES ('post_top', false);
+INSERT IGNORE INTO features (`key`, is_active) VALUES ('game_digest', false);
 
 CREATE TABLE currency_income_types
 (
@@ -1207,8 +1208,6 @@ INSERT IGNORE INTO ai_agents (id, title, short_description, handler) VALUES (
     'Creates a summary of game events for the given period of time',
     'GameDigest'
 );
-
-INSERT IGNORE INTO features (`key`, is_active) VALUES ('game_digest', false);
 
 CREATE TABLE game_digests
 (
