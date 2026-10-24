@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 const proofreadSystemInstruction = `You are a proofreader. Fix all spelling, grammar, and punctuation errors in the text the user provides.
@@ -46,36 +47,46 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 		return nil, fmt.Errorf("no AI model available: %w", err)
 	}
 
-	var reply string
+	var result ProofreadResult
 	err = withModelRetry(
 		pool,
 		Entities.AIModelSizeLarge, Entities.AIModelTypeText,
 		client,
 		func(c AIClient) error {
-			var e error
-			reply, _, e = c.Chat(context.Background(), []ChatMessage{
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+
+			reply, _, e := c.Chat(ctx, []ChatMessage{
 				{Role: "user", Content: text},
 			}, proofreadSystemInstruction)
-			return e
+			if e != nil {
+				return e
+			}
+
+			reply = strings.TrimSpace(reply)
+			if strings.HasPrefix(reply, "```") {
+				reply = strings.TrimPrefix(reply, "```json")
+				reply = strings.TrimPrefix(reply, "```")
+				reply = strings.TrimSuffix(reply, "```")
+				reply = strings.TrimSpace(reply)
+			}
+
+			if err := json.Unmarshal([]byte(reply), &result); err != nil {
+				return fmt.Errorf("failed to parse proofreading response: %w", err)
+			}
+			return nil
 		},
 		nil,
+		func(err error) bool {
+			msg := err.Error()
+			return strings.Contains(msg, "429") ||
+				strings.Contains(msg, "quota") ||
+				strings.Contains(msg, "failed to parse proofreading response") ||
+				strings.Contains(msg, "context deadline exceeded")
+		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("proofreading failed: %w", err)
-	}
-
-	// Strip accidental markdown fences the model may add.
-	reply = strings.TrimSpace(reply)
-	if strings.HasPrefix(reply, "```") {
-		reply = strings.TrimPrefix(reply, "```json")
-		reply = strings.TrimPrefix(reply, "```")
-		reply = strings.TrimSuffix(reply, "```")
-		reply = strings.TrimSpace(reply)
-	}
-
-	var result ProofreadResult
-	if err := json.Unmarshal([]byte(reply), &result); err != nil {
-		return nil, fmt.Errorf("failed to parse proofreading response: %w", err)
+		return nil, err
 	}
 	return &result, nil
 }
