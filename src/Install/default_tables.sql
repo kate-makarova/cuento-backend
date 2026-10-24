@@ -1243,7 +1243,7 @@ INSERT IGNORE INTO game_digest_settings (setting_name, setting_value) VALUES ('n
 
 CREATE TABLE game_digest_weekly_post_notes
 (
-    post_id           int          not null primary key,
+    post_id           bigint unsigned not null primary key,
     week_start        date         not null,
     is_deleted        boolean      not null default false,
     is_complete       boolean      not null default false,
