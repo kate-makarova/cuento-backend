@@ -64,7 +64,7 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 		return nil, fmt.Errorf("AI is not configured")
 	}
 
-	client, err := pool.ClientForMinSize(Entities.AIModelSizeLarge, Entities.AIModelTypeText)
+	client, err := pool.ClientForMinSize(Entities.AIModelSizeMedium, Entities.AIModelTypeText)
 	if err != nil {
 		return nil, fmt.Errorf("no AI model available: %w", err)
 	}
@@ -75,7 +75,7 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 	var result ProofreadResult
 	err = withModelRetryOpts(
 		pool,
-		Entities.AIModelSizeLarge, Entities.AIModelTypeText,
+		Entities.AIModelSizeMedium, Entities.AIModelTypeText,
 		client,
 		func(c AIClient) error {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
