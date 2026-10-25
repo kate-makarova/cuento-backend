@@ -75,7 +75,13 @@ func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelTyp
 	minCtx := minContextForSize[minSize]
 
 	// Providers known to be broken or chronically degraded on the free tier.
-	brokenProviders := []string{"recursive/", "xingchen-agi/"}
+	brokenProviders := []string{"recursive/", "xingchen-agi/", "dots-studio/"}
+
+	// Specific models known to consistently time out or return garbage.
+	brokenModels := map[string]bool{
+		"nvidia/nemotron-3.5-super-vl:free": true,
+		"liquid/lfm-2.5-2.6b:free":         true,
+	}
 
 	excludedSet := make(map[string]bool, len(excluded))
 	for _, id := range excluded {
@@ -100,6 +106,9 @@ func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelTyp
 			continue
 		}
 		if excludedSet[m.ID] {
+			continue
+		}
+		if brokenModels[m.ID] {
 			continue
 		}
 		broken := false

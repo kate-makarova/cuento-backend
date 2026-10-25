@@ -241,6 +241,15 @@ func AdminSwitchAIPool(c *gin.Context, db *sql.DB) {
 			freeOnlyStr, _ = Services.GetGlobalSetting("openrouter_use_free_only", db)
 		}
 		MCP.SwitchPool(MCP.NewOpenRouterModelPool(req.APIKey, freeOnlyStr != "n"))
+	case "groq":
+		if req.APIKey == "" {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "api_key is required for groq"})
+			c.Abort()
+			return
+		}
+		db.Exec(`UPDATE global_settings SET setting_value = 'groq' WHERE setting_name = 'model_pool_source'`)
+		db.Exec(`UPDATE global_settings SET setting_value = ? WHERE setting_name = 'groq_api_key'`, req.APIKey)
+		MCP.SwitchPool(MCP.NewGroqModelPool(req.APIKey))
 	default:
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "unknown source: " + req.Source})
 		c.Abort()
@@ -258,12 +267,14 @@ func AdminGetPoolStatus(c *gin.Context, db *sql.DB) {
 	}
 
 	source, _ := Services.GetGlobalSetting("model_pool_source", db)
-	apiKey, _ := Services.GetGlobalSetting("openrouter_api_key", db)
+	orApiKey, _ := Services.GetGlobalSetting("openrouter_api_key", db)
 	freeOnly, _ := Services.GetGlobalSetting("openrouter_use_free_only", db)
+	groqApiKey, _ := Services.GetGlobalSetting("groq_api_key", db)
 	c.JSON(http.StatusOK, gin.H{
 		"source":                   source,
-		"openrouter_api_key":       apiKey,
+		"openrouter_api_key":       orApiKey,
 		"openrouter_use_free_only": freeOnly,
+		"groq_api_key":             groqApiKey,
 	})
 }
 
@@ -275,25 +286,38 @@ func AdminListAvailablePoolModels(c *gin.Context, db *sql.DB) {
 	}
 
 	source, _ := Services.GetGlobalSetting("model_pool_source", db)
-	if source != "openrouter" {
+	switch source {
+	case "openrouter":
+		apiKey, _ := Services.GetGlobalSetting("openrouter_api_key", db)
+		if apiKey == "" {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "OpenRouter API key is not configured"})
+			c.Abort()
+			return
+		}
+		models, err := MCP.FetchOpenRouterModels(apiKey)
+		if err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusBadGateway, Message: "Failed to fetch models from OpenRouter: " + err.Error()})
+			c.Abort()
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"source": "openrouter", "models": models})
+	case "groq":
+		apiKey, _ := Services.GetGlobalSetting("groq_api_key", db)
+		if apiKey == "" {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Groq API key is not configured"})
+			c.Abort()
+			return
+		}
+		models, err := MCP.FetchGroqModels(apiKey)
+		if err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusBadGateway, Message: "Failed to fetch models from Groq: " + err.Error()})
+			c.Abort()
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"source": "groq", "models": models})
+	default:
 		c.JSON(http.StatusOK, gin.H{"source": "db", "models": []any{}})
-		return
 	}
-
-	apiKey, _ := Services.GetGlobalSetting("openrouter_api_key", db)
-	if apiKey == "" {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "OpenRouter API key is not configured"})
-		c.Abort()
-		return
-	}
-
-	models, err := MCP.FetchOpenRouterModels(apiKey)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadGateway, Message: "Failed to fetch models from OpenRouter: " + err.Error()})
-		c.Abort()
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"source": "openrouter", "models": models})
 }
 
 func AdminDeleteAIModel(c *gin.Context, db *sql.DB) {
