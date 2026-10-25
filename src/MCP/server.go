@@ -34,11 +34,15 @@ func SwitchPool(pool ModelPool) {
 // and activates the appropriate pool. Called on startup and after settings change.
 func InitPoolFromSettings(db *sql.DB) {
 	source, _ := Services.GetGlobalSetting("model_pool_source", db)
-	if source == "openrouter" {
+	switch source {
+	case "openrouter":
 		apiKey, _ := Services.GetGlobalSetting("openrouter_api_key", db)
 		freeOnly, _ := Services.GetGlobalSetting("openrouter_use_free_only", db)
 		SwitchPool(NewOpenRouterModelPool(apiKey, freeOnly != "n"))
-	} else {
+	case "groq":
+		apiKey, _ := Services.GetGlobalSetting("groq_api_key", db)
+		SwitchPool(NewGroqModelPool(apiKey))
+	default:
 		SwitchPool(NewAIModelPool(db))
 	}
 }
