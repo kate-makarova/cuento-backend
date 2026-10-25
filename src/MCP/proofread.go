@@ -73,12 +73,12 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 	masked, bbTags := maskBBCode(text)
 
 	var result ProofreadResult
-	err = withModelRetry(
+	err = withModelRetryOpts(
 		pool,
 		Entities.AIModelSizeLarge, Entities.AIModelTypeText,
 		client,
 		func(c AIClient) error {
-			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
 			reply, _, e := c.Chat(ctx, []ChatMessage{
@@ -101,13 +101,15 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 			}
 			return nil
 		},
-		nil,
-		func(err error) bool {
-			msg := err.Error()
-			return strings.Contains(msg, "429") ||
-				strings.Contains(msg, "quota") ||
-				strings.Contains(msg, "failed to parse proofreading response") ||
-				strings.Contains(msg, "context deadline exceeded")
+		ModelRetryOptions{
+			MaxRetries: 2,
+			ShouldRetry: func(err error) bool {
+				msg := err.Error()
+				return strings.Contains(msg, "429") ||
+					strings.Contains(msg, "quota") ||
+					strings.Contains(msg, "failed to parse proofreading response") ||
+					strings.Contains(msg, "context deadline exceeded")
+			},
 		},
 	)
 	if err != nil {

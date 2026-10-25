@@ -74,8 +74,8 @@ func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelTyp
 
 	minCtx := minContextForSize[minSize]
 
-	// Providers known to output only XML tool calls and never produce text responses.
-	brokenProviders := []string{"recursive/"}
+	// Providers known to be broken or chronically degraded on the free tier.
+	brokenProviders := []string{"recursive/", "xingchen-agi/"}
 
 	excludedSet := make(map[string]bool, len(excluded))
 	for _, id := range excluded {
