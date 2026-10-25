@@ -444,7 +444,10 @@ func main() {
 	protectedRouter.POST("/global-settings/update", "Update global settings", func(c *gin.Context) {
 		Controllers.UpdateGlobalSettings(c, Services.DB)
 	})
-protectedRouter.GET("/character-claims", "Get list of all character claims grouped by faction", func(c *gin.Context) {
+protectedRouter.GET("/my-claim-records", "Get current user's active claim records for wanted characters", func(c *gin.Context) {
+		Controllers.GetMyClaimRecords(c, Services.DB)
+	})
+	protectedRouter.GET("/character-claims", "Get list of all character claims grouped by faction", func(c *gin.Context) {
 		Controllers.GetCharacterClaims(c, Services.DB)
 	})
 	protectedRouter.POST("/character-claim/create", "Create a new character claim", func(c *gin.Context) {
