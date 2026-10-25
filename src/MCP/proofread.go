@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -27,12 +28,33 @@ What NOT to change:
 Return your response as a JSON object with exactly this structure:
 {"text": "<corrected text>", "fixes": ["<short description of fix 1>", "<short description of fix 2>"]}
 If no fixes were needed, return: {"text": "<original text unchanged>", "fixes": []}
+The text may contain placeholders like «0», «1», «2», etc. — leave every placeholder exactly as-is, do not alter, remove, or reorder them.
 Return only the raw JSON object — no markdown fences, no commentary.`
 
 // ProofreadResult holds the corrected text and a human-readable list of changes.
 type ProofreadResult struct {
 	Text  string   `json:"text"`
 	Fixes []string `json:"fixes"`
+}
+
+var bbcodeTagRe = regexp.MustCompile(`\[[^\[\]\n]{0,60}\]`)
+
+// maskBBCode replaces every BBCode tag with a numbered placeholder «0», «1», …
+// so the model only sees plain prose. restoreBBCode reverses the substitution.
+func maskBBCode(text string) (masked string, tags []string) {
+	masked = bbcodeTagRe.ReplaceAllStringFunc(text, func(tag string) string {
+		n := len(tags)
+		tags = append(tags, tag)
+		return fmt.Sprintf("«%d»", n)
+	})
+	return masked, tags
+}
+
+func restoreBBCode(text string, tags []string) string {
+	for i, tag := range tags {
+		text = strings.ReplaceAll(text, fmt.Sprintf("«%d»", i), tag)
+	}
+	return text
 }
 
 // ProofreadText asks a large model to fix spelling, grammar, and punctuation — no rephrasing.
@@ -47,6 +69,9 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 		return nil, fmt.Errorf("no AI model available: %w", err)
 	}
 
+	// Replace BBCode tags with placeholders so the model only sees plain prose.
+	masked, bbTags := maskBBCode(text)
+
 	var result ProofreadResult
 	err = withModelRetry(
 		pool,
@@ -57,7 +82,7 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 			defer cancel()
 
 			reply, _, e := c.Chat(ctx, []ChatMessage{
-				{Role: "user", Content: text},
+				{Role: "user", Content: masked},
 			}, proofreadSystemInstruction)
 			if e != nil {
 				return e
@@ -88,5 +113,8 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Restore BBCode tags into the corrected text.
+	result.Text = restoreBBCode(result.Text, bbTags)
 	return &result, nil
 }
