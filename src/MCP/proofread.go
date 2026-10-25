@@ -28,7 +28,7 @@ What NOT to change:
 Return your response as a JSON object with exactly this structure:
 {"text": "<corrected text>", "fixes": ["<short description of fix 1>", "<short description of fix 2>"]}
 If no fixes were needed, return: {"text": "<original text unchanged>", "fixes": []}
-The text may contain placeholders like «0», «1», «2», etc. — leave every placeholder exactly as-is, do not alter, remove, or reorder them.
+The text may contain template placeholders like {0}, {1}, {2}, etc. These are technical markers, not text. Leave every placeholder exactly as-is — do not alter, remove, reorder, or reformat them in any way.
 Return only the raw JSON object — no markdown fences, no commentary.`
 
 // ProofreadResult holds the corrected text and a human-readable list of changes.
@@ -39,20 +39,20 @@ type ProofreadResult struct {
 
 var bbcodeTagRe = regexp.MustCompile(`\[[^\[\]\n]{0,60}\]`)
 
-// maskBBCode replaces every BBCode tag with a numbered placeholder «0», «1», …
+// maskBBCode replaces every BBCode tag with a numbered placeholder {0}, {1}, …
 // so the model only sees plain prose. restoreBBCode reverses the substitution.
 func maskBBCode(text string) (masked string, tags []string) {
 	masked = bbcodeTagRe.ReplaceAllStringFunc(text, func(tag string) string {
 		n := len(tags)
 		tags = append(tags, tag)
-		return fmt.Sprintf("«%d»", n)
+		return fmt.Sprintf("{%d}", n)
 	})
 	return masked, tags
 }
 
 func restoreBBCode(text string, tags []string) string {
 	for i, tag := range tags {
-		text = strings.ReplaceAll(text, fmt.Sprintf("«%d»", i), tag)
+		text = strings.ReplaceAll(text, fmt.Sprintf("{%d}", i), tag)
 	}
 	return text
 }
