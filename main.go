@@ -43,6 +43,9 @@ func main() {
 	// Start Google Drive backup scheduler (checks hourly, runs backup per configured frequency)
 	Services.StartBackupScheduler(Services.DB)
 
+	// Clean up published post drafts older than 1 month (runs weekly)
+	Services.StartDraftCleanupScheduler(Services.DB)
+
 	// Start WebSocket Hub
 	go Websockets.MainHub.Run()
 
