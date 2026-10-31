@@ -96,6 +96,9 @@ func GetCharacter(c *gin.Context, db *sql.DB) {
 			return
 		}
 
+		currentUserID := Services.GetUserIdFromContext(c)
+		viewerTz := Services.GetUserTimezone(currentUserID, db)
+
 		// Fetch episodes for this character
 		query := `
 			SELECT e.id, e.name, e.topic_id, t.date_last_post, u.username as last_post_author_username
@@ -113,11 +116,15 @@ func GetCharacter(c *gin.Context, db *sql.DB) {
 			for rows.Next() {
 				var ep Entities.EpisodeListItem
 				if err := rows.Scan(&ep.Id, &ep.Name, &ep.TopicId, &ep.DateLastPost, &ep.LastPostAuthorUsername); err == nil {
+					if ep.DateLastPost != nil {
+						s := Services.LocalizeTime(*ep.DateLastPost, viewerTz)
+						ep.DateLastPostLocalized = &s
+					}
 					// Fetch all characters for this episode
 					charRows, err := db.Query(`
-						SELECT cb.id, cb.name 
-						FROM character_base cb 
-						JOIN episode_character ec ON cb.id = ec.character_id 
+						SELECT cb.id, cb.name
+						FROM character_base cb
+						JOIN episode_character ec ON cb.id = ec.character_id
 						WHERE ec.episode_id = ?`, ep.Id)
 					if err == nil {
 						var characters []*Entities.ShortCharacter
@@ -140,7 +147,6 @@ func GetCharacter(c *gin.Context, db *sql.DB) {
 		character.Factions, _ = Services.GetFactionTreeByCharacter(character.Id, db)
 
 		// Check CanEdit
-		currentUserID := Services.GetUserIdFromContext(c)
 		canEdit := false
 		if currentUserID != 0 {
 			// Fetch subforum ID for permission check
@@ -176,10 +182,14 @@ func GetCharacter(c *gin.Context, db *sql.DB) {
 			LIMIT 1
 		`, character.Id).Scan(&cr.Id, &cr.ClaimId, &cr.UserId, &cr.GuestHash, &cr.IsGuest, &cr.ClaimDate, &cr.ClaimExpirationDate, &cr.CharacterId, &cr.ClaimCreatedWithCharacterSheet)
 		if err == nil {
+			if cr.ClaimExpirationDate != nil {
+				s := Services.LocalizeTime(*cr.ClaimExpirationDate, viewerTz)
+				cr.ClaimExpirationDateLocalized = &s
+			}
 			character.ClaimRecord = &cr
 		}
 
-		character.UserInfo = fetchUserInfo(character.UserId, db)
+		character.UserInfo = fetchUserInfo(character.UserId, db, viewerTz)
 
 		c.JSON(http.StatusOK, character)
 		return
@@ -2313,13 +2323,15 @@ func CustomFieldList(c *gin.Context, db *sql.DB) {
 }
 
 type AdminCharacterListItem struct {
-	Id              int                      `json:"id"`
-	Name            string                   `json:"name"`
-	CharacterStatus Entities.CharacterStatus `json:"character_status"`
-	UserId          int                      `json:"user_id"`
-	Username        string                   `json:"username"`
-	DateLastPost    *time.Time               `json:"date_last_post"`
-	DateCreated     time.Time                `json:"date_created"`
+	Id                  int                      `json:"id"`
+	Name                string                   `json:"name"`
+	CharacterStatus     Entities.CharacterStatus `json:"character_status"`
+	UserId              int                      `json:"user_id"`
+	Username            string                   `json:"username"`
+	DateLastPost        *time.Time               `json:"date_last_post"`
+	DateCreated         time.Time                `json:"date_created"`
+	DateLastPostLocalized *string                `json:"date_last_post_localized,omitempty"`
+	DateCreatedLocalized  string                 `json:"date_created_localized,omitempty"`
 }
 
 func GetAdminCharacterList(c *gin.Context, db *sql.DB) {
@@ -2380,6 +2392,9 @@ func GetAdminCharacterList(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
+	adminUserID := Services.GetUserIdFromContext(c)
+	tz := Services.GetUserTimezone(adminUserID, db)
+
 	characters := []AdminCharacterListItem{}
 	for rows.Next() {
 		var ch AdminCharacterListItem
@@ -2388,6 +2403,11 @@ func GetAdminCharacterList(c *gin.Context, db *sql.DB) {
 			c.Abort()
 			return
 		}
+		if ch.DateLastPost != nil {
+			s := Services.LocalizeTime(*ch.DateLastPost, tz)
+			ch.DateLastPostLocalized = &s
+		}
+		ch.DateCreatedLocalized = Services.LocalizeTime(ch.DateCreated, tz)
 		characters = append(characters, ch)
 	}
 
@@ -2400,13 +2420,14 @@ func GetAdminCharacterList(c *gin.Context, db *sql.DB) {
 }
 
 type ArchivingWarningItem struct {
-	Id           int        `json:"id"`
-	Name         string     `json:"name"`
-	UserId       int        `json:"user_id"`
-	Username     string     `json:"username"`
-	DateLastPost *time.Time `json:"date_last_post"`
-	DaysLeft     int        `json:"days_left"`
-	ArchivalDate string     `json:"archival_date"`
+	Id                    int        `json:"id"`
+	Name                  string     `json:"name"`
+	UserId                int        `json:"user_id"`
+	Username              string     `json:"username"`
+	DateLastPost          *time.Time `json:"date_last_post"`
+	DateLastPostLocalized *string    `json:"date_last_post_localized,omitempty"`
+	DaysLeft              int        `json:"days_left"`
+	ArchivalDate          string     `json:"archival_date"`
 }
 
 func GetArchivingWarnings(c *gin.Context, db *sql.DB) {
@@ -2473,6 +2494,9 @@ func GetArchivingWarnings(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
+	viewerID := Services.GetUserIdFromContext(c)
+	tz := Services.GetUserTimezone(viewerID, db)
+
 	characters := []ArchivingWarningItem{}
 	for rows.Next() {
 		var ch ArchivingWarningItem
@@ -2480,6 +2504,10 @@ func GetArchivingWarnings(c *gin.Context, db *sql.DB) {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan character: " + err.Error()})
 			c.Abort()
 			return
+		}
+		if ch.DateLastPost != nil {
+			s := Services.LocalizeTime(*ch.DateLastPost, tz)
+			ch.DateLastPostLocalized = &s
 		}
 		characters = append(characters, ch)
 	}

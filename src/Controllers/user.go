@@ -49,22 +49,24 @@ type UserProfileResponse struct {
 }
 
 type MaskProfileListItem struct {
-	Id            int        `json:"id"`
-	Name          *string    `json:"name"`
-	Avatar        *string    `json:"avatar"`
-	TotalEpisodes int        `json:"total_episodes"`
-	TotalPosts    int        `json:"total_posts"`
-	DateLastPost  *time.Time `json:"date_last_post"`
+	Id                   int        `json:"id"`
+	Name                 *string    `json:"name"`
+	Avatar               *string    `json:"avatar"`
+	TotalEpisodes        int        `json:"total_episodes"`
+	TotalPosts           int        `json:"total_posts"`
+	DateLastPost         *time.Time `json:"date_last_post"`
+	DateLastPostLocalized *string   `json:"date_last_post_localized,omitempty"`
 }
 
 type CharacterProfileListItem struct {
-	Id              int                      `json:"id"`
-	Name            string                   `json:"name"`
-	TotalEpisodes   int                      `json:"total_episodes"`
-	TotalPosts      int                      `json:"total_posts"`
-	LastPostDate    *time.Time               `json:"last_post_date"`
-	CharacterStatus Entities.CharacterStatus `json:"character_status"`
-	Factions        []Entities.Faction       `json:"factions"`
+	Id                    int                      `json:"id"`
+	Name                  string                   `json:"name"`
+	TotalEpisodes         int                      `json:"total_episodes"`
+	TotalPosts            int                      `json:"total_posts"`
+	LastPostDate          *time.Time               `json:"last_post_date"`
+	LastPostDateLocalized *string                  `json:"last_post_date_localized,omitempty"`
+	CharacterStatus       Entities.CharacterStatus `json:"character_status"`
+	Factions              []Entities.Faction       `json:"factions"`
 }
 
 type UpdateSettingsRequest struct {
@@ -517,6 +519,10 @@ func GetUserProfile(c *gin.Context, db *sql.DB) {
 		if err := charRows.Scan(&char.Id, &char.Name, &char.TotalEpisodes, &char.TotalPosts, &char.LastPostDate, &char.CharacterStatus); err != nil {
 			continue
 		}
+		if char.LastPostDate != nil {
+			s := Services.LocalizeTime(*char.LastPostDate, viewerTimezone)
+			char.LastPostDateLocalized = &s
+		}
 
 		// Fetch factions of level 0 (root factions) for this character
 		factionRows, err := db.Query("SELECT f.id, f.name FROM factions f JOIN character_faction cf ON f.id = cf.faction_id WHERE cf.character_id = ? AND f.level = 0", char.Id)
@@ -568,6 +574,10 @@ func GetUserProfile(c *gin.Context, db *sql.DB) {
 		var mask MaskProfileListItem
 		if err := maskRows.Scan(&mask.Id, &mask.Name, &mask.Avatar, &mask.TotalEpisodes, &mask.TotalPosts, &mask.DateLastPost); err != nil {
 			continue
+		}
+		if mask.DateLastPost != nil {
+			s := Services.LocalizeTime(*mask.DateLastPost, viewerTimezone)
+			mask.DateLastPostLocalized = &s
 		}
 		profile.Masks = append(profile.Masks, mask)
 	}
@@ -773,15 +783,18 @@ func SetDoNotBlur(c *gin.Context, db *sql.DB) {
 }
 
 type AdminUserListItem struct {
-	Id               int        `json:"id"`
-	Username         string     `json:"username"`
-	UserStatus       int        `json:"user_status"`
-	DateRegistered   *time.Time `json:"date_registered"`
-	DateLastVisit    *time.Time `json:"date_last_visit"`
-	CharacterCount   int        `json:"character_count"`
-	LastGamePostDate *time.Time `json:"last_game_post_date"`
-	ArchiveDate      *time.Time `json:"archive_date"`
-	ArchiveReason    *string    `json:"archive_reason"`
+	Id                      int        `json:"id"`
+	Username                string     `json:"username"`
+	UserStatus              int        `json:"user_status"`
+	DateRegistered          *time.Time `json:"date_registered"`
+	DateLastVisit           *time.Time `json:"date_last_visit"`
+	CharacterCount          int        `json:"character_count"`
+	LastGamePostDate        *time.Time `json:"last_game_post_date"`
+	ArchiveDate             *time.Time `json:"archive_date"`
+	ArchiveReason           *string    `json:"archive_reason"`
+	DateRegisteredLocalized   *string  `json:"date_registered_localized,omitempty"`
+	DateLastVisitLocalized    *string  `json:"date_last_visit_localized,omitempty"`
+	LastGamePostDateLocalized *string  `json:"last_game_post_date_localized,omitempty"`
 }
 
 func GetAdminUserList(c *gin.Context, db *sql.DB) {
@@ -809,6 +822,9 @@ func GetAdminUserList(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
+	adminID := Services.GetUserIdFromContext(c)
+	tz := Services.GetUserTimezone(adminID, db)
+
 	users := []AdminUserListItem{}
 	for rows.Next() {
 		var u AdminUserListItem
@@ -816,6 +832,18 @@ func GetAdminUserList(c *gin.Context, db *sql.DB) {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan user: " + err.Error()})
 			c.Abort()
 			return
+		}
+		if u.DateRegistered != nil {
+			s := Services.LocalizeTime(*u.DateRegistered, tz)
+			u.DateRegisteredLocalized = &s
+		}
+		if u.DateLastVisit != nil {
+			s := Services.LocalizeTime(*u.DateLastVisit, tz)
+			u.DateLastVisitLocalized = &s
+		}
+		if u.LastGamePostDate != nil {
+			s := Services.LocalizeTime(*u.LastGamePostDate, tz)
+			u.LastGamePostDateLocalized = &s
 		}
 		users = append(users, u)
 	}

@@ -53,13 +53,21 @@ func RestoreDB(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Database restored successfully"})
 }
 
+type BackupFileResponse struct {
+	ID                  string `json:"id"`
+	Name                string `json:"name"`
+	CreatedTime         string `json:"created_time"`
+	CreatedTimeLocalized string `json:"created_time_localized,omitempty"`
+}
+
 type GDriveBackupSettings struct {
 	ServiceAccountKey string                `json:"service_account_key"`
 	Enabled           bool                  `json:"enabled"`
 	Frequency         string                `json:"frequency"`
 	Keep              int                   `json:"keep"`
 	LastRun           *time.Time            `json:"last_run"`
-	Backups           []Services.BackupFile `json:"backups"`
+	LastRunLocalized  *string               `json:"last_run_localized,omitempty"`
+	Backups           []BackupFileResponse  `json:"backups"`
 }
 
 func GetGDriveBackupSettings(c *gin.Context, db *sql.DB) {
@@ -76,12 +84,28 @@ func GetGDriveBackupSettings(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	var backups []Services.BackupFile
+	adminID := Services.GetUserIdFromContext(c)
+	tz := Services.GetUserTimezone(adminID, db)
+
+	var rawBackups []Services.BackupFile
 	if row.GdriveServiceAccountKey != "" {
-		backups, _ = Services.NewGDriveProvider(db).ListBackups()
+		rawBackups, _ = Services.NewGDriveProvider(db).ListBackups()
 	}
-	if backups == nil {
-		backups = []Services.BackupFile{}
+
+	backups := make([]BackupFileResponse, 0, len(rawBackups))
+	for _, b := range rawBackups {
+		backups = append(backups, BackupFileResponse{
+			ID:                   b.ID,
+			Name:                 b.Name,
+			CreatedTime:          b.CreatedTime.UTC().Format(time.RFC3339),
+			CreatedTimeLocalized: Services.LocalizeTime(b.CreatedTime, tz),
+		})
+	}
+
+	var lastRunLocalized *string
+	if row.GdriveLastRun != nil {
+		s := Services.LocalizeTime(*row.GdriveLastRun, tz)
+		lastRunLocalized = &s
 	}
 
 	c.JSON(http.StatusOK, GDriveBackupSettings{
@@ -90,6 +114,7 @@ func GetGDriveBackupSettings(c *gin.Context, db *sql.DB) {
 		Frequency:         row.GdriveFrequency,
 		Keep:              row.GdriveKeep,
 		LastRun:           row.GdriveLastRun,
+		LastRunLocalized:  lastRunLocalized,
 		Backups:           backups,
 	})
 }

@@ -29,18 +29,19 @@ type UserCharacterMapEntry struct {
 }
 
 type UserDataProcessingResponse struct {
-	Id                 int                               `json:"id"`
-	DateCreated        time.Time                         `json:"date_created"`
-	UserId             int                               `json:"user_id"`
-	Status             int                               `json:"status"`
-	OriginalTopicId    *string                           `json:"original_topic_id"`
-	OriginalTopicTitle *string                           `json:"original_topic_title"`
-	NewTopicId         *int                              `json:"new_topic_id"`
-	OriginalPostCount  *int                              `json:"original_post_count"`
-	ParsedPostCount    *int                              `json:"parsed_post_count"`
-	ForumDomain        *string                           `json:"forum_domain"`
-	DataExtractionUrls []string                          `json:"data_extraction_urls"`
-	UserCharacterMap   map[string]UserCharacterMapEntry  `json:"user_character_map"`
+	Id                   int                              `json:"id"`
+	DateCreated          time.Time                        `json:"date_created"`
+	DateCreatedLocalized string                           `json:"date_created_localized,omitempty"`
+	UserId               int                              `json:"user_id"`
+	Status               int                              `json:"status"`
+	OriginalTopicId      *string                          `json:"original_topic_id"`
+	OriginalTopicTitle   *string                          `json:"original_topic_title"`
+	NewTopicId           *int                             `json:"new_topic_id"`
+	OriginalPostCount    *int                             `json:"original_post_count"`
+	ParsedPostCount      *int                             `json:"parsed_post_count"`
+	ForumDomain          *string                          `json:"forum_domain"`
+	DataExtractionUrls   []string                         `json:"data_extraction_urls"`
+	UserCharacterMap     map[string]UserCharacterMapEntry `json:"user_character_map"`
 }
 
 type CreateUserDataProcessingRequest struct {
@@ -86,6 +87,7 @@ func GetUserDataProcessingList(c *gin.Context, db *sql.DB) {
 		c.Abort()
 		return
 	}
+	tz := Services.GetUserTimezone(userID, db)
 
 	rows, err := db.Query(`
 		SELECT id, date_created, user_id, status,
@@ -128,6 +130,7 @@ func GetUserDataProcessingList(c *gin.Context, db *sql.DB) {
 		if r.UserCharacterMap == nil {
 			r.UserCharacterMap = map[string]UserCharacterMapEntry{}
 		}
+		r.DateCreatedLocalized = Services.LocalizeTime(r.DateCreated, tz)
 		result = append(result, r)
 	}
 
@@ -183,6 +186,7 @@ func GetUserDataProcessing(c *gin.Context, db *sql.DB) {
 	if r.UserCharacterMap == nil {
 		r.UserCharacterMap = map[string]UserCharacterMapEntry{}
 	}
+	r.DateCreatedLocalized = Services.LocalizeTime(r.DateCreated, Services.GetUserTimezone(userID, db))
 
 	c.JSON(http.StatusOK, r)
 }

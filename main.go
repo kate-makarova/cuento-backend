@@ -858,7 +858,7 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 		Controllers.UploadAsset(c)
 	})
 	protectedRouter.GET("/asset/list", "List files in the public assets folder", func(c *gin.Context) {
-		Controllers.GetAssetList(c)
+		Controllers.GetAssetList(c, Services.DB)
 	})
 	protectedRouter.POST("/asset/delete", "Delete a file from the public assets folder", func(c *gin.Context) {
 		Controllers.DeleteAsset(c)

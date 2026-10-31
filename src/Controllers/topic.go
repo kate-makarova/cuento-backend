@@ -736,7 +736,8 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 		c.Abort()
 		return
 	}
-	topic.DateLastPostLocalized = Services.LocalizeTime(topic.DateLastPost, Services.GetUserTimezone(currentUserID, db))
+	viewerTz := Services.GetUserTimezone(currentUserID, db)
+	topic.DateLastPostLocalized = Services.LocalizeTime(topic.DateLastPost, viewerTz)
 
 	// Get all permissions for this user in this subforum context
 	userPerms, err := Services.GetSubforumPermissions(currentUserID, topic.SubforumId, db)
@@ -888,10 +889,14 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 					LIMIT 1
 				`, characterID).Scan(&cr.Id, &cr.ClaimId, &cr.UserId, &cr.GuestHash, &cr.IsGuest, &cr.ClaimDate, &cr.ClaimExpirationDate, &cr.CharacterId, &cr.ClaimCreatedWithCharacterSheet)
 				if err == nil {
+					if cr.ClaimExpirationDate != nil {
+						s := Services.LocalizeTime(*cr.ClaimExpirationDate, viewerTz)
+						cr.ClaimExpirationDateLocalized = &s
+					}
 					character.ClaimRecord = &cr
 				}
 
-				character.UserInfo = fetchUserInfo(character.UserId, db)
+				character.UserInfo = fetchUserInfo(character.UserId, db, viewerTz)
 				topic.Character = character
 			}
 		}
@@ -913,9 +918,17 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 					wc.ClaimRecord = fetchActiveClaimRecord(*wc.CharacterClaimId, db)
 					if wc.ClaimRecord != nil {
 						wc.ActiveClaimRecord = wc.ClaimRecord.ClaimExpirationDate
+						if wc.ActiveClaimRecord != nil {
+							s := Services.LocalizeTime(*wc.ActiveClaimRecord, viewerTz)
+							wc.ActiveClaimRecordLocalized = &s
+						}
+						if wc.ClaimRecord.ClaimExpirationDate != nil {
+							s := Services.LocalizeTime(*wc.ClaimRecord.ClaimExpirationDate, viewerTz)
+							wc.ClaimRecord.ClaimExpirationDateLocalized = &s
+						}
 					}
 				}
-				wc.UserInfo = fetchUserInfo(wc.AuthorUserId, db)
+				wc.UserInfo = fetchUserInfo(wc.AuthorUserId, db, viewerTz)
 				wc.Relations = fetchWantedCharacterRelations(wc.Id, db)
 				topic.WantedCharacter = wc
 			}

@@ -41,6 +41,12 @@ func LocalizeTime(t time.Time, timezone *string) string {
 	return t.In(loc).Format("2006-01-02 15:04:05")
 }
 
+// LocalizeDateOnly formats a date-only value as "YYYY-MM-DD" with no timezone conversion.
+// Use this for DATE columns (absence dates, expiration dates) where no time component exists.
+func LocalizeDateOnly(t time.Time) string {
+	return t.Format("2006-01-02")
+}
+
 // GetUserTimezone fetches the interface_timezone for a given user from the DB.
 // Returns nil if the user is a guest (userID == 0) or the value is not set.
 func GetUserTimezone(userID int, db *sql.DB) *string {

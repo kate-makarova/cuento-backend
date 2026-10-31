@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -60,15 +61,16 @@ type GetEpisodesByMaskRequest struct {
 }
 
 type EpisodeListItem struct {
-	Id           int                       `json:"id"`
-	Name         string                    `json:"name"`
-	TopicId      int                       `json:"topic_id"`
-	SubforumId   int                       `json:"subforum_id"`
-	SubforumName string                    `json:"subforum_name"`
-	TopicStatus  int                       `json:"topic_status"`
-	LastPostDate string                    `json:"last_post_date"`
-	CustomFields map[string]interface{}    `json:"custom_fields"`
-	Characters   []Entities.ShortCharacter `json:"characters"`
+	Id                   int                       `json:"id"`
+	Name                 string                    `json:"name"`
+	TopicId              int                       `json:"topic_id"`
+	SubforumId           int                       `json:"subforum_id"`
+	SubforumName         string                    `json:"subforum_name"`
+	TopicStatus          int                       `json:"topic_status"`
+	LastPostDate         string                    `json:"last_post_date"`
+	LastPostDateLocalized string                   `json:"last_post_date_localized,omitempty"`
+	CustomFields         map[string]interface{}    `json:"custom_fields"`
+	Characters           []Entities.ShortCharacter `json:"characters"`
 }
 
 func CreateEpisode(c *gin.Context, db *sql.DB) {
@@ -273,6 +275,14 @@ func PreviewEpisode(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, episode)
 }
 
+func localizeEpisodeLastPostDate(ep *EpisodeListItem, tz *string) {
+	if ep.LastPostDate != "" {
+		if t, err := time.Parse("2006-01-02 15:04:05", ep.LastPostDate); err == nil {
+			ep.LastPostDateLocalized = Services.LocalizeTime(t, tz)
+		}
+	}
+}
+
 func GetEpisodes(c *gin.Context, db *sql.DB) {
 	var req GetEpisodesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -282,6 +292,7 @@ func GetEpisodes(c *gin.Context, db *sql.DB) {
 	}
 
 	userID := Services.GetUserIdFromContext(c)
+	tz := Services.GetUserTimezone(userID, db)
 
 	visibleSubforumIDs, err := Services.GetVisibleSubforums(userID, "subforum_read", db)
 	if err != nil {
@@ -467,6 +478,7 @@ func GetEpisodes(c *gin.Context, db *sql.DB) {
 			c.Abort()
 			return
 		}
+		localizeEpisodeLastPostDate(&ep, tz)
 
 		for i, f := range allowedFields {
 			if rawVals[i] == nil || *rawVals[i] == nil {
@@ -534,6 +546,7 @@ func GetEpisodesByMask(c *gin.Context, db *sql.DB) {
 	}
 
 	userID := Services.GetUserIdFromContext(c)
+	tz := Services.GetUserTimezone(userID, db)
 
 	visibleSubforumIDs, err := Services.GetVisibleSubforums(userID, "subforum_read", db)
 	if err != nil {
@@ -658,6 +671,7 @@ func GetEpisodesByMask(c *gin.Context, db *sql.DB) {
 			c.Abort()
 			return
 		}
+		localizeEpisodeLastPostDate(&ep, tz)
 
 		for i, f := range allowedFields {
 			if rawVals[i] == nil || *rawVals[i] == nil {

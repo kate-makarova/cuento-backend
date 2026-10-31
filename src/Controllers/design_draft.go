@@ -127,6 +127,9 @@ func GetDesignDraftList(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
+	adminID := Services.GetUserIdFromContext(c)
+	tz := Services.GetUserTimezone(adminID, db)
+
 	drafts := []Entities.DesignDraftListItem{}
 	for rows.Next() {
 		var d Entities.DesignDraftListItem
@@ -135,6 +138,8 @@ func GetDesignDraftList(c *gin.Context, db *sql.DB) {
 			c.Abort()
 			return
 		}
+		d.DateCreatedLocalized = Services.LocalizeTime(d.DateCreated, tz)
+		d.DateLastChangedLocalized = Services.LocalizeTime(d.DateLastChanged, tz)
 		drafts = append(drafts, d)
 	}
 
