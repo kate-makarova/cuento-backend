@@ -779,7 +779,7 @@ export const TRANSLATIONS_RU = {
   "login.archivedAccount": "Этот аккаунт заархивирован и недоступен для входа.",
   "register.enterDetails": "Введите ваши данные",
   "register.username": "Имя пользователя",
-  "register.usernameMin": "Имя пользователя должно содержать не менее 3 символов",
+  "register.usernameMin": "Имя пользователя должно содержать не менее 2 символов",
   "register.password": "Пароль",
   "register.showPassword": "Показать",
   "register.hidePassword": "Скрыть",
