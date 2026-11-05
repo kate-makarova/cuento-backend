@@ -53,17 +53,29 @@ func NewOpenRouterModelPool(apiKey string, useFreeOnly bool) *OpenRouterModelPoo
 }
 
 func (p *OpenRouterModelPool) ClientForMinSize(minSize Entities.AIModelSize, modelType Entities.AIModelType) (AIClient, error) {
+	if p.useFreeOnly {
+		return p.freeClient()
+	}
 	return p.selectModel(minSize, modelType, "", nil)
 }
 
 func (p *OpenRouterModelPool) ClientForMinSizeAndProtocol(minSize Entities.AIModelSize, modelType Entities.AIModelType, _ Entities.AIModelProtocolType) (AIClient, error) {
-	// OpenRouter exposes all providers through one OpenAI-compat API, so
-	// protocol-based prefix filtering doesn't apply here.
+	if p.useFreeOnly {
+		return p.freeClient()
+	}
 	return p.selectModel(minSize, modelType, "", nil)
 }
 
 func (p *OpenRouterModelPool) ClientExcluding(minSize Entities.AIModelSize, modelType Entities.AIModelType, excluded []string) (AIClient, error) {
+	if p.useFreeOnly {
+		return p.freeClient()
+	}
 	return p.selectModel(minSize, modelType, "", excluded)
+}
+
+func (p *OpenRouterModelPool) freeClient() (AIClient, error) {
+	log.Printf("OpenRouter: using openrouter/auto:free virtual model")
+	return NewOpenAICompatClient(p.apiKey, "openrouter/auto:free", openRouterBaseURL)
 }
 
 func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelType Entities.AIModelType, providerPrefix string, excluded []string) (AIClient, error) {
