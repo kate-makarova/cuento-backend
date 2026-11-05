@@ -87,7 +87,7 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 		Entities.AIModelSizeMedium, Entities.AIModelTypeText,
 		client,
 		func(c AIClient) error {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 			defer cancel()
 
 			reply, _, e := c.Chat(ctx, []ChatMessage{
@@ -116,8 +116,7 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 				msg := err.Error()
 				return strings.Contains(msg, "429") ||
 					strings.Contains(msg, "quota") ||
-					strings.Contains(msg, "failed to parse proofreading response") ||
-					strings.Contains(msg, "context deadline exceeded")
+					strings.Contains(msg, "failed to parse proofreading response")
 			},
 		},
 	)
