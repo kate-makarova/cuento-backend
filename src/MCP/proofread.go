@@ -57,7 +57,62 @@ func restoreBBCode(text string, tags []string) string {
 	return text
 }
 
+// splitIntoChunks splits text into pieces of at most maxLen characters, always
+// breaking after a sentence-ending punctuation (. ! ?) followed by whitespace.
+// If no sentence boundary fits, it falls back to the last whitespace in range.
+func splitIntoChunks(text string, maxLen int) []string {
+	if len(text) <= maxLen {
+		return []string{text}
+	}
+
+	var chunks []string
+	start := 0
+	for start < len(text) {
+		if start+maxLen >= len(text) {
+			chunks = append(chunks, strings.TrimSpace(text[start:]))
+			break
+		}
+
+		end := start + maxLen
+		boundary := -1
+
+		// Prefer a sentence boundary (. ! ? followed by space or newline).
+		for i := end; i > start; i-- {
+			if text[i] == ' ' || text[i] == '\n' {
+				prev := text[i-1]
+				if prev == '.' || prev == '!' || prev == '?' {
+					boundary = i
+					break
+				}
+			}
+		}
+
+		// Fall back to any whitespace.
+		if boundary == -1 {
+			for i := end; i > start; i-- {
+				if text[i] == ' ' || text[i] == '\n' {
+					boundary = i
+					break
+				}
+			}
+		}
+
+		if boundary == -1 {
+			boundary = end
+		}
+
+		chunks = append(chunks, strings.TrimSpace(text[start:boundary]))
+		start = boundary
+		for start < len(text) && (text[start] == ' ' || text[start] == '\n' || text[start] == '\r' || text[start] == '\t') {
+			start++
+		}
+	}
+	return chunks
+}
+
 // ProofreadText asks a large model to fix spelling, grammar, and punctuation — no rephrasing.
+// If the text exceeds the model's input limit, it is split into sentence-boundary chunks
+// and each chunk is proofread separately; results are merged before returning.
 func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 	pool := getActivePool()
 	if pool == nil {
@@ -72,51 +127,65 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 	// Replace BBCode tags with placeholders so the model only sees plain prose.
 	masked, bbTags := maskBBCode(text)
 
-	var result ProofreadResult
-	err = withModelRetryOpts(
-		pool,
-		Entities.AIModelSizeMedium, Entities.AIModelTypeText,
-		client,
-		func(c AIClient) error {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
+	chunks := splitIntoChunks(masked, 5000)
 
-			reply, _, e := c.Chat(ctx, []ChatMessage{
-				{Role: "user", Content: masked},
-			}, proofreadSystemInstruction)
-			if e != nil {
-				return e
-			}
-
-			reply = strings.TrimSpace(reply)
-			if strings.HasPrefix(reply, "```") {
-				reply = strings.TrimPrefix(reply, "```json")
-				reply = strings.TrimPrefix(reply, "```")
-				reply = strings.TrimSuffix(reply, "```")
-				reply = strings.TrimSpace(reply)
-			}
-
-			if err := json.Unmarshal([]byte(reply), &result); err != nil {
-				return fmt.Errorf("failed to parse proofreading response: %w", err)
-			}
-			return nil
+	retryOpts := ModelRetryOptions{
+		MaxRetries: 2,
+		ShouldRetry: func(err error) bool {
+			msg := err.Error()
+			return strings.Contains(msg, "429") ||
+				strings.Contains(msg, "413") ||
+				strings.Contains(msg, "quota") ||
+				strings.Contains(msg, "failed to parse proofreading response") ||
+				strings.Contains(msg, "context deadline exceeded")
 		},
-		ModelRetryOptions{
-			MaxRetries: 2,
-			ShouldRetry: func(err error) bool {
-				msg := err.Error()
-				return strings.Contains(msg, "429") ||
-					strings.Contains(msg, "quota") ||
-					strings.Contains(msg, "failed to parse proofreading response") ||
-					strings.Contains(msg, "context deadline exceeded")
-			},
-		},
-	)
-	if err != nil {
-		return nil, err
 	}
 
-	// Restore BBCode tags into the corrected text.
-	result.Text = restoreBBCode(result.Text, bbTags)
-	return &result, nil
+	var textParts []string
+	var allFixes []string
+
+	for _, chunk := range chunks {
+		var chunkResult ProofreadResult
+		chunkText := chunk
+		err = withModelRetryOpts(
+			pool,
+			Entities.AIModelSizeMedium, Entities.AIModelTypeText,
+			client,
+			func(c AIClient) error {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+
+				reply, _, e := c.Chat(ctx, []ChatMessage{
+					{Role: "user", Content: chunkText},
+				}, proofreadSystemInstruction)
+				if e != nil {
+					return e
+				}
+
+				reply = strings.TrimSpace(reply)
+				if strings.HasPrefix(reply, "```") {
+					reply = strings.TrimPrefix(reply, "```json")
+					reply = strings.TrimPrefix(reply, "```")
+					reply = strings.TrimSuffix(reply, "```")
+					reply = strings.TrimSpace(reply)
+				}
+
+				if err := json.Unmarshal([]byte(reply), &chunkResult); err != nil {
+					return fmt.Errorf("failed to parse proofreading response: %w", err)
+				}
+				return nil
+			},
+			retryOpts,
+		)
+		if err != nil {
+			return nil, err
+		}
+		textParts = append(textParts, chunkResult.Text)
+		allFixes = append(allFixes, chunkResult.Fixes...)
+	}
+
+	return &ProofreadResult{
+		Text:  restoreBBCode(strings.Join(textParts, " "), bbTags),
+		Fixes: allFixes,
+	}, nil
 }
