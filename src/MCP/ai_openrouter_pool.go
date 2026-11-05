@@ -74,8 +74,8 @@ func (p *OpenRouterModelPool) ClientExcluding(minSize Entities.AIModelSize, mode
 }
 
 func (p *OpenRouterModelPool) freeClient() (AIClient, error) {
-	log.Printf("OpenRouter: using openrouter/auto:free virtual model")
-	return NewOpenAICompatClient(p.apiKey, "openrouter/auto:free", openRouterBaseURL)
+	log.Printf("OpenRouter: using openrouter/free virtual model")
+	return NewOpenAICompatClient(p.apiKey, "openrouter/free", openRouterBaseURL)
 }
 
 func (p *OpenRouterModelPool) selectModel(minSize Entities.AIModelSize, modelType Entities.AIModelType, providerPrefix string, excluded []string) (AIClient, error) {
