@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -106,6 +107,7 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 			}
 
 			if err := json.Unmarshal([]byte(reply), &result); err != nil {
+				log.Printf("Proofread: parse error — raw reply: %.500s", reply)
 				return fmt.Errorf("failed to parse proofreading response: %w", err)
 			}
 			return nil
