@@ -1421,7 +1421,7 @@ create table admin_password_resets
 (
     id                int auto_increment primary key,
     user_id           int         not null,
-    reset_code_hash   varchar(64) not null,
+    pin_hash          varchar(64) not null,
     security_code     varchar(64) null,
     created_at        datetime    not null,
     used_at           datetime    null,
