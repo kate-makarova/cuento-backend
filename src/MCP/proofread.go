@@ -32,6 +32,27 @@ If no fixes were needed, return: {"text": "<original text unchanged>", "fixes": 
 The text may contain template placeholders like {0}, {1}, {2}, etc. These are technical markers, not text. Leave every placeholder exactly as-is — do not alter, remove, reorder, or reformat them in any way.
 Return only the raw JSON object — no markdown fences, no commentary.`
 
+const proofreadStreamSystemInstruction = `You are a proofreader. Fix all spelling, grammar, and punctuation errors in the text the user provides.
+
+What to fix:
+- Spelling mistakes and typos
+- Grammatical errors: wrong verb forms, tense inconsistencies, subject-verb disagreement, incorrect pronoun case
+- Punctuation errors: missing or misplaced commas, periods, apostrophes, quotation marks
+
+What NOT to change:
+- Do NOT rephrase, reword, or restructure any sentence.
+- Do NOT add, remove, or change any ideas, facts, or meaning.
+- Do NOT change the tone, style, or voice of the text.
+- Do NOT expand abbreviations or change formatting.
+- If a sentence is stylistically unusual but grammatically correct, leave it as-is.
+
+The text may contain template placeholders like {0}, {1}, {2}, etc. These are technical markers, not text. Leave every placeholder exactly as-is.
+
+Write the corrected text first. After the corrected text, write exactly on its own line:
+===FIXES===
+Then write each fix as a separate line. If no fixes were needed, write nothing after ===FIXES===.
+Do not include any other commentary, headers, or formatting.`
+
 // ProofreadResult holds the corrected text and a human-readable list of changes.
 type ProofreadResult struct {
 	Text  string   `json:"text"`
@@ -74,7 +95,7 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 		return nil, fmt.Errorf("AI is not configured")
 	}
 
-	client, err := pool.ClientForMinSize(Entities.AIModelSizeMedium, Entities.AIModelTypeText)
+	client, err := pool.ClientForSimpleChat(Entities.AIModelSizeMedium, Entities.AIModelTypeText)
 	if err != nil {
 		return nil, fmt.Errorf("no AI model available: %w", err)
 	}
@@ -128,4 +149,110 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 
 	result.Text = restoreBBCode(result.Text, bbTags)
 	return &result, nil
+}
+
+// ProofreadTextStream streams corrected text tokens via onToken, then calls onDone
+// with the BBCode-restored text and list of fixes once the stream completes.
+func ProofreadTextStream(
+	text string,
+	db *sql.DB,
+	onToken func(string) error,
+	onDone func(restoredText string, fixes []string) error,
+) error {
+	if len([]rune(text)) > maxProofreadChars {
+		return fmt.Errorf("text is too long for proofreading (max %d characters)", maxProofreadChars)
+	}
+
+	pool := getActivePool()
+	if pool == nil {
+		return fmt.Errorf("AI is not configured")
+	}
+
+	client, err := pool.ClientForSimpleChat(Entities.AIModelSizeMedium, Entities.AIModelTypeText)
+	if err != nil {
+		return fmt.Errorf("no AI model available: %w", err)
+	}
+
+	sc, ok := client.(StreamingClient)
+	if !ok {
+		return fmt.Errorf("current AI model does not support streaming")
+	}
+
+	masked, bbTags := maskBBCode(text)
+
+	const delimiter = "===FIXES==="
+	const delimLen = len(delimiter)
+
+	var fullBuf strings.Builder
+	var emittedLen int
+	delimFound := false
+	delimPos := -1
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	err = sc.ChatSimpleStream(ctx, []ChatMessage{
+		{Role: "user", Content: masked},
+	}, proofreadStreamSystemInstruction, func(token string) error {
+		if delimFound {
+			fullBuf.WriteString(token)
+			return nil
+		}
+		fullBuf.WriteString(token)
+		full := fullBuf.String()
+
+		if idx := strings.Index(full, delimiter); idx >= 0 {
+			delimFound = true
+			delimPos = idx
+			// Emit any buffered text that precedes the delimiter.
+			if idx > emittedLen {
+				if err := onToken(full[emittedLen:idx]); err != nil {
+					return err
+				}
+			}
+			emittedLen = idx
+			return nil
+		}
+
+		// No delimiter yet — emit up to the last delimLen-1 bytes as a lookahead buffer.
+		safeEnd := len(full) - (delimLen - 1)
+		if safeEnd > emittedLen {
+			if err := onToken(full[emittedLen:safeEnd]); err != nil {
+				return err
+			}
+			emittedLen = safeEnd
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	full := fullBuf.String()
+	var correctedText string
+	var fixes []string
+
+	if !delimFound {
+		// Flush any remaining lookahead buffer.
+		if len(full) > emittedLen {
+			if err := onToken(full[emittedLen:]); err != nil {
+				return err
+			}
+		}
+		correctedText = strings.TrimSpace(full)
+	} else {
+		correctedText = strings.TrimSpace(full[:delimPos])
+		fixesRaw := strings.TrimSpace(full[delimPos+delimLen:])
+		for _, line := range strings.Split(fixesRaw, "\n") {
+			if line = strings.TrimSpace(line); line != "" {
+				fixes = append(fixes, line)
+			}
+		}
+	}
+
+	correctedText = restoreBBCode(correctedText, bbTags)
+	if fixes == nil {
+		fixes = []string{}
+	}
+	return onDone(correctedText, fixes)
 }

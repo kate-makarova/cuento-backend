@@ -40,6 +40,10 @@ func (p *GroqModelPool) ClientExcluding(minSize Entities.AIModelSize, modelType 
 	return p.selectModel(minSize, excluded)
 }
 
+func (p *GroqModelPool) ClientForSimpleChat(minSize Entities.AIModelSize, modelType Entities.AIModelType) (AIClient, error) {
+	return p.selectModel(minSize, nil)
+}
+
 func (p *GroqModelPool) selectModel(minSize Entities.AIModelSize, excluded []string) (AIClient, error) {
 	models, err := p.fetchModels()
 	if err != nil {

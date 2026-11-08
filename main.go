@@ -1283,6 +1283,12 @@ protectedRouter.GET("/admin/ai-agent-implementation/list", "Get list of all AI a
 			Controllers.ProofreadText(c, Services.DB)
 		})
 
+	protectedRouter.POST("/ai/proofread/stream", "Proofread text and stream result token by token",
+		MCP.InjectionCheckMiddleware(Services.DB, "text"),
+		func(c *gin.Context) {
+			Controllers.ProofreadStream(c, Services.DB)
+		})
+
 	protectedRouter.POST("/admin/ai-pool/switch", "Switch the active AI model pool at runtime", func(c *gin.Context) {
 		Controllers.AdminSwitchAIPool(c, Services.DB)
 	})
