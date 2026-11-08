@@ -1423,7 +1423,7 @@ create table admin_password_resets
     user_id           int         not null,
     pin_hash          varchar(64) not null,
     security_code     varchar(64) null,
-    created_at        datetime    not null,
+    created_at        datetime    not null default current_timestamp,
     used_at           datetime    null,
     constraint fk_admin_password_resets_user foreign key (user_id) references users (id) on delete cascade
 );
