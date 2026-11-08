@@ -244,6 +244,12 @@ func Login(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	if user.Password == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "password_reset_required"})
+		c.Abort()
+		return
+	}
+
 	if err := user.CheckPassword(creds.Password); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Invalid credentials"})
 		c.Abort()
@@ -1019,10 +1025,13 @@ func GetPrivateKey(c *gin.Context, db *sql.DB) {
 	}
 
 	var privateKey, salt, iv string
-	err := db.QueryRow(
-		"SELECT private_key, salt, iv FROM private_keys WHERE user_id = ? AND is_active = true",
-		userID,
-	).Scan(&privateKey, &salt, &iv)
+	var publicKeyId int
+	err := db.QueryRow(`
+		SELECT pk.private_key, pk.salt, pk.iv, pub.id
+		FROM private_keys pk
+		JOIN public_keys pub ON pub.user_id = pk.user_id AND pub.is_active = true
+		WHERE pk.user_id = ? AND pk.is_active = true
+	`, userID).Scan(&privateKey, &salt, &iv, &publicKeyId)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "No active private key found"})
@@ -1033,7 +1042,7 @@ func GetPrivateKey(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"private_key": privateKey, "salt": salt, "iv": iv})
+	c.JSON(http.StatusOK, gin.H{"private_key": privateKey, "salt": salt, "iv": iv, "public_key_id": publicKeyId})
 }
 
 func GetPublicKeyByUserId(c *gin.Context, db *sql.DB) {
@@ -1046,9 +1055,9 @@ func GetPublicKeyByUserId(c *gin.Context, db *sql.DB) {
 
 	var pk Entities.PublicKey
 	err = db.QueryRow(
-		"SELECT user_id, public_key FROM public_keys WHERE user_id = ?",
+		"SELECT id, user_id, public_key FROM public_keys WHERE user_id = ? AND is_active = true",
 		userID,
-	).Scan(&pk.UserId, &pk.PublicKey)
+	).Scan(&pk.Id, &pk.UserId, &pk.PublicKey)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "No public key found for user"})
@@ -1972,4 +1981,318 @@ func UserAutocomplete(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, users)
+}
+
+func AdminResetPassword(c *gin.Context, db *sql.DB) {
+	userID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid user ID"})
+		c.Abort()
+		return
+	}
+
+	pinBytes := make([]byte, 4)
+	if _, err := rand.Read(pinBytes); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to generate PIN"})
+		c.Abort()
+		return
+	}
+	pinInt := int(pinBytes[0])<<24 | int(pinBytes[1])<<16 | int(pinBytes[2])<<8 | int(pinBytes[3])
+	if pinInt < 0 {
+		pinInt = -pinInt
+	}
+	pin := fmt.Sprintf("%06d", pinInt%1000000)
+
+	hashBytes := sha256.Sum256([]byte(pin))
+	pinHash := hex.EncodeToString(hashBytes[:])
+
+	tx, err := db.Begin()
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start transaction"})
+		c.Abort()
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err = tx.Exec("UPDATE users SET password = '' WHERE id = ?", userID); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to reset password"})
+		c.Abort()
+		return
+	}
+	if _, err = tx.Exec("UPDATE private_keys SET is_active = false WHERE user_id = ?", userID); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to deactivate private keys"})
+		c.Abort()
+		return
+	}
+	if _, err = tx.Exec("UPDATE public_keys SET is_active = false WHERE user_id = ?", userID); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to deactivate public keys"})
+		c.Abort()
+		return
+	}
+	if _, err = tx.Exec(
+		"INSERT INTO admin_password_resets (user_id, pin_hash) VALUES (?, ?)",
+		userID, pinHash,
+	); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to store reset record"})
+		c.Abort()
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"pin": pin})
+}
+
+type VerifyAdminResetCodeRequest struct {
+	Username string `json:"username" binding:"required"`
+	Pin      string `json:"pin" binding:"required"`
+}
+
+func VerifyAdminResetCode(c *gin.Context, db *sql.DB) {
+	var req VerifyAdminResetCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	var userID int
+	if err := db.QueryRow("SELECT id FROM users WHERE username = ?", req.Username).Scan(&userID); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Invalid credentials"})
+		c.Abort()
+		return
+	}
+
+	hashBytes := sha256.Sum256([]byte(req.Pin))
+	pinHash := hex.EncodeToString(hashBytes[:])
+
+	var resetID int
+	if err := db.QueryRow(
+		"SELECT id FROM admin_password_resets WHERE user_id = ? AND pin_hash = ? AND used_at IS NULL",
+		userID, pinHash,
+	).Scan(&resetID); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Invalid or expired PIN"})
+		c.Abort()
+		return
+	}
+
+	securityCodeBytes := make([]byte, 32)
+	if _, err := rand.Read(securityCodeBytes); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to generate security code"})
+		c.Abort()
+		return
+	}
+	securityCode := hex.EncodeToString(securityCodeBytes)
+
+	res, err := db.Exec(
+		"UPDATE admin_password_resets SET security_code = ? WHERE id = ? AND security_code IS NULL AND used_at IS NULL",
+		securityCode, resetID,
+	)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to verify PIN"})
+		c.Abort()
+		return
+	}
+	affected, err := res.RowsAffected()
+	if err != nil || affected != 1 {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusConflict, Message: "PIN already used"})
+		c.Abort()
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"security_code": securityCode})
+}
+
+type CompletePasswordResetRequest struct {
+	SecurityCode        string                   `json:"security_code" binding:"required"`
+	Password            string                   `json:"password" binding:"required"`
+	PrivateKey          SaveKeysPrivateKeyItem   `json:"private_key" binding:"required"`
+	RecoveryPrivateKeys []SaveKeysPrivateKeyItem `json:"recovery_private_keys" binding:"required"`
+	PublicKey           Entities.PublicKey       `json:"public_key" binding:"required"`
+	Codes               []string                 `json:"codes" binding:"required"`
+}
+
+func CompletePasswordReset(c *gin.Context, db *sql.DB) {
+	var req CompletePasswordResetRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid request body: " + err.Error()})
+		c.Abort()
+		return
+	}
+
+	if len(req.Codes) != len(req.RecoveryPrivateKeys) {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "codes and recovery_private_keys must have the same length"})
+		c.Abort()
+		return
+	}
+
+	var userID int
+	if err := db.QueryRow(
+		"SELECT user_id FROM admin_password_resets WHERE security_code = ? AND used_at IS NULL",
+		req.SecurityCode,
+	).Scan(&userID); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Invalid or expired security code"})
+		c.Abort()
+		return
+	}
+
+	var user Entities.User
+	userQuery := "SELECT id, username, avatar, interface_language, interface_timezone, interface_font_size, user_status, interface_design, signature, editor_type, do_not_blur FROM users WHERE id = ?"
+	if err := db.QueryRow(userQuery, userID).Scan(
+		&user.Id, &user.Username, &user.Avatar, &user.InterfaceLanguage, &user.InterfaceTimezone,
+		&user.InterfaceFontSize, &user.UserStatus, &user.InterfaceDesign, &user.Signature, &user.EditorType, &user.DoNotBlur,
+	); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to load user"})
+		c.Abort()
+		return
+	}
+
+	var tempUser Entities.User
+	tempUser.Password = req.Password
+	if err := tempUser.HashPassword(req.Password); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to hash password"})
+		c.Abort()
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start transaction"})
+		c.Abort()
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err = tx.Exec("UPDATE users SET password = ? WHERE id = ?", tempUser.Password, userID); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to set password"})
+		c.Abort()
+		return
+	}
+
+	if _, err = tx.Exec(
+		"UPDATE admin_password_resets SET used_at = NOW() WHERE security_code = ?",
+		req.SecurityCode,
+	); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to mark reset as used"})
+		c.Abort()
+		return
+	}
+
+	if _, err = tx.Exec(
+		"INSERT INTO private_keys (user_id, private_key, salt, iv, recovery_code_id, is_active) VALUES (?, ?, ?, ?, NULL, true)",
+		userID, req.PrivateKey.PrivateKey, req.PrivateKey.Salt, req.PrivateKey.IV,
+	); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save private key"})
+		c.Abort()
+		return
+	}
+
+	for i, code := range req.Codes {
+		codeHashBytes := sha256.Sum256([]byte(code))
+		codeHashHex := fmt.Sprintf("%x", codeHashBytes)
+
+		codeRes, err := tx.Exec("INSERT INTO recovery_codes (user_id, recovery_code) VALUES (?, ?)", userID, codeHashHex)
+		if err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save recovery code"})
+			c.Abort()
+			return
+		}
+		codeID, err := codeRes.LastInsertId()
+		if err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get recovery code ID"})
+			c.Abort()
+			return
+		}
+
+		pk := req.RecoveryPrivateKeys[i]
+		if _, err = tx.Exec(
+			"INSERT INTO private_keys (user_id, private_key, salt, iv, recovery_code_id, is_active) VALUES (?, ?, ?, ?, ?, false)",
+			userID, pk.PrivateKey, pk.Salt, pk.IV, codeID,
+		); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save recovery private key"})
+			c.Abort()
+			return
+		}
+	}
+
+	if _, err = tx.Exec("INSERT INTO public_keys (user_id, public_key, is_active) VALUES (?, ?, true)", userID, req.PublicKey.PublicKey); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save public key"})
+		c.Abort()
+		return
+	}
+
+	if err = tx.Commit(); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
+		c.Abort()
+		return
+	}
+
+	rolesQuery := `
+		SELECT r.id, r.name
+		FROM roles r
+		INNER JOIN user_role ur ON r.id = ur.role_id
+		WHERE ur.user_id = ?`
+	roleRows, err := db.Query(rolesQuery, userID)
+	if err == nil {
+		defer roleRows.Close()
+		user.Roles = []Entities.Role{}
+		for roleRows.Next() {
+			var role Entities.Role
+			if err := roleRows.Scan(&role.Id, &role.Name); err == nil {
+				role.Permissions = Services.GetRoleFrontendPermissions(role.Id, db)
+				user.Roles = append(user.Roles, role)
+			}
+		}
+		if Services.IsSuperuserID(user.Id) {
+			user.Roles = append(user.Roles, Entities.Role{Id: 0, Name: "superadmin", Permissions: []string{"show_admin_backup", "show_admin_ai_models"}})
+			user.IsSuperuser = true
+		}
+	}
+
+	expirationTime := time.Now().Add(24 * time.Hour)
+	claims := &Middlewares.Claims{
+		Username: user.Username,
+		UserID:   user.Id,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			Issuer:    "cuento-backend",
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(Middlewares.JwtKey)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to generate token"})
+		c.Abort()
+		return
+	}
+
+	refreshExpirationTime := time.Now().Add(7 * 24 * time.Hour)
+	refreshClaims := &Middlewares.Claims{
+		Username: user.Username,
+		UserID:   user.Id,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(refreshExpirationTime),
+			Issuer:    "cuento-backend",
+		},
+	}
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
+	refreshTokenString, err := refreshToken.SignedString(Middlewares.JwtKey)
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to generate refresh token"})
+		c.Abort()
+		return
+	}
+
+	user.Password = ""
+	user.NotificationSettings = []Entities.UserNotificationSetting{}
+
+	c.JSON(http.StatusOK, gin.H{
+		"access_token":  tokenString,
+		"refresh_token": refreshTokenString,
+		"user":          user,
+	})
 }
