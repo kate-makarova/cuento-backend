@@ -11,7 +11,11 @@ type ChatSource struct {
 }
 
 type AIClient interface {
+	// Chat runs a multi-turn game-AI session with tool calls and source collection.
 	Chat(ctx context.Context, history []ChatMessage, systemInstruction string) (string, []ChatSource, error)
+	// SimpleChat is a single-turn completion with no tools. Use this for proofreading,
+	// summarisation, and any task where tool support is not required.
+	SimpleChat(ctx context.Context, messages []ChatMessage, systemInstruction string) (string, error)
 	ModelID() string
 }
 
@@ -36,4 +40,8 @@ func NewAIAgent(client AIClient) *AIAgent {
 
 func (a *AIAgent) Chat(ctx context.Context, history []ChatMessage, systemInstruction string) (string, []ChatSource, error) {
 	return a.client.Chat(ctx, history, systemInstruction)
+}
+
+func (a *AIAgent) SimpleChat(ctx context.Context, messages []ChatMessage, systemInstruction string) (string, error) {
+	return a.client.SimpleChat(ctx, messages, systemInstruction)
 }

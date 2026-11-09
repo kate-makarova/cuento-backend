@@ -76,6 +76,34 @@ func (o *OpenAICompatClient) ChatSimpleStream(
 	return stream.Err()
 }
 
+// SimpleChat sends a single-turn request without tools and returns the text response.
+func (o *OpenAICompatClient) SimpleChat(ctx context.Context, messages []ChatMessage, systemInstruction string) (string, error) {
+	msgs := make([]openai.ChatCompletionMessageParamUnion, 0, len(messages)+1)
+	if systemInstruction != "" {
+		msgs = append(msgs, openai.SystemMessage(systemInstruction))
+	}
+	for _, msg := range messages {
+		switch msg.Role {
+		case "user":
+			msgs = append(msgs, openai.UserMessage(msg.Content))
+		case "assistant":
+			msgs = append(msgs, openai.AssistantMessage(msg.Content))
+		}
+	}
+	resp, err := o.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
+		Model:       openai.ChatModel(o.model),
+		Messages:    msgs,
+		Temperature: openai.Float(0),
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(resp.Choices) == 0 {
+		return "", fmt.Errorf("empty response (no choices)")
+	}
+	return resp.Choices[0].Message.Content, nil
+}
+
 func (o *OpenAICompatClient) Chat(ctx context.Context, history []ChatMessage, systemInstruction string) (string, []ChatSource, error) {
 	messages := make([]openai.ChatCompletionMessageParamUnion, 0, len(history)+1)
 	if systemInstruction != "" {
