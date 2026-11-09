@@ -84,6 +84,16 @@ func restoreBBCode(text string, tags []string) string {
 // leaving ~6600 tokens (~26000 chars) for user text. 20000 chars is a safe margin.
 const maxProofreadChars = 20000
 
+// proofreadShouldRetry returns true for errors that mean "try a different model":
+// 400 invalid request, 429 rate limit, quota exhaustion, or unparseable JSON response.
+func proofreadShouldRetry(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "400") ||
+		strings.Contains(msg, "429") ||
+		strings.Contains(msg, "quota") ||
+		strings.Contains(msg, "failed to parse proofreading response")
+}
+
 // ProofreadText asks a large model to fix spelling, grammar, and punctuation — no rephrasing.
 func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 	if len([]rune(text)) > maxProofreadChars {
@@ -134,13 +144,8 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 			return nil
 		},
 		ModelRetryOptions{
-			MaxRetries: 2,
-			ShouldRetry: func(err error) bool {
-				msg := err.Error()
-				return strings.Contains(msg, "429") ||
-					strings.Contains(msg, "quota") ||
-					strings.Contains(msg, "failed to parse proofreading response")
-			},
+			MaxRetries: 4,
+			ShouldRetry: proofreadShouldRetry,
 		},
 	)
 	if err != nil {
@@ -168,91 +173,108 @@ func ProofreadTextStream(
 		return fmt.Errorf("AI is not configured")
 	}
 
-	client, err := pool.ClientForSimpleChat(Entities.AIModelSizeMedium, Entities.AIModelTypeText)
-	if err != nil {
-		return fmt.Errorf("no AI model available: %w", err)
-	}
-
-	sc, ok := client.(StreamingClient)
-	if !ok {
-		return fmt.Errorf("current AI model does not support streaming")
-	}
-
 	masked, bbTags := maskBBCode(text)
 
 	const delimiter = "===FIXES==="
 	const delimLen = len(delimiter)
 
-	var fullBuf strings.Builder
-	var emittedLen int
-	delimFound := false
-	delimPos := -1
+	const maxAttempts = 5
+	excluded := make([]string, 0, maxAttempts)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
-	defer cancel()
-
-	err = sc.ChatSimpleStream(ctx, []ChatMessage{
-		{Role: "user", Content: masked},
-	}, proofreadStreamSystemInstruction, func(token string) error {
-		if delimFound {
-			fullBuf.WriteString(token)
-			return nil
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		var client AIClient
+		var err error
+		if attempt == 0 {
+			client, err = pool.ClientForSimpleChat(Entities.AIModelSizeMedium, Entities.AIModelTypeText)
+		} else {
+			client, err = pool.ClientExcluding(Entities.AIModelSizeMedium, Entities.AIModelTypeText, excluded)
 		}
-		fullBuf.WriteString(token)
-		full := fullBuf.String()
+		if err != nil {
+			return fmt.Errorf("no AI model available: %w", err)
+		}
 
-		if idx := strings.Index(full, delimiter); idx >= 0 {
-			delimFound = true
-			delimPos = idx
-			// Emit any buffered text that precedes the delimiter.
-			if idx > emittedLen {
-				if err := onToken(full[emittedLen:idx]); err != nil {
+		sc, ok := client.(StreamingClient)
+		if !ok {
+			excluded = append(excluded, client.ModelID())
+			continue
+		}
+
+		var fullBuf strings.Builder
+		var emittedLen int
+		delimFound := false
+		delimPos := -1
+
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+
+		streamErr := sc.ChatSimpleStream(ctx, []ChatMessage{
+			{Role: "user", Content: masked},
+		}, proofreadStreamSystemInstruction, func(token string) error {
+			if delimFound {
+				fullBuf.WriteString(token)
+				return nil
+			}
+			fullBuf.WriteString(token)
+			full := fullBuf.String()
+
+			if idx := strings.Index(full, delimiter); idx >= 0 {
+				delimFound = true
+				delimPos = idx
+				if idx > emittedLen {
+					if err := onToken(full[emittedLen:idx]); err != nil {
+						return err
+					}
+				}
+				emittedLen = idx
+				return nil
+			}
+
+			safeEnd := len(full) - (delimLen - 1)
+			if safeEnd > emittedLen {
+				if err := onToken(full[emittedLen:safeEnd]); err != nil {
+					return err
+				}
+				emittedLen = safeEnd
+			}
+			return nil
+		})
+		cancel()
+
+		if streamErr != nil {
+			// Only retry if no tokens were emitted yet (safe to start over).
+			if emittedLen == 0 && proofreadShouldRetry(streamErr) {
+				excluded = append(excluded, client.ModelID())
+				continue
+			}
+			return streamErr
+		}
+
+		full := fullBuf.String()
+		var correctedText string
+		var fixes []string
+
+		if !delimFound {
+			if len(full) > emittedLen {
+				if err := onToken(full[emittedLen:]); err != nil {
 					return err
 				}
 			}
-			emittedLen = idx
-			return nil
-		}
-
-		// No delimiter yet — emit up to the last delimLen-1 bytes as a lookahead buffer.
-		safeEnd := len(full) - (delimLen - 1)
-		if safeEnd > emittedLen {
-			if err := onToken(full[emittedLen:safeEnd]); err != nil {
-				return err
-			}
-			emittedLen = safeEnd
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	full := fullBuf.String()
-	var correctedText string
-	var fixes []string
-
-	if !delimFound {
-		// Flush any remaining lookahead buffer.
-		if len(full) > emittedLen {
-			if err := onToken(full[emittedLen:]); err != nil {
-				return err
+			correctedText = strings.TrimSpace(full)
+		} else {
+			correctedText = strings.TrimSpace(full[:delimPos])
+			fixesRaw := strings.TrimSpace(full[delimPos+delimLen:])
+			for _, line := range strings.Split(fixesRaw, "\n") {
+				if line = strings.TrimSpace(line); line != "" {
+					fixes = append(fixes, line)
+				}
 			}
 		}
-		correctedText = strings.TrimSpace(full)
-	} else {
-		correctedText = strings.TrimSpace(full[:delimPos])
-		fixesRaw := strings.TrimSpace(full[delimPos+delimLen:])
-		for _, line := range strings.Split(fixesRaw, "\n") {
-			if line = strings.TrimSpace(line); line != "" {
-				fixes = append(fixes, line)
-			}
+
+		correctedText = restoreBBCode(correctedText, bbTags)
+		if fixes == nil {
+			fixes = []string{}
 		}
+		return onDone(correctedText, fixes)
 	}
 
-	correctedText = restoreBBCode(correctedText, bbTags)
-	if fixes == nil {
-		fixes = []string{}
-	}
-	return onDone(correctedText, fixes)
+	return fmt.Errorf("all available models failed for proofreading")
 }
