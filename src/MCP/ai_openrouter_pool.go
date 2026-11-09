@@ -80,6 +80,13 @@ func (p *OpenRouterModelPool) ClientForSimpleChat(minSize Entities.AIModelSize, 
 	return p.selectModel(minSize, modelType, "", nil, false)
 }
 
+func (p *OpenRouterModelPool) ClientExcludingForSimpleChat(minSize Entities.AIModelSize, modelType Entities.AIModelType, excluded []string) (AIClient, error) {
+	if p.useFreeOnly {
+		return p.freeClient()
+	}
+	return p.selectModel(minSize, modelType, "", excluded, false)
+}
+
 func (p *OpenRouterModelPool) freeClient() (AIClient, error) {
 	log.Printf("OpenRouter: using openrouter/free virtual model")
 	return NewOpenAICompatClient(p.apiKey, "openrouter/free", openRouterBaseURL)

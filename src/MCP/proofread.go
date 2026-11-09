@@ -144,8 +144,9 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 			return nil
 		},
 		ModelRetryOptions{
-			MaxRetries: 4,
+			MaxRetries:  4,
 			ShouldRetry: proofreadShouldRetry,
+			SimpleChat:  true,
 		},
 	)
 	if err != nil {
@@ -187,7 +188,7 @@ func ProofreadTextStream(
 		if attempt == 0 {
 			client, err = pool.ClientForSimpleChat(Entities.AIModelSizeMedium, Entities.AIModelTypeText)
 		} else {
-			client, err = pool.ClientExcluding(Entities.AIModelSizeMedium, Entities.AIModelTypeText, excluded)
+			client, err = pool.ClientExcludingForSimpleChat(Entities.AIModelSizeMedium, Entities.AIModelTypeText, excluded)
 		}
 		if err != nil {
 			return fmt.Errorf("no AI model available: %w", err)
