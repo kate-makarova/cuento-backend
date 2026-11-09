@@ -155,6 +155,12 @@ func main() {
 	publicRouter.POST("/update-password", "Update user password via recovery flow", func(c *gin.Context) {
 		Controllers.UpdatePassword(c, Services.DB)
 	})
+	publicRouter.POST("/verify-admin-reset-code", "Verify admin-issued PIN and obtain security code for password reset", func(c *gin.Context) {
+		Controllers.VerifyAdminResetCode(c, Services.DB)
+	})
+	publicRouter.POST("/complete-password-reset", "Set new password and keys after admin reset", func(c *gin.Context) {
+		Controllers.CompletePasswordReset(c, Services.DB)
+	})
 	wipeRateLimiter := Middlewares.NewRateLimiter(5, time.Hour)
 	r.POST("/user/wipe", wipeRateLimiter.Middleware(), func(c *gin.Context) {
 		Controllers.WipeOutMyUser(c, Services.DB)
@@ -690,6 +696,9 @@ protectedRouter.GET("/my-claim-records", "Get current user's active claim record
 	})
 	protectedRouter.POST("/admin/user/delete/:id", "Delete a user account: removes general posts, reassigns game posts, deletes the user", func(c *gin.Context) {
 		Controllers.AdminWipeUser(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/users/:id/reset-password", "Reset a user's password and invalidate their encryption keys (admin)", func(c *gin.Context) {
+		Controllers.AdminResetPassword(c, Services.DB)
 	})
 	protectedRouter.GET("/characters/archiving-warnings", "Get active characters approaching auto-archiving threshold", func(c *gin.Context) {
 		Controllers.GetArchivingWarnings(c, Services.DB)

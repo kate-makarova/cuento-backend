@@ -112,7 +112,7 @@ func ProofreadText(text string, db *sql.DB) (*ProofreadResult, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 			defer cancel()
 
-			reply, _, e := c.Chat(ctx, []ChatMessage{
+			reply, e := c.SimpleChat(ctx, []ChatMessage{
 				{Role: "user", Content: masked},
 			}, proofreadSystemInstruction)
 			if e != nil {
