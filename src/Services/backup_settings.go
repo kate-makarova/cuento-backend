@@ -11,34 +11,37 @@ type BackupSettingsRow struct {
 	GdriveFrequency         string
 	GdriveKeep              int
 	GdriveLastRun           *time.Time
+	GdriveFolderID          string
 }
 
 func GetBackupSettings(db *sql.DB) (BackupSettingsRow, error) {
 	var row BackupSettingsRow
-	var key sql.NullString
+	var key, folderID sql.NullString
 	var lastRun sql.NullTime
 	err := db.QueryRow(`
-		SELECT gdrive_service_account_key, gdrive_enabled, gdrive_frequency, gdrive_keep, gdrive_last_run
+		SELECT gdrive_service_account_key, gdrive_enabled, gdrive_frequency, gdrive_keep, gdrive_last_run, gdrive_folder_id
 		FROM backup_settings WHERE id = 1`).
-		Scan(&key, &row.GdriveEnabled, &row.GdriveFrequency, &row.GdriveKeep, &lastRun)
+		Scan(&key, &row.GdriveEnabled, &row.GdriveFrequency, &row.GdriveKeep, &lastRun, &folderID)
 	if err != nil {
 		return row, err
 	}
 	row.GdriveServiceAccountKey = key.String
+	row.GdriveFolderID = folderID.String
 	if lastRun.Valid {
 		row.GdriveLastRun = &lastRun.Time
 	}
 	return row, nil
 }
 
-func SaveBackupSettings(key string, enabled bool, frequency string, keep int, db *sql.DB) error {
+func SaveBackupSettings(key string, enabled bool, frequency string, keep int, folderID string, db *sql.DB) error {
 	_, err := db.Exec(`
 		UPDATE backup_settings
 		SET gdrive_service_account_key = ?,
 		    gdrive_enabled             = ?,
 		    gdrive_frequency           = ?,
-		    gdrive_keep                = ?
-		WHERE id = 1`, key, enabled, frequency, keep)
+		    gdrive_keep                = ?,
+		    gdrive_folder_id           = ?
+		WHERE id = 1`, key, enabled, frequency, keep, folderID)
 	return err
 }
 
