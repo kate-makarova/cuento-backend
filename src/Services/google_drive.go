@@ -99,6 +99,9 @@ func (p *GDriveProvider) Prune(keep int) error {
 	if err != nil {
 		return fmt.Errorf("list backups for pruning: %w", err)
 	}
+	if len(list.Files) <= keep {
+		return nil
+	}
 	for _, f := range list.Files[keep:] {
 		if err := svc.Files.Delete(f.Id).SupportsAllDrives(true).Do(); err != nil {
 			log.Printf("GDrive: failed to delete old backup %s (%s): %v", f.Name, f.Id, err)
