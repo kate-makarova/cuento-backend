@@ -9,6 +9,8 @@ import (
 	"log"
 	"time"
 
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/option"
 )
@@ -36,7 +38,7 @@ func (p *GDriveProvider) Upload(filename string, data []byte) error {
 	_, err = svc.Files.Create(&drive.File{
 		Name:    filename,
 		Parents: []string{folderID},
-	}).Media(bytes.NewReader(data)).Do()
+	}).SupportsAllDrives(true).Media(bytes.NewReader(data)).Do()
 	return err
 }
 
@@ -50,7 +52,8 @@ func (p *GDriveProvider) ListBackups() ([]BackupFile, error) {
 		return nil, err
 	}
 	q := fmt.Sprintf("'%s' in parents and trashed = false", folderID)
-	list, err := svc.Files.List().Q(q).Fields("files(id,name,createdTime)").OrderBy("createdTime desc").Do()
+	list, err := svc.Files.List().Q(q).Fields("files(id,name,createdTime)").OrderBy("createdTime desc").
+		SupportsAllDrives(true).IncludeItemsFromAllDrives(true).Do()
 	if err != nil {
 		return nil, fmt.Errorf("list backups: %w", err)
 	}
@@ -91,12 +94,13 @@ func (p *GDriveProvider) Prune(keep int) error {
 		return err
 	}
 	q := fmt.Sprintf("'%s' in parents and trashed = false", folderID)
-	list, err := svc.Files.List().Q(q).Fields("files(id,name)").OrderBy("createdTime desc").Do()
+	list, err := svc.Files.List().Q(q).Fields("files(id,name)").OrderBy("createdTime desc").
+		SupportsAllDrives(true).IncludeItemsFromAllDrives(true).Do()
 	if err != nil {
 		return fmt.Errorf("list backups for pruning: %w", err)
 	}
 	for _, f := range list.Files[keep:] {
-		if err := svc.Files.Delete(f.Id).Do(); err != nil {
+		if err := svc.Files.Delete(f.Id).SupportsAllDrives(true).Do(); err != nil {
 			log.Printf("GDrive: failed to delete old backup %s (%s): %v", f.Name, f.Id, err)
 		}
 	}
@@ -104,13 +108,22 @@ func (p *GDriveProvider) Prune(keep int) error {
 }
 
 func (p *GDriveProvider) service() (*drive.Service, error) {
-	keyJSON, err := GetBackupSetting("gdrive_service_account_key", p.db)
-	if err != nil || keyJSON == "" {
-		return nil, fmt.Errorf("google drive service account key not configured")
+	settings, err := GetBackupSettings(p.db)
+	if err != nil {
+		return nil, fmt.Errorf("read backup settings: %w", err)
 	}
+	if settings.GdriveClientID == "" || settings.GdriveClientSecret == "" || settings.GdriveRefreshToken == "" {
+		return nil, fmt.Errorf("google drive oauth2 credentials not configured")
+	}
+	cfg := &oauth2.Config{
+		ClientID:     settings.GdriveClientID,
+		ClientSecret: settings.GdriveClientSecret,
+		Scopes:       []string{drive.DriveScope},
+		Endpoint:     google.Endpoint,
+	}
+	token := &oauth2.Token{RefreshToken: settings.GdriveRefreshToken}
 	svc, err := drive.NewService(context.Background(),
-		option.WithCredentialsJSON([]byte(keyJSON)),
-		option.WithScopes(drive.DriveScope),
+		option.WithTokenSource(cfg.TokenSource(context.Background(), token)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create drive service: %w", err)
@@ -129,7 +142,8 @@ func (p *GDriveProvider) backupFolderID(svc *drive.Service) (string, error) {
 		return id, nil
 	}
 	q := fmt.Sprintf("name = '%s' and mimeType = 'application/vnd.google-apps.folder' and trashed = false", gdriveFolderName)
-	list, err := svc.Files.List().Q(q).Fields("files(id)").Do()
+	list, err := svc.Files.List().Q(q).Fields("files(id)").
+		SupportsAllDrives(true).IncludeItemsFromAllDrives(true).Do()
 	if err != nil {
 		return "", fmt.Errorf("search backup folder: %w", err)
 	}
@@ -139,7 +153,7 @@ func (p *GDriveProvider) backupFolderID(svc *drive.Service) (string, error) {
 	folder, err := svc.Files.Create(&drive.File{
 		Name:     gdriveFolderName,
 		MimeType: "application/vnd.google-apps.folder",
-	}).Fields("id").Do()
+	}).SupportsAllDrives(true).Fields("id").Do()
 	if err != nil {
 		return "", fmt.Errorf("create backup folder: %w", err)
 	}

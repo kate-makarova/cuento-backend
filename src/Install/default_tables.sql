@@ -73,13 +73,15 @@ CREATE TABLE global_settings
 
 CREATE TABLE backup_settings
 (
-    id                         INT          NOT NULL DEFAULT 1,
-    gdrive_service_account_key TEXT,
-    gdrive_enabled             TINYINT(1)   NOT NULL DEFAULT 0,
-    gdrive_frequency           VARCHAR(20)  NOT NULL DEFAULT 'daily',
-    gdrive_keep                INT          NOT NULL DEFAULT 5,
-    gdrive_last_run            DATETIME,
-    gdrive_folder_id           VARCHAR(255) NOT NULL DEFAULT '',
+    id                  INT          NOT NULL DEFAULT 1,
+    gdrive_enabled      TINYINT(1)   NOT NULL DEFAULT 0,
+    gdrive_frequency    VARCHAR(20)  NOT NULL DEFAULT 'daily',
+    gdrive_keep         INT          NOT NULL DEFAULT 5,
+    gdrive_last_run     DATETIME,
+    gdrive_folder_id    VARCHAR(255) NOT NULL DEFAULT '',
+    gdrive_client_id    VARCHAR(255) NOT NULL DEFAULT '',
+    gdrive_client_secret VARCHAR(255) NOT NULL DEFAULT '',
+    gdrive_refresh_token TEXT,
     PRIMARY KEY (id)
 );
 
