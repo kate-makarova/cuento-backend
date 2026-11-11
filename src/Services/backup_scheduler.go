@@ -31,11 +31,11 @@ type BackupFile struct {
 
 // resolveBackupProvider returns the configured provider, or nil if none is set up.
 func resolveBackupProvider(db *sql.DB) BackupStorageProvider {
-	key, _ := GetBackupSetting("gdrive_service_account_key", db)
-	if key != "" {
-		return NewGDriveProvider(db)
+	settings, err := GetBackupSettings(db)
+	if err != nil || settings.GdriveClientID == "" || settings.GdriveRefreshToken == "" {
+		return nil
 	}
-	return nil
+	return NewGDriveProvider(db)
 }
 
 func StartBackupScheduler(db *sql.DB) {

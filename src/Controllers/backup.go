@@ -54,13 +54,15 @@ func RestoreDB(c *gin.Context) {
 }
 
 type GDriveBackupSettings struct {
-	ServiceAccountKey string                `json:"service_account_key"`
-	Enabled           bool                  `json:"enabled"`
-	Frequency         string                `json:"frequency"`
-	Keep              int                   `json:"keep"`
-	FolderID          string                `json:"folder_id"`
-	LastRun           *time.Time            `json:"last_run"`
-	Backups           []Services.BackupFile `json:"backups"`
+	ClientID     string                `json:"client_id"`
+	ClientSecret string                `json:"client_secret"`
+	RefreshToken string                `json:"refresh_token"`
+	Enabled      bool                  `json:"enabled"`
+	Frequency    string                `json:"frequency"`
+	Keep         int                   `json:"keep"`
+	FolderID     string                `json:"folder_id"`
+	LastRun      *time.Time            `json:"last_run"`
+	Backups      []Services.BackupFile `json:"backups"`
 }
 
 func GetGDriveBackupSettings(c *gin.Context, db *sql.DB) {
@@ -78,7 +80,7 @@ func GetGDriveBackupSettings(c *gin.Context, db *sql.DB) {
 	}
 
 	var backups []Services.BackupFile
-	if row.GdriveServiceAccountKey != "" {
+	if row.GdriveClientID != "" && row.GdriveRefreshToken != "" {
 		backups, _ = Services.NewGDriveProvider(db).ListBackups()
 	}
 	if backups == nil {
@@ -86,22 +88,26 @@ func GetGDriveBackupSettings(c *gin.Context, db *sql.DB) {
 	}
 
 	c.JSON(http.StatusOK, GDriveBackupSettings{
-		ServiceAccountKey: row.GdriveServiceAccountKey,
-		Enabled:           row.GdriveEnabled,
-		Frequency:         row.GdriveFrequency,
-		Keep:              row.GdriveKeep,
-		FolderID:          row.GdriveFolderID,
-		LastRun:           row.GdriveLastRun,
-		Backups:           backups,
+		ClientID:     row.GdriveClientID,
+		ClientSecret: row.GdriveClientSecret,
+		RefreshToken: row.GdriveRefreshToken,
+		Enabled:      row.GdriveEnabled,
+		Frequency:    row.GdriveFrequency,
+		Keep:         row.GdriveKeep,
+		FolderID:     row.GdriveFolderID,
+		LastRun:      row.GdriveLastRun,
+		Backups:      backups,
 	})
 }
 
 type UpdateGDriveBackupSettingsRequest struct {
-	ServiceAccountKey string `json:"service_account_key"`
-	Enabled           bool   `json:"enabled"`
-	Frequency         string `json:"frequency"`
-	Keep              int    `json:"keep"`
-	FolderID          string `json:"folder_id"`
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	RefreshToken string `json:"refresh_token"`
+	Enabled      bool   `json:"enabled"`
+	Frequency    string `json:"frequency"`
+	Keep         int    `json:"keep"`
+	FolderID     string `json:"folder_id"`
 }
 
 func UpdateGDriveBackupSettings(c *gin.Context, db *sql.DB) {
@@ -125,7 +131,7 @@ func UpdateGDriveBackupSettings(c *gin.Context, db *sql.DB) {
 		req.Keep = 1
 	}
 
-	if err := Services.SaveBackupSettings(req.ServiceAccountKey, req.Enabled, req.Frequency, req.Keep, req.FolderID, db); err != nil {
+	if err := Services.SaveBackupSettings(req.Enabled, req.Frequency, req.Keep, req.FolderID, req.ClientID, req.ClientSecret, req.RefreshToken, db); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save settings"})
 		c.Abort()
 		return
