@@ -29,7 +29,7 @@ func (p *GDriveProvider) Upload(filename string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	folderID, err := getOrCreateBackupFolder(svc)
+	folderID, err := p.backupFolderID(svc)
 	if err != nil {
 		return err
 	}
@@ -45,7 +45,7 @@ func (p *GDriveProvider) ListBackups() ([]BackupFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	folderID, err := getOrCreateBackupFolder(svc)
+	folderID, err := p.backupFolderID(svc)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (p *GDriveProvider) Prune(keep int) error {
 	if err != nil {
 		return err
 	}
-	folderID, err := getOrCreateBackupFolder(svc)
+	folderID, err := p.backupFolderID(svc)
 	if err != nil {
 		return err
 	}
@@ -118,7 +118,16 @@ func (p *GDriveProvider) service() (*drive.Service, error) {
 	return svc, nil
 }
 
-func getOrCreateBackupFolder(svc *drive.Service) (string, error) {
+// backupFolderID returns the configured folder ID if one is set, otherwise
+// searches for (and creates) a "Cuento Backups" folder in the service account's
+// Drive. Note: service accounts have no personal storage quota, so the
+// auto-create path only works when a user-owned folder has been shared with the
+// service account and its ID stored in backup settings.
+func (p *GDriveProvider) backupFolderID(svc *drive.Service) (string, error) {
+	id, _ := GetBackupSetting("gdrive_folder_id", p.db)
+	if id != "" {
+		return id, nil
+	}
 	q := fmt.Sprintf("name = '%s' and mimeType = 'application/vnd.google-apps.folder' and trashed = false", gdriveFolderName)
 	list, err := svc.Files.List().Q(q).Fields("files(id)").Do()
 	if err != nil {

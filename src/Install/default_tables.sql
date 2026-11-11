@@ -17,6 +17,7 @@ create table users
     total_posts        int default 0 not null,
     total_general_posts int default 0 not null,
     signature          text         null,
+    bio                text         null,
     editor_type        int          not null default 0,
     do_not_blur        tinyint(1)   not null default 0,
     constraint users_pk_2
@@ -78,6 +79,7 @@ CREATE TABLE backup_settings
     gdrive_frequency           VARCHAR(20)  NOT NULL DEFAULT 'daily',
     gdrive_keep                INT          NOT NULL DEFAULT 5,
     gdrive_last_run            DATETIME,
+    gdrive_folder_id           VARCHAR(255) NOT NULL DEFAULT '',
     PRIMARY KEY (id)
 );
 
