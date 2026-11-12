@@ -162,9 +162,6 @@ func main() {
 	publicRouter.GET("/character/field-list/:machine_name", "Get distinct values of a string character custom field", func(c *gin.Context) {
 		Controllers.CustomFieldList(c, Services.DB)
 	})
-	publicRouter.GET("/character/get/:id", "Get character details by ID", func(c *gin.Context) {
-		Controllers.GetCharacter(c, Services.DB)
-	})
 	publicRouter.GET("/character-profile/get/:id", "Get character profile details by ID", func(c *gin.Context) {
 		Controllers.GetCharacterProfile(c, Services.DB)
 	})
@@ -219,6 +216,9 @@ func main() {
 	})
 	optionalAuthRouter.GET("/topic/get/:id", "Get topic details by ID", func(c *gin.Context) {
 		Controllers.GetTopic(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/character/get/:id", "Get character details by ID", func(c *gin.Context) {
+		Controllers.GetCharacter(c, Services.DB)
 	})
 	optionalAuthRouter.GET("/character-list", "Get list of all characters", func(c *gin.Context) {
 		Controllers.GetCharacterList(c, Services.DB)

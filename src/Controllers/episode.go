@@ -275,13 +275,6 @@ func PreviewEpisode(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, episode)
 }
 
-func localizeEpisodeLastPostDate(ep *EpisodeListItem, tz *string) {
-	if ep.LastPostDate != "" {
-		if t, err := time.Parse("2006-01-02 15:04:05", ep.LastPostDate); err == nil {
-			ep.LastPostDateLocalized = Services.LocalizeTime(t, tz)
-		}
-	}
-}
 
 func GetEpisodes(c *gin.Context, db *sql.DB) {
 	var req GetEpisodesRequest
@@ -470,7 +463,8 @@ func GetEpisodes(c *gin.Context, db *sql.DB) {
 			rawVals[i] = new(sql.RawBytes)
 			customDests[i] = rawVals[i]
 		}
-		scanDests := []interface{}{&ep.Id, &ep.Name, &ep.TopicId, &ep.SubforumId, &ep.SubforumName, &ep.TopicStatus, &ep.LastPostDate}
+		var lastPostTime *time.Time
+		scanDests := []interface{}{&ep.Id, &ep.Name, &ep.TopicId, &ep.SubforumId, &ep.SubforumName, &ep.TopicStatus, &lastPostTime}
 		scanDests = append(scanDests, customDests...)
 
 		if err := rows.Scan(scanDests...); err != nil {
@@ -478,7 +472,10 @@ func GetEpisodes(c *gin.Context, db *sql.DB) {
 			c.Abort()
 			return
 		}
-		localizeEpisodeLastPostDate(&ep, tz)
+		if lastPostTime != nil {
+			ep.LastPostDate = lastPostTime.UTC().Format("2006-01-02 15:04:05")
+			ep.LastPostDateLocalized = Services.LocalizeTime(*lastPostTime, tz)
+		}
 
 		for i, f := range allowedFields {
 			if rawVals[i] == nil || *rawVals[i] == nil {
@@ -663,7 +660,8 @@ func GetEpisodesByMask(c *gin.Context, db *sql.DB) {
 			rawVals[i] = new(sql.RawBytes)
 			customDests[i] = rawVals[i]
 		}
-		scanDests := []interface{}{&ep.Id, &ep.Name, &ep.TopicId, &ep.SubforumId, &ep.SubforumName, &ep.TopicStatus, &ep.LastPostDate}
+		var lastPostTime *time.Time
+		scanDests := []interface{}{&ep.Id, &ep.Name, &ep.TopicId, &ep.SubforumId, &ep.SubforumName, &ep.TopicStatus, &lastPostTime}
 		scanDests = append(scanDests, customDests...)
 
 		if err := rows.Scan(scanDests...); err != nil {
@@ -671,7 +669,10 @@ func GetEpisodesByMask(c *gin.Context, db *sql.DB) {
 			c.Abort()
 			return
 		}
-		localizeEpisodeLastPostDate(&ep, tz)
+		if lastPostTime != nil {
+			ep.LastPostDate = lastPostTime.UTC().Format("2006-01-02 15:04:05")
+			ep.LastPostDateLocalized = Services.LocalizeTime(*lastPostTime, tz)
+		}
 
 		for i, f := range allowedFields {
 			if rawVals[i] == nil || *rawVals[i] == nil {

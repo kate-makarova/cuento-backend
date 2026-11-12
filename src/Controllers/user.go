@@ -503,7 +503,7 @@ func GetUserProfile(c *gin.Context, db *sql.DB) {
 
 	currentUserID := Services.GetUserIdFromContext(c)
 	viewerTimezone := Services.GetUserTimezone(currentUserID, db)
-	profile.RegistrationDateLocalized = Services.LocalizeTime(profile.RegistrationDate, viewerTimezone)
+	profile.RegistrationDateLocalized = Services.LocalizeDateOnly(profile.RegistrationDate)
 
 	// Fetch characters for this user
 	charRows, err := db.Query("SELECT cb.id, cb.name, cb.total_episodes, cb.total_posts, cb.date_last_post, cb.character_status FROM character_base cb LEFT JOIN topics t ON cb.topic_id = t.id WHERE cb.user_id = ? AND (cb.topic_id IS NULL OR t.status != ?)", userID, Entities.DeletedTopic)
