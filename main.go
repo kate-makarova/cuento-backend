@@ -40,6 +40,8 @@ func main() {
 	// Start archiving warning notifier (checks daily, sends notifications at 10/5/3/2/1 days before archiving)
 	Services.StartArchivingNotifier(Services.DB)
 
+	Services.StartImageHostingMonitor(Services.DB)
+
 	// Start Google Drive backup scheduler (checks hourly, runs backup per configured frequency)
 	Services.StartBackupScheduler(Services.DB)
 
@@ -452,6 +454,12 @@ func main() {
 	})
 	protectedRouter.POST("/global-settings/update", "Update global settings", func(c *gin.Context) {
 		Controllers.UpdateGlobalSettings(c, Services.DB)
+	})
+	protectedRouter.GET("/admin/image-hosting", "Get image hosting settings and nginx status", func(c *gin.Context) {
+		Controllers.GetImageHostingSettings(c, Services.DB)
+	})
+	protectedRouter.POST("/admin/image-hosting", "Update image hosting settings and apply nginx state", func(c *gin.Context) {
+		Controllers.UpdateImageHostingSettings(c, Services.DB)
 	})
 protectedRouter.GET("/my-claim-records", "Get current user's active claim records for wanted characters", func(c *gin.Context) {
 		Controllers.GetMyClaimRecords(c, Services.DB)

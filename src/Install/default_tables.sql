@@ -204,6 +204,27 @@ VALUES ('openrouter_use_free_only', 'y', 1);
 INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('groq_api_key', '', 1);
 
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('image_hosting_enabled', 'n', 0);
+
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('image_hosting_ram_limit_mb', '5', 0);
+
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('image_hosting_s3_access_key', '', 1);
+
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('image_hosting_s3_bucket', '', 0);
+
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('image_hosting_s3_endpoint', '', 0);
+
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('image_hosting_s3_secret_key', '', 1);
+
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('image_hosting_storage', 'local', 0);
+
 CREATE TABLE categories (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NULL,
