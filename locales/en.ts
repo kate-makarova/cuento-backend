@@ -487,6 +487,7 @@ export const TRANSLATIONS_EN = {
   "adminFeatures.settingsLink": "Settings",
   "adminFeatures.title": "Features",
   "adminImageHosting.baseUrl": "Server base URL",
+  "adminImageHosting.imgbbApiKey": "ImgBB API key",
   "adminImageHosting.enabled": "Enable server",
   "adminImageHosting.hintImgbb": "Images are uploaded to ImgBB. Configure the API key on the Settings page.",
   "adminImageHosting.hintLocal": "Images are saved to the local server. The nginx image server must be installed and running.",

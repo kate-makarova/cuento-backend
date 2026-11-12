@@ -1075,6 +1075,7 @@ export const TRANSLATIONS_RU = {
   "admin.design.uploadedAssets": "Загруженные файлы",
   "admin.features": "Дополнительные функции",
   "adminImageHosting.baseUrl": "Базовый URL сервера",
+  "adminImageHosting.imgbbApiKey": "API ключ ImgBB",
   "adminImageHosting.enabled": "Включить сервер",
   "adminImageHosting.hintImgbb": "Изображения загружаются на ImgBB. Настройте API ключ на странице Настроек.",
   "adminImageHosting.hintLocal": "Изображения сохраняются на локальный сервер. Необходимо установить и запустить nginx.",

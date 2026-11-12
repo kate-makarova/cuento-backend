@@ -11,16 +11,17 @@ import (
 )
 
 type imageHostingSettingsResponse struct {
-	Enabled         string `json:"enabled"`
-	Storage         string `json:"storage"`
-	RamLimitMB      string `json:"ram_limit_mb"`
-	S3Endpoint      string `json:"s3_endpoint"`
-	S3Bucket        string `json:"s3_bucket"`
-	S3AccessKey     string `json:"s3_access_key"`
-	S3SecretKey     string `json:"s3_secret_key"`
-	NginxActive     bool   `json:"nginx_active"`
-	UploadProvider  string `json:"upload_provider"`
-	BaseURL         string `json:"base_url"`
+	Enabled        string `json:"enabled"`
+	Storage        string `json:"storage"`
+	RamLimitMB     string `json:"ram_limit_mb"`
+	S3Endpoint     string `json:"s3_endpoint"`
+	S3Bucket       string `json:"s3_bucket"`
+	S3AccessKey    string `json:"s3_access_key"`
+	S3SecretKey    string `json:"s3_secret_key"`
+	NginxActive    bool   `json:"nginx_active"`
+	UploadProvider string `json:"upload_provider"`
+	BaseURL        string `json:"base_url"`
+	ImgbbApiKey    string `json:"imgbb_api_key"`
 }
 
 type imageHostingSettingsRequest struct {
@@ -33,6 +34,7 @@ type imageHostingSettingsRequest struct {
 	S3SecretKey    string `json:"s3_secret_key"`
 	UploadProvider string `json:"upload_provider"`
 	BaseURL        string `json:"base_url"`
+	ImgbbApiKey    string `json:"imgbb_api_key"`
 }
 
 var imageHostingSettingKeys = []string{
@@ -47,11 +49,11 @@ var imageHostingSettingKeys = []string{
 
 func GetImageHostingSettings(c *gin.Context, db *sql.DB) {
 	rows, err := db.Query(
-		"SELECT setting_name, setting_value FROM global_settings WHERE setting_name IN (?,?,?,?,?,?,?,?,?)",
+		"SELECT setting_name, setting_value FROM global_settings WHERE setting_name IN (?,?,?,?,?,?,?,?,?,?)",
 		"image_hosting_enabled", "image_hosting_storage", "image_hosting_ram_limit_mb",
 		"image_hosting_s3_endpoint", "image_hosting_s3_bucket",
 		"image_hosting_s3_access_key", "image_hosting_s3_secret_key",
-		"image_upload_provider", "image_hosting_base_url",
+		"image_upload_provider", "image_hosting_base_url", "imgbb_api_key",
 	)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to load image hosting settings: " + err.Error()})
@@ -82,6 +84,7 @@ func GetImageHostingSettings(c *gin.Context, db *sql.DB) {
 		NginxActive:    Services.IsNginxImageHostingActive(),
 		UploadProvider: settings["image_upload_provider"],
 		BaseURL:        settings["image_hosting_base_url"],
+		ImgbbApiKey:    settings["imgbb_api_key"],
 	}
 	if isSuperuser {
 		resp.S3AccessKey = settings["image_hosting_s3_access_key"]
@@ -146,6 +149,7 @@ func UpdateImageHostingSettings(c *gin.Context, db *sql.DB) {
 		"image_hosting_s3_bucket":    req.S3Bucket,
 		"image_upload_provider":      req.UploadProvider,
 		"image_hosting_base_url":     req.BaseURL,
+		"imgbb_api_key":              req.ImgbbApiKey,
 	}
 	if isSuperuser {
 		updates["image_hosting_s3_access_key"] = req.S3AccessKey
