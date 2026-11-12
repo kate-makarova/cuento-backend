@@ -293,7 +293,7 @@ func Login(c *gin.Context, db *sql.DB) {
 		user.Roles = append(user.Roles, role)
 	}
 	if Services.IsSuperuserID(user.Id) {
-		user.Roles = append(user.Roles, Entities.Role{Id: 0, Name: "superadmin", Permissions: []string{"show_admin_backup", "show_admin_ai_models"}})
+		user.Roles = append(user.Roles, Entities.Role{Id: 0, Name: "superadmin", Permissions: []string{"show_admin_backup", "show_admin_ai_models", "show_admin_image_hosting"}})
 		user.IsSuperuser = true
 	}
 
@@ -415,7 +415,7 @@ func RefreshToken(c *gin.Context, db *sql.DB) {
 			}
 		}
 		if Services.IsSuperuserID(user.Id) {
-			user.Roles = append(user.Roles, Entities.Role{Id: 0, Name: "superadmin", Permissions: []string{"show_admin_backup", "show_admin_ai_models"}})
+			user.Roles = append(user.Roles, Entities.Role{Id: 0, Name: "superadmin", Permissions: []string{"show_admin_backup", "show_admin_ai_models", "show_admin_image_hosting"}})
 			user.IsSuperuser = true
 		}
 	}
@@ -738,7 +738,7 @@ func UpdateSettings(c *gin.Context, db *sql.DB) {
 			}
 		}
 		if Services.IsSuperuserID(user.Id) {
-			user.Roles = append(user.Roles, Entities.Role{Id: 0, Name: "superadmin", Permissions: []string{"show_admin_backup", "show_admin_ai_models"}})
+			user.Roles = append(user.Roles, Entities.Role{Id: 0, Name: "superadmin", Permissions: []string{"show_admin_backup", "show_admin_ai_models", "show_admin_image_hosting"}})
 			user.IsSuperuser = true
 		}
 	}
