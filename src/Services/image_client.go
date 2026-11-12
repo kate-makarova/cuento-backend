@@ -2,6 +2,20 @@ package Services
 
 import "database/sql"
 
+// GetImageClient returns the configured image upload client.
+// Falls back to ImgbbClient if the setting is missing or unrecognised.
+func GetImageClient(db *sql.DB) BulkImageClient {
+	provider, _ := GetGlobalSetting("image_upload_provider", db)
+	return getImageClientFromValue(provider)
+}
+
+func getImageClientFromValue(provider string) BulkImageClient {
+	if provider == "local" {
+		return LocalImageClient{}
+	}
+	return ImgbbClient{}
+}
+
 type ImageUploadResult struct {
 	URL          string
 	ThumbnailURL string

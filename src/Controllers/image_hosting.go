@@ -11,24 +11,28 @@ import (
 )
 
 type imageHostingSettingsResponse struct {
-	Enabled      string `json:"enabled"`
-	Storage      string `json:"storage"`
-	RamLimitMB   string `json:"ram_limit_mb"`
-	S3Endpoint   string `json:"s3_endpoint"`
-	S3Bucket     string `json:"s3_bucket"`
-	S3AccessKey  string `json:"s3_access_key"`
-	S3SecretKey  string `json:"s3_secret_key"`
-	NginxActive  bool   `json:"nginx_active"`
+	Enabled         string `json:"enabled"`
+	Storage         string `json:"storage"`
+	RamLimitMB      string `json:"ram_limit_mb"`
+	S3Endpoint      string `json:"s3_endpoint"`
+	S3Bucket        string `json:"s3_bucket"`
+	S3AccessKey     string `json:"s3_access_key"`
+	S3SecretKey     string `json:"s3_secret_key"`
+	NginxActive     bool   `json:"nginx_active"`
+	UploadProvider  string `json:"upload_provider"`
+	BaseURL         string `json:"base_url"`
 }
 
 type imageHostingSettingsRequest struct {
-	Enabled     string `json:"enabled"`
-	Storage     string `json:"storage"`
-	RamLimitMB  string `json:"ram_limit_mb"`
-	S3Endpoint  string `json:"s3_endpoint"`
-	S3Bucket    string `json:"s3_bucket"`
-	S3AccessKey string `json:"s3_access_key"`
-	S3SecretKey string `json:"s3_secret_key"`
+	Enabled        string `json:"enabled"`
+	Storage        string `json:"storage"`
+	RamLimitMB     string `json:"ram_limit_mb"`
+	S3Endpoint     string `json:"s3_endpoint"`
+	S3Bucket       string `json:"s3_bucket"`
+	S3AccessKey    string `json:"s3_access_key"`
+	S3SecretKey    string `json:"s3_secret_key"`
+	UploadProvider string `json:"upload_provider"`
+	BaseURL        string `json:"base_url"`
 }
 
 var imageHostingSettingKeys = []string{
@@ -43,10 +47,11 @@ var imageHostingSettingKeys = []string{
 
 func GetImageHostingSettings(c *gin.Context, db *sql.DB) {
 	rows, err := db.Query(
-		"SELECT setting_name, setting_value FROM global_settings WHERE setting_name IN (?,?,?,?,?,?,?)",
+		"SELECT setting_name, setting_value FROM global_settings WHERE setting_name IN (?,?,?,?,?,?,?,?,?)",
 		"image_hosting_enabled", "image_hosting_storage", "image_hosting_ram_limit_mb",
 		"image_hosting_s3_endpoint", "image_hosting_s3_bucket",
 		"image_hosting_s3_access_key", "image_hosting_s3_secret_key",
+		"image_upload_provider", "image_hosting_base_url",
 	)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to load image hosting settings: " + err.Error()})
@@ -69,12 +74,14 @@ func GetImageHostingSettings(c *gin.Context, db *sql.DB) {
 
 	isSuperuser := Services.IsSuperuser(c)
 	resp := imageHostingSettingsResponse{
-		Enabled:    settings["image_hosting_enabled"],
-		Storage:    settings["image_hosting_storage"],
-		RamLimitMB: settings["image_hosting_ram_limit_mb"],
-		S3Endpoint: settings["image_hosting_s3_endpoint"],
-		S3Bucket:   settings["image_hosting_s3_bucket"],
-		NginxActive: Services.IsNginxImageHostingActive(),
+		Enabled:        settings["image_hosting_enabled"],
+		Storage:        settings["image_hosting_storage"],
+		RamLimitMB:     settings["image_hosting_ram_limit_mb"],
+		S3Endpoint:     settings["image_hosting_s3_endpoint"],
+		S3Bucket:       settings["image_hosting_s3_bucket"],
+		NginxActive:    Services.IsNginxImageHostingActive(),
+		UploadProvider: settings["image_upload_provider"],
+		BaseURL:        settings["image_hosting_base_url"],
 	}
 	if isSuperuser {
 		resp.S3AccessKey = settings["image_hosting_s3_access_key"]
@@ -94,6 +101,11 @@ func UpdateImageHostingSettings(c *gin.Context, db *sql.DB) {
 
 	if req.Storage != "local" && req.Storage != "s3" {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "storage must be 'local' or 's3'"})
+		c.Abort()
+		return
+	}
+	if req.UploadProvider != "imgbb" && req.UploadProvider != "local" {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "upload_provider must be 'imgbb' or 'local'"})
 		c.Abort()
 		return
 	}
@@ -127,11 +139,13 @@ func UpdateImageHostingSettings(c *gin.Context, db *sql.DB) {
 	defer tx.Rollback()
 
 	updates := map[string]string{
-		"image_hosting_enabled":       req.Enabled,
-		"image_hosting_storage":       req.Storage,
-		"image_hosting_ram_limit_mb":  req.RamLimitMB,
-		"image_hosting_s3_endpoint":   req.S3Endpoint,
-		"image_hosting_s3_bucket":     req.S3Bucket,
+		"image_hosting_enabled":      req.Enabled,
+		"image_hosting_storage":      req.Storage,
+		"image_hosting_ram_limit_mb": req.RamLimitMB,
+		"image_hosting_s3_endpoint":  req.S3Endpoint,
+		"image_hosting_s3_bucket":    req.S3Bucket,
+		"image_upload_provider":      req.UploadProvider,
+		"image_hosting_base_url":     req.BaseURL,
 	}
 	if isSuperuser {
 		updates["image_hosting_s3_access_key"] = req.S3AccessKey

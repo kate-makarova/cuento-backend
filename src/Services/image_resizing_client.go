@@ -64,7 +64,7 @@ func GetResizedImageURL(originalURL string, width, height int, db *sql.DB) (stri
 		return originalURL, fmt.Errorf("failed to encode image: %w", err)
 	}
 
-	result, err := UploadImageToImgbb(buf.Bytes(), db)
+	result, err := GetImageClient(db).UploadImage(buf.Bytes(), db)
 	if err != nil {
 		return originalURL, fmt.Errorf("failed to upload resized image: %w", err)
 	}

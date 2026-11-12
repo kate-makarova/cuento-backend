@@ -205,6 +205,9 @@ INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser
 VALUES ('groq_api_key', '', 1);
 
 INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('image_hosting_base_url', '', 0);
+
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('image_hosting_enabled', 'n', 0);
 
 INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
@@ -224,6 +227,9 @@ VALUES ('image_hosting_s3_secret_key', '', 1);
 
 INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
 VALUES ('image_hosting_storage', 'local', 0);
+
+INSERT IGNORE INTO global_settings (setting_name, setting_value, needs_superuser)
+VALUES ('image_upload_provider', 'imgbb', 0);
 
 CREATE TABLE categories (
     id INT AUTO_INCREMENT PRIMARY KEY,

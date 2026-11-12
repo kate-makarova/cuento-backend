@@ -32,7 +32,7 @@ func UploadImage(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	result, err := Services.UploadImageToImgbb(imageData, db)
+	result, err := Services.GetImageClient(db).UploadImage(imageData, db)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to upload image: " + err.Error()})
 		c.Abort()

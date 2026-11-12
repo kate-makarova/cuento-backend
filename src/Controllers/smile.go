@@ -314,7 +314,7 @@ func BulkUploadSmiles(c *gin.Context, db *sql.DB) {
 	c.Header("Cache-Control", "no-cache")
 	c.Header("X-Accel-Buffering", "no")
 
-	results, _ := Services.ImgbbClient{}.BulkUpload(tmpDir, db, func(completed, total int) {
+	results, _ := Services.GetImageClient(db).BulkUpload(tmpDir, db, func(completed, total int) {
 		c.SSEvent("progress", gin.H{"completed": completed, "total": total})
 		c.Writer.Flush()
 	})
@@ -345,7 +345,7 @@ func UploadSmile(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	result, err := Services.UploadImageToImgbb(imageData, db)
+	result, err := Services.GetImageClient(db).UploadImage(imageData, db)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to upload image: " + err.Error()})
 		c.Abort()

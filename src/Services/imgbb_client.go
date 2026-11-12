@@ -22,7 +22,7 @@ type ImgbbClient struct{}
 func (ImgbbClient) BulkUploadSupport() bool { return false }
 
 func (c ImgbbClient) UploadImage(imageData []byte, db *sql.DB) (*ImageUploadResult, error) {
-	return UploadImageToImgbb(imageData, db)
+	return uploadImageToImgbb(imageData, db)
 }
 
 func (c ImgbbClient) BulkUpload(folderPath string, db *sql.DB, onProgress func(completed, total int)) ([]BulkUploadFileResult, error) {
@@ -46,7 +46,7 @@ func (c ImgbbClient) BulkUpload(folderPath string, db *sql.DB, onProgress func(c
 		if err != nil {
 			results[i] = BulkUploadFileResult{FileName: e.Name(), Err: err}
 		} else {
-			res, err := UploadImageToImgbb(data, db)
+			res, err := uploadImageToImgbb(data, db)
 			results[i] = BulkUploadFileResult{FileName: e.Name(), Result: res, Err: err}
 		}
 		if onProgress != nil {
@@ -69,7 +69,7 @@ type ImgbbResponse struct {
 	Status  int  `json:"status"`
 }
 
-func UploadImageToImgbb(imageData []byte, db *sql.DB) (*ImageUploadResult, error) {
+func uploadImageToImgbb(imageData []byte, db *sql.DB) (*ImageUploadResult, error) {
 	apiKey, err := GetGlobalSetting("imgbb_api_key", db)
 	if err != nil || apiKey == "" {
 		return nil, fmt.Errorf("imgbb_api_key is not configured")
