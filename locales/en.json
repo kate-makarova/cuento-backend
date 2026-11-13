@@ -1,4 +1,9 @@
 {
+  "date.format": "2 Jan 2006",
+  "date.usePm": "false",
+  "date.today": "",
+  "date.yesterday": "",
+
   "currency_income_game_post.name": "Game post",
   "currency_income_game_post.description": "Currency for every game post",
   "currency_income_wanted_character.name": "Wanted character",
@@ -57,10 +62,5 @@
 
   "auto_archiving.deactivated": "Your character {{.Name}} has been automatically deactivated due to inactivity.",
 
-  "absence.started_notification": "{{.Username}} has started an absence until {{.EndDate}}.",
-
-  "date.format": "2006-01-02",
-  "date.usePm": "false",
-  "date.today": "",
-  "date.yesterday": ""
+  "absence.started_notification": "{{.Username}} has started an absence until {{.EndDate}}."
 }
