@@ -97,9 +97,9 @@ func LocalizeTimeForUser(t time.Time, locale UserLocale) string {
 	todayWord := localeStr(localizer, "date.today", "")
 	yesterdayWord := localeStr(localizer, "date.yesterday", "")
 
-	timeFormat := "15:04:05"
+	timeFormat := "15:04"
 	if usePm {
-		timeFormat = "3:04:05 PM"
+		timeFormat = "3:04 PM"
 	}
 
 	now := time.Now().In(loc)
@@ -133,10 +133,20 @@ func localeStr(localizer *i18n.Localizer, key, def string) string {
 // LocalizeDateOnly formats a date-only value for the viewer identified by c.
 // Use this for DATE columns where no time component exists.
 func LocalizeDateOnly(c *gin.Context, t time.Time) string {
-	locale := GetUserLocaleFromContext(c)
+	return LocalizeDateOnlyForUser(t, GetUserLocaleFromContext(c))
+}
+
+// LocalizeDateOnlyForUser is the locale-explicit variant for callers without a Gin context.
+func LocalizeDateOnlyForUser(t time.Time, locale UserLocale) string {
+	loc := time.UTC
+	if locale.TZ != nil && *locale.TZ != "" {
+		if l, err := time.LoadLocation(*locale.TZ); err == nil {
+			loc = l
+		}
+	}
 	localizer := NewLocalizer(locale.Lang)
 	dateFormat := localeStr(localizer, "date.format", "2006-01-02")
-	return t.Format(dateFormat)
+	return t.In(loc).Format(dateFormat)
 }
 
 // IsFeatureEnabled checks whether a named feature flag is active in the Gin context,
