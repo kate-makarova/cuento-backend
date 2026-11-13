@@ -130,9 +130,6 @@ func main() {
 	publicRouter.GET("/smiles", "Get smile categories with their smiles", func(c *gin.Context) {
 		Controllers.GetSmileTree(c, Services.DB)
 	})
-	publicRouter.GET("/user/profile/:userID", "Get user profile details", func(c *gin.Context) {
-		Controllers.GetUserProfile(c, Services.DB)
-	})
 	publicRouter.GET("/user/list", "Get list of active users and their characters", func(c *gin.Context) {
 		Controllers.GetUserList(c, Services.DB)
 	})
@@ -192,6 +189,9 @@ func main() {
 	optionalAuthGroup.Use(Middlewares.OptionalAuthMiddleware())
 	optionalAuthGroup.Use(Middlewares.UserLocaleMiddleware(Services.DB))
 	optionalAuthRouter := Router.NewProtectedCustomRouter(optionalAuthGroup)
+	optionalAuthRouter.GET("/user/profile/:userID", "Get user profile details", func(c *gin.Context) {
+		Controllers.GetUserProfile(c, Services.DB)
+	})
 	optionalAuthRouter.GET("/global-settings", "Get all global settings", func(c *gin.Context) {
 		Controllers.GetGlobalSettings(c, Services.DB)
 	})

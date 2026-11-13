@@ -1024,7 +1024,7 @@ func fetchUserInfo(userId int, db *sql.DB, locale Services.UserLocale) *Entities
 	if err != nil {
 		return nil
 	}
-	s := Services.LocalizeTimeForUser(info.DateRegistered, locale)
+	s := Services.LocalizeDateOnlyForUser(info.DateRegistered, locale)
 	info.DateRegisteredLocalized = &s
 	if info.DateLastVisit != nil {
 		sv := Services.LocalizeTimeForUser(*info.DateLastVisit, locale)
