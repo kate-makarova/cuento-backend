@@ -68,7 +68,7 @@ func RegisterDirectChatEventHandlers() {
 					"username":            username,
 					"avatar":              avatar,
 					"date_send":           event.DateSend,
-					"date_send_localized": Services.LocalizeTime(event.DateSend, locale),
+					"date_send_localized": Services.LocalizeTimeForUser(event.DateSend, locale),
 					"date_received":       nil,
 					"ciphertext":          event.Ciphertext,
 					"iv":                  event.IV,

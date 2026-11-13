@@ -20,7 +20,6 @@ func GetUnreadNotifications(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	locale := Services.GetUserLocaleFromContext(c)
 
 	rows, err := db.Query("SELECT id, type, title, message, data, date_created, is_read FROM notifications WHERE user_id = ? AND is_read = FALSE ORDER BY date_created DESC", userID)
 	if err != nil {
@@ -48,7 +47,7 @@ func GetUnreadNotifications(c *gin.Context, db *sql.DB) {
 			continue
 		}
 		base.UserId = userID
-		base.DateCreatedLocalized = Services.LocalizeTime(base.DateCreated, locale)
+		base.DateCreatedLocalized = Services.LocalizeTime(c, base.DateCreated)
 
 		var notification interface{}
 		switch base.Type {

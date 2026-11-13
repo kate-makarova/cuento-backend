@@ -41,7 +41,6 @@ func GetQdrantCursors(c *gin.Context, db *sql.DB) {
 		}
 	}
 
-	locale := Services.GetUserLocaleFromContext(c)
 
 	result := make([]QdrantCursorItem, 0, len(Services.AllSonicBuckets))
 	for _, bucket := range Services.AllSonicBuckets {
@@ -50,7 +49,7 @@ func GetQdrantCursors(c *gin.Context, db *sql.DB) {
 			item.LastId = existing.LastId
 			item.DateIngested = existing.DateIngested
 			if existing.DateIngested != nil {
-				s := Services.LocalizeTime(*existing.DateIngested, locale)
+				s := Services.LocalizeTime(c, *existing.DateIngested)
 				item.DateIngestedLocalized = &s
 			}
 		}

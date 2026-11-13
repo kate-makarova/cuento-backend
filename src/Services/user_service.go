@@ -73,9 +73,16 @@ func GetUserLocaleFromContext(c *gin.Context) UserLocale {
 	return UserLocale{Lang: "en"}
 }
 
-// LocalizeTime converts t into the viewer's timezone, then formats it using locale-specific
-// date format, AM/PM preference, and today/yesterday word substitution.
-func LocalizeTime(t time.Time, locale UserLocale) string {
+// LocalizeTime formats t for the viewer identified by c, applying timezone, date format,
+// AM/PM preference, and today/yesterday word substitution from the request's locale.
+// Use LocalizeTimeForUser when no Gin context is available (EventHandlers, background jobs).
+func LocalizeTime(c *gin.Context, t time.Time) string {
+	return LocalizeTimeForUser(t, GetUserLocaleFromContext(c))
+}
+
+// LocalizeTimeForUser is the locale-explicit variant used by EventHandlers and background jobs
+// that do not have a Gin context.
+func LocalizeTimeForUser(t time.Time, locale UserLocale) string {
 	loc := time.UTC
 	if locale.TZ != nil && *locale.TZ != "" {
 		if l, err := time.LoadLocation(*locale.TZ); err == nil {
@@ -123,10 +130,13 @@ func localeStr(localizer *i18n.Localizer, key, def string) string {
 	return msg
 }
 
-// LocalizeDateOnly formats a date-only value as "YYYY-MM-DD" with no timezone conversion.
-// Use this for DATE columns (absence dates, expiration dates) where no time component exists.
-func LocalizeDateOnly(t time.Time) string {
-	return t.Format("2006-01-02")
+// LocalizeDateOnly formats a date-only value for the viewer identified by c.
+// Use this for DATE columns where no time component exists.
+func LocalizeDateOnly(c *gin.Context, t time.Time) string {
+	locale := GetUserLocaleFromContext(c)
+	localizer := NewLocalizer(locale.Lang)
+	dateFormat := localeStr(localizer, "date.format", "2006-01-02")
+	return t.Format(dateFormat)
 }
 
 // IsFeatureEnabled checks whether a named feature flag is active in the Gin context,

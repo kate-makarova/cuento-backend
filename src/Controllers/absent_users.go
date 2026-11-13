@@ -80,8 +80,8 @@ func GetAbsentUsers(c *gin.Context, db *sql.DB) {
 		}
 		u.AbsenceStartDate = u.AbsenceStartDate.In(time.Local)
 		u.AbsenceEndDate = u.AbsenceEndDate.In(time.Local)
-		u.AbsenceStartDateLocalized = Services.LocalizeDateOnly(u.AbsenceStartDate)
-		u.AbsenceEndDateLocalized = Services.LocalizeDateOnly(u.AbsenceEndDate)
+		u.AbsenceStartDateLocalized = Services.LocalizeDateOnly(c, u.AbsenceStartDate)
+		u.AbsenceEndDateLocalized = Services.LocalizeDateOnly(c, u.AbsenceEndDate)
 
 		u.Characters = []Entities.ShortCharacter{}
 		charRows, err := db.Query(
@@ -430,8 +430,8 @@ func GetCharacterProtectionHistory(c *gin.Context, db *sql.DB) {
 		}
 		item.StartDate = item.StartDate.In(time.Local)
 		item.EndDate = item.EndDate.In(time.Local)
-		item.StartDateLocalized = Services.LocalizeDateOnly(item.StartDate)
-		item.EndDateLocalized = Services.LocalizeDateOnly(item.EndDate)
+		item.StartDateLocalized = Services.LocalizeDateOnly(c, item.StartDate)
+		item.EndDateLocalized = Services.LocalizeDateOnly(c, item.EndDate)
 		items = append(items, item)
 	}
 
@@ -455,8 +455,8 @@ func GetCharacterProtectionHistory(c *gin.Context, db *sql.DB) {
 		}
 		item.StartDate = item.StartDate.In(time.Local)
 		item.EndDate = item.EndDate.In(time.Local)
-		item.StartDateLocalized = Services.LocalizeDateOnly(item.StartDate)
-		item.EndDateLocalized = Services.LocalizeDateOnly(item.EndDate)
+		item.StartDateLocalized = Services.LocalizeDateOnly(c, item.StartDate)
+		item.EndDateLocalized = Services.LocalizeDateOnly(c, item.EndDate)
 		item.Reason = &reason
 		items = append(items, item)
 	}

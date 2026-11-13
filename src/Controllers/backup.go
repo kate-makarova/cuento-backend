@@ -84,7 +84,6 @@ func GetGDriveBackupSettings(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	locale := Services.GetUserLocaleFromContext(c)
 
 	var rawBackups []Services.BackupFile
 	if row.GdriveServiceAccountKey != "" {
@@ -97,13 +96,13 @@ func GetGDriveBackupSettings(c *gin.Context, db *sql.DB) {
 			ID:                   b.ID,
 			Name:                 b.Name,
 			CreatedTime:          b.CreatedTime.UTC().Format(time.RFC3339),
-			CreatedTimeLocalized: Services.LocalizeTime(b.CreatedTime, locale),
+			CreatedTimeLocalized: Services.LocalizeTime(c, b.CreatedTime),
 		})
 	}
 
 	var lastRunLocalized *string
 	if row.GdriveLastRun != nil {
-		s := Services.LocalizeTime(*row.GdriveLastRun, locale)
+		s := Services.LocalizeTime(c, *row.GdriveLastRun)
 		lastRunLocalized = &s
 	}
 

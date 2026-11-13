@@ -567,7 +567,6 @@ func GetArcEpisodes(c *gin.Context, db *sql.DB) {
 	}
 
 	userID := Services.GetUserIdFromContext(c)
-	locale := Services.GetUserLocaleFromContext(c)
 
 	// Check arc visibility for guests
 	var isPublic bool
@@ -635,7 +634,7 @@ func GetArcEpisodes(c *gin.Context, db *sql.DB) {
 		if lastPostDate.Valid {
 			ep.LastPostDate = lastPostDate.String
 			if t, err := time.Parse("2006-01-02 15:04:05", lastPostDate.String); err == nil {
-				ep.LastPostDateLocalized = Services.LocalizeTime(t, locale)
+				ep.LastPostDateLocalized = Services.LocalizeTime(c, t)
 			}
 		}
 		if authorID.Valid {

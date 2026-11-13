@@ -97,8 +97,7 @@ func GetCharacter(c *gin.Context, db *sql.DB) {
 		}
 
 		currentUserID := Services.GetUserIdFromContext(c)
-		viewerLocale := Services.GetUserLocaleFromContext(c)
-
+	
 		// Fetch episodes for this character
 		query := `
 			SELECT e.id, e.name, e.topic_id, t.date_last_post, u.username as last_post_author_username
@@ -117,7 +116,7 @@ func GetCharacter(c *gin.Context, db *sql.DB) {
 				var ep Entities.EpisodeListItem
 				if err := rows.Scan(&ep.Id, &ep.Name, &ep.TopicId, &ep.DateLastPost, &ep.LastPostAuthorUsername); err == nil {
 					if ep.DateLastPost != nil {
-						s := Services.LocalizeTime(*ep.DateLastPost, viewerLocale)
+						s := Services.LocalizeTime(c, *ep.DateLastPost)
 						ep.DateLastPostLocalized = &s
 					}
 					// Fetch all characters for this episode
@@ -183,13 +182,13 @@ func GetCharacter(c *gin.Context, db *sql.DB) {
 		`, character.Id).Scan(&cr.Id, &cr.ClaimId, &cr.UserId, &cr.GuestHash, &cr.IsGuest, &cr.ClaimDate, &cr.ClaimExpirationDate, &cr.CharacterId, &cr.ClaimCreatedWithCharacterSheet)
 		if err == nil {
 			if cr.ClaimExpirationDate != nil {
-				s := Services.LocalizeTime(*cr.ClaimExpirationDate, viewerLocale)
+				s := Services.LocalizeTime(c, *cr.ClaimExpirationDate)
 				cr.ClaimExpirationDateLocalized = &s
 			}
 			character.ClaimRecord = &cr
 		}
 
-		character.UserInfo = fetchUserInfo(character.UserId, db, viewerLocale)
+		character.UserInfo = fetchUserInfo(character.UserId, db, Services.GetUserLocaleFromContext(c))
 
 		c.JSON(http.StatusOK, character)
 		return
@@ -736,7 +735,6 @@ func GetCharacterList(c *gin.Context, db *sql.DB) {
 
 	// 4. Collect current user identity for pending faction exception
 	userID := Services.GetUserIdFromContext(c)
-	userLocale := Services.GetUserLocaleFromContext(c)
 	guestHashes := make([]string, 3)
 	for i := 1; i <= 3; i++ {
 		if hash, err := c.Cookie(fmt.Sprintf("claim_hash_%d", i)); err == nil {
@@ -811,7 +809,7 @@ func GetCharacterList(c *gin.Context, db *sql.DB) {
 		}
 		item.IsClaim = true
 		if claimExpirationDate != nil {
-			item.ClaimExpirationDate = Services.LocalizeTime(*claimExpirationDate, userLocale)
+			item.ClaimExpirationDate = Services.LocalizeTime(c, *claimExpirationDate)
 		}
 		if _, ok := factionMap[factionID]; !ok {
 			// Pending faction only visible to the current user — add it on-the-fly
@@ -2392,7 +2390,6 @@ func GetAdminCharacterList(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
-	locale := Services.GetUserLocaleFromContext(c)
 
 	characters := []AdminCharacterListItem{}
 	for rows.Next() {
@@ -2403,10 +2400,10 @@ func GetAdminCharacterList(c *gin.Context, db *sql.DB) {
 			return
 		}
 		if ch.DateLastPost != nil {
-			s := Services.LocalizeTime(*ch.DateLastPost, locale)
+			s := Services.LocalizeTime(c, *ch.DateLastPost)
 			ch.DateLastPostLocalized = &s
 		}
-		ch.DateCreatedLocalized = Services.LocalizeTime(ch.DateCreated, locale)
+		ch.DateCreatedLocalized = Services.LocalizeTime(c, ch.DateCreated)
 		characters = append(characters, ch)
 	}
 
@@ -2493,7 +2490,6 @@ func GetArchivingWarnings(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
-	locale := Services.GetUserLocaleFromContext(c)
 
 	characters := []ArchivingWarningItem{}
 	for rows.Next() {
@@ -2504,7 +2500,7 @@ func GetArchivingWarnings(c *gin.Context, db *sql.DB) {
 			return
 		}
 		if ch.DateLastPost != nil {
-			s := Services.LocalizeTime(*ch.DateLastPost, locale)
+			s := Services.LocalizeTime(c, *ch.DateLastPost)
 			ch.DateLastPostLocalized = &s
 		}
 		characters = append(characters, ch)

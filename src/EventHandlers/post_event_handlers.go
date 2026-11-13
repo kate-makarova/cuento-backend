@@ -47,7 +47,7 @@ func RegisterPostEventHandlers() {
 		for _, uid := range userIDs {
 			userPost := event.Post
 			userPost.ContentHtml = Services.ProcessHideBlocks(baseHtml, uid, int(event.TopicID), db)
-			userPost.DateCreatedLocalized = Services.LocalizeTime(userPost.DateCreated, Services.GetUserLocale(uid, db))
+			userPost.DateCreatedLocalized = Services.LocalizeTimeForUser(userPost.DateCreated, Services.GetUserLocale(uid, db))
 
 			canEdit := false
 			if uid != 0 {

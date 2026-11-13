@@ -61,7 +61,7 @@ func scanCategoryRows(rows *sql.Rows, locale Services.UserLocale) ([]Entities.Ca
 		if dateLastPost != nil {
 			raw := dateLastPost.Format(time.RFC3339)
 			sub.DateLastPost = &raw
-			localized := Services.LocalizeTime(*dateLastPost, locale)
+			localized := Services.LocalizeTimeForUser(*dateLastPost, locale)
 			sub.DateLastPostLocalized = &localized
 		}
 		sub.DescriptionHtml = Services.ParseBBCode(sub.Description)
@@ -568,7 +568,7 @@ func GetSubforum(c *gin.Context, db *sql.DB) {
 	if dateLastPost != nil {
 		raw := dateLastPost.UTC().Format("2006-01-02 15:04:05")
 		subforum.DateLastPost = &raw
-		localized := Services.LocalizeTime(*dateLastPost, Services.GetUserLocaleFromContext(c))
+		localized := Services.LocalizeTime(c, *dateLastPost)
 		subforum.DateLastPostLocalized = &localized
 	}
 	if userID > 0 {

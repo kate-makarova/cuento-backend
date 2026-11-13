@@ -285,7 +285,6 @@ func GetEpisodes(c *gin.Context, db *sql.DB) {
 	}
 
 	userID := Services.GetUserIdFromContext(c)
-	locale := Services.GetUserLocaleFromContext(c)
 
 	visibleSubforumIDs, err := Services.GetVisibleSubforums(userID, "subforum_read", db)
 	if err != nil {
@@ -474,7 +473,7 @@ func GetEpisodes(c *gin.Context, db *sql.DB) {
 		}
 		if lastPostTime != nil {
 			ep.LastPostDate = lastPostTime.UTC().Format("2006-01-02 15:04:05")
-			ep.LastPostDateLocalized = Services.LocalizeTime(*lastPostTime, locale)
+			ep.LastPostDateLocalized = Services.LocalizeTime(c, *lastPostTime)
 		}
 
 		for i, f := range allowedFields {
@@ -543,7 +542,6 @@ func GetEpisodesByMask(c *gin.Context, db *sql.DB) {
 	}
 
 	userID := Services.GetUserIdFromContext(c)
-	locale := Services.GetUserLocaleFromContext(c)
 
 	visibleSubforumIDs, err := Services.GetVisibleSubforums(userID, "subforum_read", db)
 	if err != nil {
@@ -671,7 +669,7 @@ func GetEpisodesByMask(c *gin.Context, db *sql.DB) {
 		}
 		if lastPostTime != nil {
 			ep.LastPostDate = lastPostTime.UTC().Format("2006-01-02 15:04:05")
-			ep.LastPostDateLocalized = Services.LocalizeTime(*lastPostTime, locale)
+			ep.LastPostDateLocalized = Services.LocalizeTime(c, *lastPostTime)
 		}
 
 		for i, f := range allowedFields {

@@ -107,7 +107,6 @@ func GetTopicsBySubforum(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	userLocale := Services.GetUserLocaleFromContext(c)
 
 	// If the user has opted out of tracking new posts for this subforum, suppress the not_viewed marker.
 	notViewedUserID := userID
@@ -177,7 +176,7 @@ func GetTopicsBySubforum(c *gin.Context, db *sql.DB) {
 			return
 		}
 		if topic.DateLastPost != nil {
-			localized := Services.LocalizeTime(*topic.DateLastPost, userLocale)
+			localized := Services.LocalizeTime(c, *topic.DateLastPost)
 			topic.DateLastPostLocalized = &localized
 		}
 		topics = append(topics, topic)
@@ -411,7 +410,6 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 	cols, _ := rows.Columns()
 	posts := make([]Entities.Post, 0) // Initialize slice
 
-	userLocale := Services.GetUserLocaleFromContext(c)
 	var subforumID int
 
 	// Find date_created column index to scan it directly into time.Time
@@ -459,7 +457,7 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 			post.AuthorUserName = username.(string)
 		}
 		post.DateCreated = dateCreated
-		post.DateCreatedLocalized = Services.LocalizeTime(post.DateCreated, userLocale)
+		post.DateCreatedLocalized = Services.LocalizeTime(c, post.DateCreated)
 		post.Content = rowMap["content"].(string)
 		post.ContentHtml = Services.ProcessHideBlocks(Services.LinkifyURLs(Services.ResolveNPCPlaceholders(Services.ParseBBCode(post.Content), db), domain, db), currentUserID, topicID, db)
 		post.UseCharacterProfile, _ = strconv.ParseBool(rowMap["use_character_profile"].(string))
@@ -736,8 +734,7 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 		c.Abort()
 		return
 	}
-	viewerLocale := Services.GetUserLocaleFromContext(c)
-	topic.DateLastPostLocalized = Services.LocalizeTime(topic.DateLastPost, viewerLocale)
+	topic.DateLastPostLocalized = Services.LocalizeTime(c, topic.DateLastPost)
 
 	// Get all permissions for this user in this subforum context
 	userPerms, err := Services.GetSubforumPermissions(currentUserID, topic.SubforumId, db)
@@ -890,13 +887,13 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 				`, characterID).Scan(&cr.Id, &cr.ClaimId, &cr.UserId, &cr.GuestHash, &cr.IsGuest, &cr.ClaimDate, &cr.ClaimExpirationDate, &cr.CharacterId, &cr.ClaimCreatedWithCharacterSheet)
 				if err == nil {
 					if cr.ClaimExpirationDate != nil {
-						s := Services.LocalizeTime(*cr.ClaimExpirationDate, viewerLocale)
+						s := Services.LocalizeTime(c, *cr.ClaimExpirationDate)
 						cr.ClaimExpirationDateLocalized = &s
 					}
 					character.ClaimRecord = &cr
 				}
 
-				character.UserInfo = fetchUserInfo(character.UserId, db, viewerLocale)
+				character.UserInfo = fetchUserInfo(character.UserId, db, Services.GetUserLocaleFromContext(c))
 				topic.Character = character
 			}
 		}
@@ -919,16 +916,16 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 					if wc.ClaimRecord != nil {
 						wc.ActiveClaimRecord = wc.ClaimRecord.ClaimExpirationDate
 						if wc.ActiveClaimRecord != nil {
-							s := Services.LocalizeTime(*wc.ActiveClaimRecord, viewerLocale)
+							s := Services.LocalizeTime(c, *wc.ActiveClaimRecord)
 							wc.ActiveClaimRecordLocalized = &s
 						}
 						if wc.ClaimRecord.ClaimExpirationDate != nil {
-							s := Services.LocalizeTime(*wc.ClaimRecord.ClaimExpirationDate, viewerLocale)
+							s := Services.LocalizeTime(c, *wc.ClaimRecord.ClaimExpirationDate)
 							wc.ClaimRecord.ClaimExpirationDateLocalized = &s
 						}
 					}
 				}
-				wc.UserInfo = fetchUserInfo(wc.AuthorUserId, db, viewerLocale)
+				wc.UserInfo = fetchUserInfo(wc.AuthorUserId, db, Services.GetUserLocaleFromContext(c))
 				wc.Relations = fetchWantedCharacterRelations(wc.Id, db)
 				topic.WantedCharacter = wc
 			}
@@ -1987,7 +1984,6 @@ func GetActiveTopics(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
-	userLocale := Services.GetUserLocaleFromContext(c)
 
 	var topics []ViewforumRow
 	for rows.Next() {
@@ -2012,7 +2008,7 @@ func GetActiveTopics(c *gin.Context, db *sql.DB) {
 			continue
 		}
 		if topic.DateLastPost != nil {
-			localized := Services.LocalizeTime(*topic.DateLastPost, userLocale)
+			localized := Services.LocalizeTime(c, *topic.DateLastPost)
 			topic.DateLastPostLocalized = &localized
 		}
 		topics = append(topics, topic)
@@ -2032,7 +2028,6 @@ func GetUserSubscribedTopics(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	userLocale := Services.GetUserLocaleFromContext(c)
 
 	query := `
 		SELECT t.id, t.status, t.name, t.type, t.date_last_post, t.post_number,
@@ -2083,7 +2078,7 @@ func GetUserSubscribedTopics(c *gin.Context, db *sql.DB) {
 			continue
 		}
 		if topic.DateLastPost != nil {
-			localized := Services.LocalizeTime(*topic.DateLastPost, userLocale)
+			localized := Services.LocalizeTime(c, *topic.DateLastPost)
 			topic.DateLastPostLocalized = &localized
 		}
 		topics = append(topics, topic)
@@ -2439,7 +2434,7 @@ func GetPostById(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	post.DateCreatedLocalized = Services.LocalizeTime(post.DateCreated, Services.GetUserLocaleFromContext(c))
+	post.DateCreatedLocalized = Services.LocalizeTime(c, post.DateCreated)
 
 	c.JSON(http.StatusOK, post)
 }
