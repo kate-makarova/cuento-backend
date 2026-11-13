@@ -49,8 +49,7 @@ func GetSonicCursors(c *gin.Context, db *sql.DB) {
 		}
 	}
 
-	adminID := Services.GetUserIdFromContext(c)
-	tz := Services.GetUserTimezone(adminID, db)
+	locale := Services.GetUserLocaleFromContext(c)
 
 	result := make([]SonicCursorItem, 0, len(allBuckets))
 	for _, bucket := range allBuckets {
@@ -59,7 +58,7 @@ func GetSonicCursors(c *gin.Context, db *sql.DB) {
 			item.LastId = existing.LastId
 			item.DateIngested = existing.DateIngested
 			if existing.DateIngested != nil {
-				s := Services.LocalizeTime(*existing.DateIngested, tz)
+				s := Services.LocalizeTime(*existing.DateIngested, locale)
 				item.DateIngestedLocalized = &s
 			}
 		}

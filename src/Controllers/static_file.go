@@ -39,8 +39,7 @@ func GetStaticFileList(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
-	adminID := Services.GetUserIdFromContext(c)
-	tz := Services.GetUserTimezone(adminID, db)
+	locale := Services.GetUserLocaleFromContext(c)
 
 	var files []StaticFile
 	for rows.Next() {
@@ -50,7 +49,7 @@ func GetStaticFileList(c *gin.Context, db *sql.DB) {
 			c.Abort()
 			return
 		}
-		f.FileCreatedDateLocalized = Services.LocalizeTime(f.FileCreatedDate, tz)
+		f.FileCreatedDateLocalized = Services.LocalizeTime(f.FileCreatedDate, locale)
 		files = append(files, f)
 	}
 
@@ -344,11 +343,10 @@ func GetAssetList(c *gin.Context, db *sql.DB) {
 		c.Abort()
 		return
 	}
-	adminID := Services.GetUserIdFromContext(c)
-	tz := Services.GetUserTimezone(adminID, db)
+	locale := Services.GetUserLocaleFromContext(c)
 	for i := range files {
 		if t, err := time.Parse(time.RFC3339, files[i].ModTime); err == nil {
-			files[i].ModTimeLocalized = Services.LocalizeTime(t, tz)
+			files[i].ModTimeLocalized = Services.LocalizeTime(t, locale)
 		}
 	}
 	c.JSON(http.StatusOK, files)

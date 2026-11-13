@@ -184,6 +184,7 @@ func main() {
 	// Optional Auth routes (Context populated if token present, otherwise Guest)
 	optionalAuthGroup := r.Group("/")
 	optionalAuthGroup.Use(Middlewares.OptionalAuthMiddleware())
+	optionalAuthGroup.Use(Middlewares.UserLocaleMiddleware(Services.DB))
 	optionalAuthRouter := Router.NewProtectedCustomRouter(optionalAuthGroup)
 	optionalAuthRouter.GET("/global-settings", "Get all global settings", func(c *gin.Context) {
 		Controllers.GetGlobalSettings(c, Services.DB)
@@ -317,6 +318,7 @@ func main() {
 	// Auth-only routes (JWT required, no per-route permission check — controller handles authorization)
 	authOnlyGroup := r.Group("/")
 	authOnlyGroup.Use(Middlewares.AuthMiddleware())
+	authOnlyGroup.Use(Middlewares.UserLocaleMiddleware(Services.DB))
 	authOnlyRouter := Router.NewCustomRouter(authOnlyGroup)
 
 	authOnlyRouter.GET("/admin/backup", "Download a full SQL backup of the database", func(c *gin.Context) {
@@ -342,6 +344,7 @@ func main() {
 	protectedGroup := r.Group("/")
 	protectedGroup.Use(Middlewares.AuthMiddleware())
 	protectedGroup.Use(Middlewares.PermissionsMiddleware(Services.DB))
+	protectedGroup.Use(Middlewares.UserLocaleMiddleware(Services.DB))
 	protectedRouter := Router.NewProtectedCustomRouter(protectedGroup)
 
 	publicRouter.GET("/stats/overall", "Get overall game stats for a time period", func(c *gin.Context) {

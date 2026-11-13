@@ -152,8 +152,7 @@ func GetWantedCharacterList(c *gin.Context, db *sql.DB) {
 		list = append(list, &wc)
 	}
 
-	viewerID := Services.GetUserIdFromContext(c)
-	viewerTz := Services.GetUserTimezone(viewerID, db)
+	viewerLocale := Services.GetUserLocaleFromContext(c)
 	for _, wc := range list {
 		if entity, err := Services.GetEntity(int64(wc.Id), "wanted_character", db); err == nil {
 			if full, ok := entity.(*Entities.WantedCharacter); ok {
@@ -166,18 +165,18 @@ func GetWantedCharacterList(c *gin.Context, db *sql.DB) {
 			if wc.ClaimRecord != nil {
 				wc.ActiveClaimRecord = wc.ClaimRecord.ClaimExpirationDate
 				if wc.ActiveClaimRecord != nil {
-					s := Services.LocalizeTime(*wc.ActiveClaimRecord, viewerTz)
+					s := Services.LocalizeTime(*wc.ActiveClaimRecord, viewerLocale)
 					wc.ActiveClaimRecordLocalized = &s
 				}
 				if wc.ClaimRecord.ClaimExpirationDate != nil {
-					s := Services.LocalizeTime(*wc.ClaimRecord.ClaimExpirationDate, viewerTz)
+					s := Services.LocalizeTime(*wc.ClaimRecord.ClaimExpirationDate, viewerLocale)
 					wc.ClaimRecord.ClaimExpirationDateLocalized = &s
 				}
 			}
 		} else {
 			wc.Factions = []Entities.Faction{}
 		}
-		wc.UserInfo = fetchUserInfo(wc.AuthorUserId, db, viewerTz)
+		wc.UserInfo = fetchUserInfo(wc.AuthorUserId, db, viewerLocale)
 		wc.Relations = fetchWantedCharacterRelations(wc.Id, db)
 	}
 
@@ -331,19 +330,18 @@ func GetWantedCharacter(c *gin.Context, db *sql.DB) {
 			return
 		}
 
-		viewerID := Services.GetUserIdFromContext(c)
-		viewerTz := Services.GetUserTimezone(viewerID, db)
+		viewerLocale := Services.GetUserLocaleFromContext(c)
 		if wc.CharacterClaimId != nil {
 			wc.Factions, _ = Services.GetFactionTreeByCharacterClaim(*wc.CharacterClaimId, db)
 			wc.ClaimRecord = fetchActiveClaimRecord(*wc.CharacterClaimId, db)
 			if wc.ClaimRecord != nil {
 				wc.ActiveClaimRecord = wc.ClaimRecord.ClaimExpirationDate
 				if wc.ActiveClaimRecord != nil {
-					s := Services.LocalizeTime(*wc.ActiveClaimRecord, viewerTz)
+					s := Services.LocalizeTime(*wc.ActiveClaimRecord, viewerLocale)
 					wc.ActiveClaimRecordLocalized = &s
 				}
 				if wc.ClaimRecord.ClaimExpirationDate != nil {
-					s := Services.LocalizeTime(*wc.ClaimRecord.ClaimExpirationDate, viewerTz)
+					s := Services.LocalizeTime(*wc.ClaimRecord.ClaimExpirationDate, viewerLocale)
 					wc.ClaimRecord.ClaimExpirationDateLocalized = &s
 				}
 			}
@@ -812,7 +810,7 @@ type ClaimAutocompleteItem struct {
 	GuestHash                    *string    `json:"guest_hash"`
 }
 
-func scanClaimAutocompleteRows(c *gin.Context, rows *sql.Rows, errMsg string, tz *string) []ClaimAutocompleteItem {
+func scanClaimAutocompleteRows(c *gin.Context, rows *sql.Rows, errMsg string, locale Services.UserLocale) []ClaimAutocompleteItem {
 	var results []ClaimAutocompleteItem
 	for rows.Next() {
 		var guestHash *string
@@ -827,7 +825,7 @@ func scanClaimAutocompleteRows(c *gin.Context, rows *sql.Rows, errMsg string, tz
 			item.IsClaimed = &isClaimed
 			item.ClaimExpirationDate = claimDate
 			item.GuestHash = guestHash
-			s := Services.LocalizeTime(*claimDate, tz)
+			s := Services.LocalizeTime(*claimDate, locale)
 			item.ClaimExpirationDateLocalized = &s
 		}
 		results = append(results, item)
@@ -854,8 +852,7 @@ func GetWantedCharacterAutocomplete(c *gin.Context, db *sql.DB) {
 		return
 	}
 	defer rows.Close()
-	viewerID := Services.GetUserIdFromContext(c)
-	c.JSON(http.StatusOK, scanClaimAutocompleteRows(c, rows, "Failed to scan wanted character: ", Services.GetUserTimezone(viewerID, db)))
+	c.JSON(http.StatusOK, scanClaimAutocompleteRows(c, rows, "Failed to scan wanted character: ", Services.GetUserLocaleFromContext(c)))
 }
 
 func GetClaimAutocomplete(c *gin.Context, db *sql.DB) {
@@ -876,8 +873,7 @@ func GetClaimAutocomplete(c *gin.Context, db *sql.DB) {
 		return
 	}
 	defer rows.Close()
-	viewerID := Services.GetUserIdFromContext(c)
-	c.JSON(http.StatusOK, scanClaimAutocompleteRows(c, rows, "Failed to scan claim: ", Services.GetUserTimezone(viewerID, db)))
+	c.JSON(http.StatusOK, scanClaimAutocompleteRows(c, rows, "Failed to scan claim: ", Services.GetUserLocaleFromContext(c)))
 }
 
 func GetMyClaimRecords(c *gin.Context, db *sql.DB) {
@@ -905,7 +901,7 @@ func GetMyClaimRecords(c *gin.Context, db *sql.DB) {
 		return
 	}
 	defer rows.Close()
-	c.JSON(http.StatusOK, scanClaimAutocompleteRows(c, rows, "Failed to scan claim record: ", Services.GetUserTimezone(userID, db)))
+	c.JSON(http.StatusOK, scanClaimAutocompleteRows(c, rows, "Failed to scan claim record: ", Services.GetUserLocaleFromContext(c)))
 }
 
 func PreviewWantedCharacter(c *gin.Context, db *sql.DB) {
@@ -1014,7 +1010,7 @@ func fetchWantedCharacterRelations(wantedCharacterID int, db *sql.DB) []Entities
 	return result
 }
 
-func fetchUserInfo(userId int, db *sql.DB, tz *string) *Entities.UserInfo {
+func fetchUserInfo(userId int, db *sql.DB, locale Services.UserLocale) *Entities.UserInfo {
 	var info Entities.UserInfo
 	err := db.QueryRow(`
 		SELECT u.id, u.username, u.user_status, u.date_registered, u.date_last_visit, u.total_posts,
@@ -1030,10 +1026,10 @@ func fetchUserInfo(userId int, db *sql.DB, tz *string) *Entities.UserInfo {
 	if err != nil {
 		return nil
 	}
-	s := Services.LocalizeTime(info.DateRegistered, tz)
+	s := Services.LocalizeTime(info.DateRegistered, locale)
 	info.DateRegisteredLocalized = &s
 	if info.DateLastVisit != nil {
-		sv := Services.LocalizeTime(*info.DateLastVisit, tz)
+		sv := Services.LocalizeTime(*info.DateLastVisit, locale)
 		info.DateLastVisitLocalized = &sv
 	}
 	return &info

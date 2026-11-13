@@ -87,7 +87,7 @@ func GetUserDataProcessingList(c *gin.Context, db *sql.DB) {
 		c.Abort()
 		return
 	}
-	tz := Services.GetUserTimezone(userID, db)
+	locale := Services.GetUserLocaleFromContext(c)
 
 	rows, err := db.Query(`
 		SELECT id, date_created, user_id, status,
@@ -130,7 +130,7 @@ func GetUserDataProcessingList(c *gin.Context, db *sql.DB) {
 		if r.UserCharacterMap == nil {
 			r.UserCharacterMap = map[string]UserCharacterMapEntry{}
 		}
-		r.DateCreatedLocalized = Services.LocalizeTime(r.DateCreated, tz)
+		r.DateCreatedLocalized = Services.LocalizeTime(r.DateCreated, locale)
 		result = append(result, r)
 	}
 
@@ -186,7 +186,7 @@ func GetUserDataProcessing(c *gin.Context, db *sql.DB) {
 	if r.UserCharacterMap == nil {
 		r.UserCharacterMap = map[string]UserCharacterMapEntry{}
 	}
-	r.DateCreatedLocalized = Services.LocalizeTime(r.DateCreated, Services.GetUserTimezone(userID, db))
+	r.DateCreatedLocalized = Services.LocalizeTime(r.DateCreated, Services.GetUserLocaleFromContext(c))
 
 	c.JSON(http.StatusOK, r)
 }

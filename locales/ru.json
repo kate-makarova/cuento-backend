@@ -61,5 +61,10 @@
 
   "auto_archiving.deactivated": "Ваш персонаж {{.Name}} был автоматически деактивирован из-за неактивности.",
 
-  "absence.started_notification": "{{.Username}} ушёл в отсутствие до {{.EndDate}}."
+  "absence.started_notification": "{{.Username}} ушёл в отсутствие до {{.EndDate}}.",
+
+  "date.format": "02.01.2006",
+  "date.usePm": "false",
+  "date.today": "Сегодня",
+  "date.yesterday": "Вчера"
 }

@@ -501,8 +501,7 @@ func GetUserProfile(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	currentUserID := Services.GetUserIdFromContext(c)
-	viewerTimezone := Services.GetUserTimezone(currentUserID, db)
+	viewerLocale := Services.GetUserLocaleFromContext(c)
 	profile.RegistrationDateLocalized = Services.LocalizeDateOnly(profile.RegistrationDate)
 
 	// Fetch characters for this user
@@ -520,7 +519,7 @@ func GetUserProfile(c *gin.Context, db *sql.DB) {
 			continue
 		}
 		if char.LastPostDate != nil {
-			s := Services.LocalizeTime(*char.LastPostDate, viewerTimezone)
+			s := Services.LocalizeTime(*char.LastPostDate, viewerLocale)
 			char.LastPostDateLocalized = &s
 		}
 
@@ -576,7 +575,7 @@ func GetUserProfile(c *gin.Context, db *sql.DB) {
 			continue
 		}
 		if mask.DateLastPost != nil {
-			s := Services.LocalizeTime(*mask.DateLastPost, viewerTimezone)
+			s := Services.LocalizeTime(*mask.DateLastPost, viewerLocale)
 			mask.DateLastPostLocalized = &s
 		}
 		profile.Masks = append(profile.Masks, mask)
@@ -822,8 +821,7 @@ func GetAdminUserList(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
-	adminID := Services.GetUserIdFromContext(c)
-	tz := Services.GetUserTimezone(adminID, db)
+	locale := Services.GetUserLocaleFromContext(c)
 
 	users := []AdminUserListItem{}
 	for rows.Next() {
@@ -834,15 +832,15 @@ func GetAdminUserList(c *gin.Context, db *sql.DB) {
 			return
 		}
 		if u.DateRegistered != nil {
-			s := Services.LocalizeTime(*u.DateRegistered, tz)
+			s := Services.LocalizeTime(*u.DateRegistered, locale)
 			u.DateRegisteredLocalized = &s
 		}
 		if u.DateLastVisit != nil {
-			s := Services.LocalizeTime(*u.DateLastVisit, tz)
+			s := Services.LocalizeTime(*u.DateLastVisit, locale)
 			u.DateLastVisitLocalized = &s
 		}
 		if u.LastGamePostDate != nil {
-			s := Services.LocalizeTime(*u.LastGamePostDate, tz)
+			s := Services.LocalizeTime(*u.LastGamePostDate, locale)
 			u.LastGamePostDateLocalized = &s
 		}
 		users = append(users, u)
@@ -1309,7 +1307,7 @@ type ActiveUserInfo struct {
 }
 
 func buildActiveUserActivity(forUserID int, db *sql.DB) []ActiveUserInfo {
-	timezone := Services.GetUserTimezone(forUserID, db)
+	locale := Services.GetUserLocale(forUserID, db)
 	activeUsers := Services.ActivityStorage.GetActiveUsers()
 	result := make([]ActiveUserInfo, 0, len(activeUsers))
 
@@ -1324,7 +1322,7 @@ func buildActiveUserActivity(forUserID int, db *sql.DB) []ActiveUserInfo {
 			UserID:              u.UserID,
 			Username:            u.Username,
 			CurrentPageType:     u.CurrentPageType,
-			LastActiveLocalized: Services.LocalizeTime(u.LastActive, timezone),
+			LastActiveLocalized: Services.LocalizeTime(u.LastActive, locale),
 		}
 
 		switch u.CurrentPageType {
@@ -1350,7 +1348,7 @@ func buildActiveUserActivity(forUserID int, db *sql.DB) []ActiveUserInfo {
 			IsGuest:             true,
 			Username:            "Guest#" + g.ShortID,
 			CurrentPageType:     g.CurrentPageType,
-			LastActiveLocalized: Services.LocalizeTime(g.LastActive, timezone),
+			LastActiveLocalized: Services.LocalizeTime(g.LastActive, locale),
 		}
 		if g.CurrentPageType == "topic" && g.CurrentPageId != "" {
 			var subforumID int

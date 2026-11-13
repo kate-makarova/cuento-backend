@@ -136,8 +136,7 @@ func GetLoreTopicPosts(c *gin.Context, db *sql.DB) {
 	}
 	defer rows.Close()
 
-	userID := Services.GetUserIdFromContext(c)
-	tz := Services.GetUserTimezone(userID, db)
+	locale := Services.GetUserLocaleFromContext(c)
 
 	var list []LoreTopicPostRow
 	for rows.Next() {
@@ -152,7 +151,7 @@ func GetLoreTopicPosts(c *gin.Context, db *sql.DB) {
 			c.Abort()
 			return
 		}
-		row.DateCreatedLocalized = Services.LocalizeTime(row.DateCreated, tz)
+		row.DateCreatedLocalized = Services.LocalizeTime(row.DateCreated, locale)
 		if lpName.Valid {
 			info := &LorePageInfo{
 				Name:     lpName.String,
