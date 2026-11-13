@@ -53,16 +53,24 @@ func RestoreDB(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Database restored successfully"})
 }
 
+type BackupFileResponse struct {
+	ID                  string `json:"id"`
+	Name                string `json:"name"`
+	CreatedTime         string `json:"created_time"`
+	CreatedTimeLocalized string `json:"created_time_localized,omitempty"`
+}
+
 type GDriveBackupSettings struct {
-	ClientID     string                `json:"client_id"`
-	ClientSecret string                `json:"client_secret"`
-	RefreshToken string                `json:"refresh_token"`
-	Enabled      bool                  `json:"enabled"`
-	Frequency    string                `json:"frequency"`
-	Keep         int                   `json:"keep"`
-	FolderID     string                `json:"folder_id"`
-	LastRun      *time.Time            `json:"last_run"`
-	Backups      []Services.BackupFile `json:"backups"`
+	ClientID         string               `json:"client_id"`
+	ClientSecret     string               `json:"client_secret"`
+	RefreshToken     string               `json:"refresh_token"`
+	Enabled          bool                 `json:"enabled"`
+	Frequency        string               `json:"frequency"`
+	Keep             int                  `json:"keep"`
+	FolderID         string               `json:"folder_id"`
+	LastRun          *time.Time           `json:"last_run"`
+	LastRunLocalized *string              `json:"last_run_localized,omitempty"`
+	Backups          []BackupFileResponse `json:"backups"`
 }
 
 func GetGDriveBackupSettings(c *gin.Context, db *sql.DB) {
@@ -79,24 +87,38 @@ func GetGDriveBackupSettings(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	var backups []Services.BackupFile
+	var rawBackups []Services.BackupFile
 	if row.GdriveClientID != "" && row.GdriveRefreshToken != "" {
-		backups, _ = Services.NewGDriveProvider(db).ListBackups()
+		rawBackups, _ = Services.NewGDriveProvider(db).ListBackups()
 	}
-	if backups == nil {
-		backups = []Services.BackupFile{}
+
+	backups := make([]BackupFileResponse, 0, len(rawBackups))
+	for _, b := range rawBackups {
+		backups = append(backups, BackupFileResponse{
+			ID:                   b.ID,
+			Name:                 b.Name,
+			CreatedTime:          b.CreatedTime.UTC().Format(time.RFC3339),
+			CreatedTimeLocalized: Services.LocalizeTime(c, b.CreatedTime),
+		})
+	}
+
+	var lastRunLocalized *string
+	if row.GdriveLastRun != nil {
+		s := Services.LocalizeTime(c, *row.GdriveLastRun)
+		lastRunLocalized = &s
 	}
 
 	c.JSON(http.StatusOK, GDriveBackupSettings{
-		ClientID:     row.GdriveClientID,
-		ClientSecret: row.GdriveClientSecret,
-		RefreshToken: row.GdriveRefreshToken,
-		Enabled:      row.GdriveEnabled,
-		Frequency:    row.GdriveFrequency,
-		Keep:         row.GdriveKeep,
-		FolderID:     row.GdriveFolderID,
-		LastRun:      row.GdriveLastRun,
-		Backups:      backups,
+		ClientID:         row.GdriveClientID,
+		ClientSecret:     row.GdriveClientSecret,
+		RefreshToken:     row.GdriveRefreshToken,
+		Enabled:          row.GdriveEnabled,
+		Frequency:        row.GdriveFrequency,
+		Keep:             row.GdriveKeep,
+		FolderID:         row.GdriveFolderID,
+		LastRun:          row.GdriveLastRun,
+		LastRunLocalized: lastRunLocalized,
+		Backups:          backups,
 	})
 }
 

@@ -168,9 +168,6 @@ func main() {
 	publicRouter.GET("/character/field-list/:machine_name", "Get distinct values of a string character custom field", func(c *gin.Context) {
 		Controllers.CustomFieldList(c, Services.DB)
 	})
-	publicRouter.GET("/character/get/:id", "Get character details by ID", func(c *gin.Context) {
-		Controllers.GetCharacter(c, Services.DB)
-	})
 	publicRouter.GET("/character-profile/get/:id", "Get character profile details by ID", func(c *gin.Context) {
 		Controllers.GetCharacterProfile(c, Services.DB)
 	})
@@ -193,6 +190,7 @@ func main() {
 	// Optional Auth routes (Context populated if token present, otherwise Guest)
 	optionalAuthGroup := r.Group("/")
 	optionalAuthGroup.Use(Middlewares.OptionalAuthMiddleware())
+	optionalAuthGroup.Use(Middlewares.UserLocaleMiddleware(Services.DB))
 	optionalAuthRouter := Router.NewProtectedCustomRouter(optionalAuthGroup)
 	optionalAuthRouter.GET("/global-settings", "Get all global settings", func(c *gin.Context) {
 		Controllers.GetGlobalSettings(c, Services.DB)
@@ -225,6 +223,9 @@ func main() {
 	})
 	optionalAuthRouter.GET("/topic/get/:id", "Get topic details by ID", func(c *gin.Context) {
 		Controllers.GetTopic(c, Services.DB)
+	})
+	optionalAuthRouter.GET("/character/get/:id", "Get character details by ID", func(c *gin.Context) {
+		Controllers.GetCharacter(c, Services.DB)
 	})
 	optionalAuthRouter.GET("/character-list", "Get list of all characters", func(c *gin.Context) {
 		Controllers.GetCharacterList(c, Services.DB)
@@ -323,6 +324,7 @@ func main() {
 	// Auth-only routes (JWT required, no per-route permission check — controller handles authorization)
 	authOnlyGroup := r.Group("/")
 	authOnlyGroup.Use(Middlewares.AuthMiddleware())
+	authOnlyGroup.Use(Middlewares.UserLocaleMiddleware(Services.DB))
 	authOnlyRouter := Router.NewCustomRouter(authOnlyGroup)
 
 	authOnlyRouter.GET("/admin/backup", "Download a full SQL backup of the database", func(c *gin.Context) {
@@ -348,6 +350,7 @@ func main() {
 	protectedGroup := r.Group("/")
 	protectedGroup.Use(Middlewares.AuthMiddleware())
 	protectedGroup.Use(Middlewares.PermissionsMiddleware(Services.DB))
+	protectedGroup.Use(Middlewares.UserLocaleMiddleware(Services.DB))
 	protectedRouter := Router.NewProtectedCustomRouter(protectedGroup)
 
 	publicRouter.GET("/stats/overall", "Get overall game stats for a time period", func(c *gin.Context) {
@@ -867,7 +870,7 @@ protectedRouter.POST("/category/create", "Create a new category", func(c *gin.Co
 		Controllers.UploadAsset(c)
 	})
 	protectedRouter.GET("/asset/list", "List files in the public assets folder", func(c *gin.Context) {
-		Controllers.GetAssetList(c)
+		Controllers.GetAssetList(c, Services.DB)
 	})
 	protectedRouter.POST("/asset/delete", "Delete a file from the public assets folder", func(c *gin.Context) {
 		Controllers.DeleteAsset(c)
