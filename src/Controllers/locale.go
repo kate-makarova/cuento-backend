@@ -201,11 +201,6 @@ func UploadLocale(c *gin.Context, db *sql.DB) {
 		return
 	}
 	id, _ := res.LastInsertId()
-
-	if err := Services.ReloadI18n(); err != nil {
-		fmt.Printf("[i18n] reload after locale upload failed: %v\n", err)
-	}
-
 	c.JSON(http.StatusOK, gin.H{"id": id, "front_end_file_name": tsName, "back_end_file_name": jsonName})
 }
 
@@ -259,9 +254,6 @@ func ReuploadLocaleFiles(c *gin.Context, db *sql.DB) {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to save backend file: " + err.Error()})
 			c.Abort()
 			return
-		}
-		if err := Services.ReloadI18n(); err != nil {
-			fmt.Printf("[i18n] reload after locale reupload failed: %v\n", err)
 		}
 	}
 
@@ -336,6 +328,11 @@ func InstallLocale(c *gin.Context, db *sql.DB) {
 
 	fileSize := int64(len(tsContent))
 	_, _ = db.Exec("UPDATE locales SET is_installed = 1, installed_file_size_fe = ? WHERE id = ?", fileSize, id)
+
+	if err := Services.ReloadI18n(); err != nil {
+		fmt.Printf("[i18n] reload after locale install failed: %v\n", err)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"installed": locale.Code})
 }
 
