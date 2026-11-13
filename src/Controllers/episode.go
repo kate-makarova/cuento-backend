@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -60,15 +61,16 @@ type GetEpisodesByMaskRequest struct {
 }
 
 type EpisodeListItem struct {
-	Id           int                       `json:"id"`
-	Name         string                    `json:"name"`
-	TopicId      int                       `json:"topic_id"`
-	SubforumId   int                       `json:"subforum_id"`
-	SubforumName string                    `json:"subforum_name"`
-	TopicStatus  int                       `json:"topic_status"`
-	LastPostDate string                    `json:"last_post_date"`
-	CustomFields map[string]interface{}    `json:"custom_fields"`
-	Characters   []Entities.ShortCharacter `json:"characters"`
+	Id                   int                       `json:"id"`
+	Name                 string                    `json:"name"`
+	TopicId              int                       `json:"topic_id"`
+	SubforumId           int                       `json:"subforum_id"`
+	SubforumName         string                    `json:"subforum_name"`
+	TopicStatus          int                       `json:"topic_status"`
+	LastPostDate         string                    `json:"last_post_date"`
+	LastPostDateLocalized string                   `json:"last_post_date_localized,omitempty"`
+	CustomFields         map[string]interface{}    `json:"custom_fields"`
+	Characters           []Entities.ShortCharacter `json:"characters"`
 }
 
 func CreateEpisode(c *gin.Context, db *sql.DB) {
@@ -273,6 +275,7 @@ func PreviewEpisode(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, episode)
 }
 
+
 func GetEpisodes(c *gin.Context, db *sql.DB) {
 	var req GetEpisodesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -459,13 +462,18 @@ func GetEpisodes(c *gin.Context, db *sql.DB) {
 			rawVals[i] = new(sql.RawBytes)
 			customDests[i] = rawVals[i]
 		}
-		scanDests := []interface{}{&ep.Id, &ep.Name, &ep.TopicId, &ep.SubforumId, &ep.SubforumName, &ep.TopicStatus, &ep.LastPostDate}
+		var lastPostTime *time.Time
+		scanDests := []interface{}{&ep.Id, &ep.Name, &ep.TopicId, &ep.SubforumId, &ep.SubforumName, &ep.TopicStatus, &lastPostTime}
 		scanDests = append(scanDests, customDests...)
 
 		if err := rows.Scan(scanDests...); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan episode: " + err.Error()})
 			c.Abort()
 			return
+		}
+		if lastPostTime != nil {
+			ep.LastPostDate = lastPostTime.UTC().Format("2006-01-02 15:04:05")
+			ep.LastPostDateLocalized = Services.LocalizeTime(c, *lastPostTime)
 		}
 
 		for i, f := range allowedFields {
@@ -650,13 +658,18 @@ func GetEpisodesByMask(c *gin.Context, db *sql.DB) {
 			rawVals[i] = new(sql.RawBytes)
 			customDests[i] = rawVals[i]
 		}
-		scanDests := []interface{}{&ep.Id, &ep.Name, &ep.TopicId, &ep.SubforumId, &ep.SubforumName, &ep.TopicStatus, &ep.LastPostDate}
+		var lastPostTime *time.Time
+		scanDests := []interface{}{&ep.Id, &ep.Name, &ep.TopicId, &ep.SubforumId, &ep.SubforumName, &ep.TopicStatus, &lastPostTime}
 		scanDests = append(scanDests, customDests...)
 
 		if err := rows.Scan(scanDests...); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan episode: " + err.Error()})
 			c.Abort()
 			return
+		}
+		if lastPostTime != nil {
+			ep.LastPostDate = lastPostTime.UTC().Format("2006-01-02 15:04:05")
+			ep.LastPostDateLocalized = Services.LocalizeTime(c, *lastPostTime)
 		}
 
 		for i, f := range allowedFields {
