@@ -171,6 +171,7 @@ type fixture struct {
 var allSubforumPermissions = []string{
 	"subforum_read", "subforum_post",
 	"subforum_create_general_topic", "subforum_create_episode_topic", "subforum_create_character_topic",
+	"subforum_create_wanted_character_topic",
 	"subforum_edit_own_post", "subforum_edit_own_topic",
 }
 
@@ -337,6 +338,7 @@ func newTestRouter(db *sql.DB) *gin.Engine {
 	protected.Use(Middlewares.AuthMiddleware(), Middlewares.PermissionsMiddleware(db), Middlewares.UserLocaleMiddleware(db))
 	protected.POST("/character/create", func(c *gin.Context) { Controllers.CreateCharacter(c, db) })
 	protected.POST("/episode/create", func(c *gin.Context) { Controllers.CreateEpisode(c, db) })
+	protected.POST("/wanted-character/create", func(c *gin.Context) { Controllers.CreateWantedCharacter(c, db) })
 	protected.POST("/post/update/:id", func(c *gin.Context) { Controllers.UpdatePost(c, db) })
 	protected.POST("/topic/update/:id", func(c *gin.Context) { Controllers.UpdateTopic(c, db) })
 	protected.GET("/notifications/unread", func(c *gin.Context) { Controllers.GetUnreadNotifications(c, db) })
