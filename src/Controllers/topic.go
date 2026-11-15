@@ -1056,7 +1056,7 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 				}
 
 				if memberCount == 0 {
-					c.JSON(http.StatusForbidden, gin.H{"error": "This character is not a participant in this episode"})
+					c.JSON(http.StatusForbidden, gin.H{"error": "This character is not a participant in this scene"})
 					return
 				}
 			}
@@ -1079,7 +1079,7 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 			}
 		}
 		if isGmPost == nil {
-			c.JSON(http.StatusForbidden, gin.H{"error": "You are not a game master of the arc this episode belongs to"})
+			c.JSON(http.StatusForbidden, gin.H{"error": "You are not a game master of the arc this scene belongs to"})
 			return
 		}
 	}
@@ -1483,7 +1483,7 @@ func UpdatePost(c *gin.Context, db *sql.DB) {
 							episodeID, characterID.Int64).Scan(&memberCount)
 					}
 					if memberCount == 0 {
-						_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "This character is not a participant in this episode"})
+						_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "This character is not a participant in this scene"})
 						c.Abort()
 						return
 					}
