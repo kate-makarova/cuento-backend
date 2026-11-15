@@ -82,6 +82,9 @@ func main() {
 	}()
 
 	r := gin.Default()
+	if err := r.SetTrustedProxies(Middlewares.TrustedProxies()); err != nil {
+		panic("invalid TRUSTED_PROXIES: " + err.Error())
+	}
 	config := cors.DefaultConfig()
 	config.AllowAllOrigins = true
 	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization", "X-Screen-Resolution", "Sec-CH-UA", "X-Color-Depth"}
