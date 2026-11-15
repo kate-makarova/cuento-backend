@@ -51,13 +51,13 @@ func TestGetUnreadNotifications(t *testing.T) {
 			t.Errorf("Expected status 200, got %d. Body: %s", w.Code, w.Body.String())
 		}
 
-		var response map[string][]Entities.Notification
+		var response map[string][]Entities.MentionNotification
 		json.Unmarshal(w.Body.Bytes(), &response)
 		if len(response["mention"]) != 1 {
 			t.Errorf("Expected 1 mention notification, got %d", len(response["mention"]))
 		}
-		if response["mention"][0].Mention.UserName != "user2" {
-			t.Errorf("Expected mention author 'user2', got %s", response["mention"][0].Mention.UserName)
+		if response["mention"][0].Data.UserName != "user2" {
+			t.Errorf("Expected mention author 'user2', got %s", response["mention"][0].Data.UserName)
 		}
 	})
 }

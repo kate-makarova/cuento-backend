@@ -182,8 +182,9 @@ func TestUpdateTopic(t *testing.T) {
 		defer db.Close()
 
 		topicID := 1
+		name := "Updated Topic Name"
 		reqBody := Controllers.UpdateTopicRequest{
-			Name: "Updated Topic Name",
+			Name: &name,
 		}
 		body, _ := json.Marshal(reqBody)
 
@@ -226,8 +227,9 @@ func TestUpdateTopic(t *testing.T) {
 		defer db.Close()
 
 		topicID := 2
+		name := "Updated Topic Name"
 		reqBody := Controllers.UpdateTopicRequest{
-			Name: "Updated Topic Name",
+			Name: &name,
 		}
 		body, _ := json.Marshal(reqBody)
 
