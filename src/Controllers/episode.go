@@ -88,6 +88,12 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	if hasPerm, err := Services.HasPermission(userID, fmt.Sprintf("subforum_create_episode_topic:%d", req.SubforumID), db); err != nil || !hasPerm {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You don't have permission to create episodes in this subforum"})
+		c.Abort()
+		return
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start transaction"})
