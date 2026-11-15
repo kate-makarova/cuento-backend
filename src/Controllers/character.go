@@ -97,7 +97,18 @@ func GetCharacter(c *gin.Context, db *sql.DB) {
 		}
 
 		currentUserID := Services.GetUserIdFromContext(c)
-	
+		var subforumID int
+		if err := db.QueryRow("SELECT subforum_id FROM topics WHERE id = ?", character.TopicId).Scan(&subforumID); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: fmt.Sprintf("Failed to load subforum of character %d: %s", character.Id, err.Error())})
+			c.Abort()
+			return
+		}
+		if hasPerm, err := Services.HasPermission(currentUserID, fmt.Sprintf("subforum_read:%d", subforumID), db); err != nil || !hasPerm {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Character not found"})
+			c.Abort()
+			return
+		}
+
 		// Fetch episodes for this character
 		query := `
 			SELECT e.id, e.name, e.topic_id, t.date_last_post, u.username as last_post_author_username
@@ -148,24 +159,19 @@ func GetCharacter(c *gin.Context, db *sql.DB) {
 		// Check CanEdit
 		canEdit := false
 		if currentUserID != 0 {
-			// Fetch subforum ID for permission check
-			var subforumID int
-			err = db.QueryRow("SELECT subforum_id FROM topics WHERE id = ?", character.TopicId).Scan(&subforumID)
-			if err == nil {
-				// Check for "Edit others' topic" permission
-				permission := fmt.Sprintf("subforum_edit_others_topic:%d", subforumID)
-				if hasPerm, err := Services.HasPermission(currentUserID, permission, db); err == nil && hasPerm {
-					canEdit = true
-				} else {
-					// Check if user is the author of the topic
-					var authorUserID int
-					err = db.QueryRow("SELECT author_user_id FROM topics WHERE id = ?", character.TopicId).Scan(&authorUserID)
-					if err == nil && currentUserID == authorUserID {
-						// Check for "Edit own topic" permission
-						permission = fmt.Sprintf("subforum_edit_own_topic:%d", subforumID)
-						if hasPerm, err := Services.HasPermission(currentUserID, permission, db); err == nil && hasPerm {
-							canEdit = true
-						}
+			// Check for "Edit others' topic" permission
+			permission := fmt.Sprintf("subforum_edit_others_topic:%d", subforumID)
+			if hasPerm, err := Services.HasPermission(currentUserID, permission, db); err == nil && hasPerm {
+				canEdit = true
+			} else {
+				// Check if user is the author of the topic
+				var authorUserID int
+				err = db.QueryRow("SELECT author_user_id FROM topics WHERE id = ?", character.TopicId).Scan(&authorUserID)
+				if err == nil && currentUserID == authorUserID {
+					// Check for "Edit own topic" permission
+					permission = fmt.Sprintf("subforum_edit_own_topic:%d", subforumID)
+					if hasPerm, err := Services.HasPermission(currentUserID, permission, db); err == nil && hasPerm {
+						canEdit = true
 					}
 				}
 			}
@@ -208,6 +214,12 @@ func CreateCharacter(c *gin.Context, db *sql.DB) {
 	userID := Services.GetUserIdFromContext(c)
 	if userID == 0 {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
+		c.Abort()
+		return
+	}
+
+	if hasPerm, err := Services.HasPermission(userID, fmt.Sprintf("subforum_create_character_topic:%d", req.SubforumID), db); err != nil || !hasPerm {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You don't have permission to create characters in this subforum"})
 		c.Abort()
 		return
 	}
