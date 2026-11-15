@@ -365,7 +365,7 @@ func RegisterPostEventHandlers() {
 				Events.Publish(db, Events.NotificationCreated, Events.NotificationEvent{
 					UserID:  participantUserID,
 					Type:    "game",
-					Message: fmt.Sprintf("New [post in episode %s] by %s", topicTitle, event.Post.CharacterProfile.CharacterName),
+					Message: fmt.Sprintf("New [post in scene %s] by %s", topicTitle, event.Post.CharacterProfile.CharacterName),
 					Data:    gameData,
 				})
 			}
@@ -509,7 +509,7 @@ func RegisterPostEventHandlers() {
 		Events.Publish(db, Events.NotificationCreated, Events.NotificationEvent{
 			UserID:  event.Post.AuthorUserId,
 			Type:    "account_update",
-			Message: fmt.Sprintf("You earned %d currency for your episode post", amount),
+			Message: fmt.Sprintf("You earned %d currency for your scene post", amount),
 			Data: Entities.NotificationAccountUpdate{
 				IncomeTypeKey: "currency_income_game_post",
 				Amount:        amount,
@@ -594,7 +594,7 @@ func RegisterPostEventHandlers() {
 		Events.Publish(db, Events.NotificationCreated, Events.NotificationEvent{
 			UserID:  event.Post.AuthorUserId,
 			Type:    "account_update",
-			Message: fmt.Sprintf("You earned %d currency for your episode post", amount),
+			Message: fmt.Sprintf("You earned %d currency for your scene post", amount),
 			Data: Entities.NotificationAccountUpdate{
 				IncomeTypeKey: "currency_income_game_post",
 				Amount:        amount,

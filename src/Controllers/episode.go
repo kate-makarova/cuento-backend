@@ -89,7 +89,7 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 	}
 
 	if hasPerm, err := Services.HasPermission(userID, fmt.Sprintf("subforum_create_episode_topic:%d", req.SubforumID), db); err != nil || !hasPerm {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You don't have permission to create episodes in this subforum"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You don't have permission to create scenes in this subforum"})
 		c.Abort()
 		return
 	}
@@ -745,7 +745,7 @@ func GetEpisode(c *gin.Context, db *sql.DB) {
 	entity, err := Services.GetEntity(int64(id), "episode", db)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Episode not found"})
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Scene not found"})
 		} else {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to get episode: " + err.Error()})
 		}
@@ -756,7 +756,7 @@ func GetEpisode(c *gin.Context, db *sql.DB) {
 	if episode, ok := entity.(*Entities.Episode); ok {
 		var topicStatus Entities.TopicStatus
 		if err := db.QueryRow("SELECT status FROM topics WHERE id = ?", episode.Topic_Id).Scan(&topicStatus); err == nil && topicStatus == Entities.DeletedTopic {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Episode not found"})
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Scene not found"})
 			c.Abort()
 			return
 		}
@@ -859,7 +859,7 @@ func UpdateEpisode(c *gin.Context, db *sql.DB) {
 	err = db.QueryRow(query, episodeID).Scan(&topicID, &authorUserID, &subforumID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Episode not found"})
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Scene not found"})
 		} else {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to fetch episode details: " + err.Error()})
 		}
@@ -884,7 +884,7 @@ func UpdateEpisode(c *gin.Context, db *sql.DB) {
 	}
 
 	if !canEdit {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You do not have permission to edit this episode"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You do not have permission to edit this scene"})
 		c.Abort()
 		return
 	}
@@ -1123,7 +1123,7 @@ func DeactivateEpisode(c *gin.Context, db *sql.DB) {
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Episode not found"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Scene not found"})
 		c.Abort()
 		return
 	}
@@ -1194,7 +1194,7 @@ func UpdateEpisodeStatus(c *gin.Context, db *sql.DB) {
 		"SELECT COUNT(*) FROM episode_character ec JOIN character_base cb ON ec.character_id = cb.id WHERE ec.episode_id = ? AND cb.user_id = ?",
 		id, userID,
 	).Scan(&participantCount); err != nil || participantCount == 0 {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You are not a participant of this episode"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You are not a participant of this scene"})
 		c.Abort()
 		return
 	}
@@ -1226,7 +1226,7 @@ func UpdateEpisodeStatus(c *gin.Context, db *sql.DB) {
 	}
 	affected, _ := result.RowsAffected()
 	if affected == 0 {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Episode not found"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Scene not found"})
 		c.Abort()
 		return
 	}
@@ -1325,7 +1325,7 @@ func ActivateEpisode(c *gin.Context, db *sql.DB) {
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Episode not found"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Scene not found"})
 		c.Abort()
 		return
 	}
@@ -1574,7 +1574,7 @@ func SetEpisodeCustomAvatar(c *gin.Context, db *sql.DB) {
 	}
 	affected, _ := result.RowsAffected()
 	if affected == 0 {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Episode-character link not found"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Scene-character link not found"})
 		c.Abort()
 		return
 	}
@@ -1607,7 +1607,7 @@ func DeleteEpisodeCustomAvatar(c *gin.Context, db *sql.DB) {
 	}
 	affected, _ := result.RowsAffected()
 	if affected == 0 {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Episode-character link not found"})
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Scene-character link not found"})
 		c.Abort()
 		return
 	}
