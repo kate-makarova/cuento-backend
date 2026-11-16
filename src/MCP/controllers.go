@@ -108,7 +108,7 @@ func GetAIChatHistory(c *gin.Context, db *sql.DB) {
 	rows, err := db.Query(
 		`SELECT id, user_id, role, content, sources, date_created FROM (
 			SELECT id, user_id, role, content, sources, date_created
-			FROM ai_chat_messages WHERE user_id = ?
+			FROM ai_chat_messages WHERE user_id = ? AND role <> 'clear'
 			ORDER BY date_created DESC LIMIT ?
 		) sub ORDER BY date_created ASC`,
 		userID, limit,
@@ -136,7 +136,7 @@ func GetAIChatHistory(c *gin.Context, db *sql.DB) {
 	c.JSON(http.StatusOK, messages)
 }
 
-func ClearAIContext(c *gin.Context, db *sql.DB) {
+func ClearAIContext(c *gin.Context) {
 	userID := Services.GetUserIdFromContext(c)
 	if userID == 0 {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusUnauthorized, Message: "Unauthorized"})
@@ -148,16 +148,6 @@ func ClearAIContext(c *gin.Context, db *sql.DB) {
 		SessionID string `json:"session_id"`
 	}
 	_ = c.ShouldBindJSON(&req)
-
-	_, err := db.Exec(
-		"INSERT INTO ai_chat_messages (user_id, role, content, date_created) VALUES (?, 'clear', '', NOW())",
-		userID,
-	)
-	if err != nil {
-		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to clear context"})
-		c.Abort()
-		return
-	}
 
 	if req.SessionID != "" {
 		InvalidateChatSession(req.SessionID)
