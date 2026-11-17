@@ -346,6 +346,7 @@ func newTestRouter(db *sql.DB) *gin.Engine {
 	protected.POST("/notifications/dismiss/:id", func(c *gin.Context) { Controllers.DismissNotification(c, db) })
 	protected.GET("/ai-chat/history", func(c *gin.Context) { MCP.GetAIChatHistory(c, db) })
 	protected.POST("/ai-chat/clear", func(c *gin.Context) { MCP.ClearAIContext(c) })
+	protected.GET("/characters/archiving-warnings", func(c *gin.Context) { Controllers.GetArchivingWarnings(c, db) })
 	return r
 }
 
