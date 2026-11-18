@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -78,7 +79,7 @@ func SendMessage(c *gin.Context, db *sql.DB) {
 
 	notifyWorker()
 
-	c.JSON(http.StatusOK, gin.H{"message": "ok", "queue_position": position})
+	c.JSON(http.StatusOK, gin.H{"message": "ok", "queue_position": position, "date": Services.LocalizeTime(c, time.Now())})
 }
 
 func GetAvailableModels(c *gin.Context, db *sql.DB) {
@@ -130,6 +131,7 @@ func GetAIChatHistory(c *gin.Context, db *sql.DB) {
 		if len(sourcesRaw) > 0 {
 			_ = json.Unmarshal(sourcesRaw, &msg.Sources)
 		}
+		msg.Date = Services.LocalizeTime(c, msg.DateCreated)
 		messages = append(messages, msg)
 	}
 

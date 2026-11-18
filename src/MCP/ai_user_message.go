@@ -27,18 +27,19 @@ func SendAIMessageToUser(db *sql.DB, userID int, markdown string) (int64, error)
 		return 0, fmt.Errorf("reading AI message id for user %d: %w", userID, err)
 	}
 
+	locale := Services.GetUserLocale(userID, db)
 	Websockets.MainHub.SendNotification(userID, map[string]interface{}{
 		"type": "ai_message",
 		"data": Entities.AIChatMessage{
-			Id:          int(messageID),
-			UserId:      userID,
-			Role:        "assistant",
-			Content:     content,
-			DateCreated: time.Now(),
+			Id:      int(messageID),
+			UserId:  userID,
+			Role:    "assistant",
+			Content: content,
+			Date:    Services.LocalizeTimeForUser(time.Now(), locale),
 		},
 	})
 
-	localizer := Services.NewLocalizer(Services.GetUserLanguage(userID, db))
+	localizer := Services.NewLocalizer(locale.Lang)
 	Events.Publish(db, Events.NotificationCreated, Events.NotificationEvent{
 		UserID:  userID,
 		Type:    "ai_message",
