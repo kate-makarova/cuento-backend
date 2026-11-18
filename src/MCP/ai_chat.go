@@ -153,12 +153,12 @@ func executeChatTask(db *sql.DB, taskID, userID int) {
 		}
 	}
 	msg := Entities.AIChatMessage{
-		Id:          int(replyID),
-		UserId:      userID,
-		Role:        "assistant",
-		Content:     replyText,
-		Sources:     entitySources,
-		Date:        Services.LocalizeTimeForUser(time.Now(), Services.GetUserLocale(userID, db)),
+		Id:      int(replyID),
+		UserId:  userID,
+		Role:    "assistant",
+		Content: replyText,
+		Sources: entitySources,
+		Date:    Services.LocalizeTimeForUser(time.Now(), Services.GetUserLocale(userID, db)),
 	}
 
 	// Notify subscribers and determine how to deliver the reply.
