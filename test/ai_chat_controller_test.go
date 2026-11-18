@@ -69,3 +69,40 @@ func TestGetAIChatHistory_ExcludesClearRows(t *testing.T) {
 		t.Errorf("expected second message assistant/answer, got %s/%q", messages[1].Role, messages[1].Content)
 	}
 }
+
+func TestGetAIChatHistory_LocalizesDate(t *testing.T) {
+	tests := []struct {
+		name     string
+		lang     string
+		timezone string
+		want     string
+	}{
+		{"english utc", "en", "", "1 Nov 2026 10:00 AM"},
+		{"russian utc", "ru", "", "01.11.2026 10:00"},
+		{"english user timezone", "en", "Europe/Berlin", "1 Nov 2026 11:00 AM"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t)
+			f.exec(t, "UPDATE users SET interface_language = ?, interface_timezone = NULLIF(?, '') WHERE id = ?", tt.lang, tt.timezone, f.admin)
+			f.exec(t, "INSERT INTO ai_chat_messages (user_id, role, content, date_created) VALUES (?, 'user', 'question', '2026-11-01 10:00:00')", f.admin)
+
+			w := f.do(t, "GET", "/ai-chat/history", f.admin, nil)
+			expectStatus(t, w, http.StatusOK)
+
+			var messages []map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &messages); err != nil {
+				t.Fatalf("decoding response: %v", err)
+			}
+			if len(messages) != 1 {
+				t.Fatalf("expected 1 message, got %d: %s", len(messages), w.Body.String())
+			}
+			if got := messages[0]["date"]; got != tt.want {
+				t.Errorf("expected date %q, got %q", tt.want, got)
+			}
+			if _, ok := messages[0]["date_created"]; ok {
+				t.Errorf("raw date_created must not be sent: %s", w.Body.String())
+			}
+		})
+	}
+}
