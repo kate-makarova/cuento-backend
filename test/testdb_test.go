@@ -5,6 +5,7 @@ import (
 	"cuento-backend/config"
 	"cuento-backend/src/Controllers"
 	"cuento-backend/src/Entities"
+	"cuento-backend/src/Features"
 	"cuento-backend/src/MCP"
 	"cuento-backend/src/Middlewares"
 	"cuento-backend/src/Services"
@@ -347,6 +348,7 @@ func newTestRouter(db *sql.DB) *gin.Engine {
 	protected.GET("/ai-chat/history", func(c *gin.Context) { MCP.GetAIChatHistory(c, db) })
 	protected.POST("/ai-chat/clear", func(c *gin.Context) { MCP.ClearAIContext(c) })
 	protected.GET("/characters/archiving-warnings", func(c *gin.Context) { Controllers.GetArchivingWarnings(c, db) })
+	protected.POST("/currency/user/:user_id/transactions/add", func(c *gin.Context) { Features.AddUserCurrencyTransactionHandler(c, db) })
 	return r
 }
 
