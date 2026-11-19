@@ -335,6 +335,8 @@ func newTestRouter(db *sql.DB) *gin.Engine {
 	optional.GET("/topic/get/:id", func(c *gin.Context) { Controllers.GetTopic(c, db) })
 	optional.GET("/character/get/:id", func(c *gin.Context) { Controllers.GetCharacter(c, db) })
 	optional.POST("/post/create", func(c *gin.Context) { Controllers.CreatePost(c, db) })
+	optional.GET("/arc/:id/inventory/items", func(c *gin.Context) { Controllers.GetArcInventory(c, db) })
+	optional.GET("/inventory/item/:id", func(c *gin.Context) { Controllers.GetInventoryItem(c, db) })
 
 	protected := r.Group("/")
 	protected.Use(Middlewares.AuthMiddleware(), Middlewares.PermissionsMiddleware(db), Middlewares.UserLocaleMiddleware(db))
@@ -349,6 +351,19 @@ func newTestRouter(db *sql.DB) *gin.Engine {
 	protected.POST("/ai-chat/clear", func(c *gin.Context) { MCP.ClearAIContext(c) })
 	protected.GET("/characters/archiving-warnings", func(c *gin.Context) { Controllers.GetArchivingWarnings(c, db) })
 	protected.POST("/currency/user/:user_id/transactions/add", func(c *gin.Context) { Features.AddUserCurrencyTransactionHandler(c, db) })
+	protected.POST("/episode/:id/status", func(c *gin.Context) { Controllers.UpdateEpisodeStatus(c, db) })
+	protected.POST("/arc/:id/inventory/enable", func(c *gin.Context) { Controllers.SetArcInventory(c, db, true) })
+	protected.POST("/arc/:id/inventory/disable", func(c *gin.Context) { Controllers.SetArcInventory(c, db, false) })
+	protected.POST("/inventory/item/create", func(c *gin.Context) { Controllers.CreateInventoryItem(c, db) })
+	protected.POST("/inventory/item/update/:id", func(c *gin.Context) { Controllers.UpdateInventoryItem(c, db) })
+	protected.DELETE("/inventory/item/delete/:id", func(c *gin.Context) { Controllers.DeleteInventoryItem(c, db) })
+	protected.POST("/episode/:id/inventory/settings", func(c *gin.Context) { Controllers.SetSceneInventory(c, db) })
+	protected.GET("/episode/:id/inventories", func(c *gin.Context) { Controllers.GetSceneInventories(c, db) })
+	protected.POST("/episode/:id/inventory/:profile_id/update", func(c *gin.Context) { Controllers.UpdateSceneInventory(c, db) })
+	protected.POST("/episode/:id/inventory/:profile_id/lock", func(c *gin.Context) { Controllers.LockSceneInventory(c, db) })
+	protected.POST("/episode/:id/start", func(c *gin.Context) { Controllers.StartScene(c, db) })
+	protected.GET("/episode/:id/inventory/current", func(c *gin.Context) { Controllers.GetCurrentSceneInventories(c, db) })
+	protected.GET("/post/:id/inventory", func(c *gin.Context) { Controllers.GetPostInventory(c, db) })
 	return r
 }
 

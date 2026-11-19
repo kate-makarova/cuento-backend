@@ -6,28 +6,32 @@ const (
 	ActiveEpisode   EpisodeStatus = 0
 	InactiveEpisode EpisodeStatus = 1
 	FinishedEpisode EpisodeStatus = 2
+	// PendingEpisode is a scene waiting for its GM to fill and lock inventories; only Start leaves it.
+	PendingEpisode EpisodeStatus = 3
 )
 
 type Episode struct {
-	Id              int               `json:"id" db:"id"`
-	Topic_Id        int               `json:"topic_id" db:"topic_id"`
-	Name            string            `json:"name" db:"name"`
-	OpenToEveryone  bool              `json:"open_to_everyone" db:"open_to_everyone"`
-	EpisodeStatus   EpisodeStatus     `json:"episode_status" db:"episode_status"`
-	RatingSet       bool              `json:"rating_set" db:"rating_set"`
-	RatingLanguage  int               `json:"rating_language" db:"rating_language"`
-	RatingViolence  int               `json:"rating_violence" db:"rating_violence"`
-	RatingSex       int               `json:"rating_sex" db:"rating_sex"`
-	Characters      []*ShortCharacter `json:"characters" db:"-"`
-	Masks           []ShortMask       `json:"masks" db:"-"`
-	HasWarnings     bool              `json:"has_warnings" db:"-"`
-	WarningsConsent bool              `json:"warnings_consent" db:"-"`
-	Warnings        []StandardWarning `json:"warnings" db:"-"`
-	CustomFields    CustomFieldEntity `json:"custom_fields" db:"-"`
-	CanEdit         *bool             `json:"can_edit,omitempty" db:"-"`
-	IsArc           bool              `json:"is_arc" db:"-"`
-	Arc             *EpisodeArc       `json:"arc" db:"-"`
-	IsGM            bool              `json:"is_gm" db:"-"`
+	Id                 int               `json:"id" db:"id"`
+	Topic_Id           int               `json:"topic_id" db:"topic_id"`
+	Name               string            `json:"name" db:"name"`
+	OpenToEveryone     bool              `json:"open_to_everyone" db:"open_to_everyone"`
+	EpisodeStatus      EpisodeStatus     `json:"episode_status" db:"episode_status"`
+	RatingSet          bool              `json:"rating_set" db:"rating_set"`
+	RatingLanguage     int               `json:"rating_language" db:"rating_language"`
+	RatingViolence     int               `json:"rating_violence" db:"rating_violence"`
+	RatingSex          int               `json:"rating_sex" db:"rating_sex"`
+	Characters         []*ShortCharacter `json:"characters" db:"-"`
+	Masks              []ShortMask       `json:"masks" db:"-"`
+	HasWarnings        bool              `json:"has_warnings" db:"-"`
+	WarningsConsent    bool              `json:"warnings_consent" db:"-"`
+	Warnings           []StandardWarning `json:"warnings" db:"-"`
+	CustomFields       CustomFieldEntity `json:"custom_fields" db:"-"`
+	CanEdit            *bool             `json:"can_edit,omitempty" db:"-"`
+	IsArc              bool              `json:"is_arc" db:"-"`
+	Arc                *EpisodeArc       `json:"arc" db:"-"`
+	IsGM               bool              `json:"is_gm" db:"-"`
+	UsesInventory      bool              `json:"uses_inventory" db:"-"`
+	CanManageInventory bool              `json:"can_manage_inventory" db:"-"`
 }
 
 type EpisodeArc struct {

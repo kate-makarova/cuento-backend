@@ -1266,6 +1266,50 @@ protectedRouter.POST("/user/subforum-settings/update-all", "Replace all subforum
 		Controllers.DeleteNPC(c, Services.DB)
 	})
 
+	// Inventory (optional per arc and per scene)
+	optionalAuthRouter.GET("/arc/:id/inventory/items", "Get the inventory state and item catalogue of an arc", func(c *gin.Context) {
+		Controllers.GetArcInventory(c, Services.DB)
+	})
+	protectedRouter.POST("/arc/:id/inventory/enable", "Turn inventory on for an arc (GM)", func(c *gin.Context) {
+		Controllers.SetArcInventory(c, Services.DB, true)
+	})
+	protectedRouter.POST("/arc/:id/inventory/disable", "Turn inventory off for an arc while no scene uses it (GM)", func(c *gin.Context) {
+		Controllers.SetArcInventory(c, Services.DB, false)
+	})
+	optionalAuthRouter.GET("/inventory/item/:id", "Get an inventory item by ID", func(c *gin.Context) {
+		Controllers.GetInventoryItem(c, Services.DB)
+	})
+	protectedRouter.POST("/inventory/item/create", "Create an inventory item in an arc (GM)", func(c *gin.Context) {
+		Controllers.CreateInventoryItem(c, Services.DB)
+	})
+	protectedRouter.POST("/inventory/item/update/:id", "Update an inventory item (GM)", func(c *gin.Context) {
+		Controllers.UpdateInventoryItem(c, Services.DB)
+	})
+	protectedRouter.DELETE("/inventory/item/delete/:id", "Delete an inventory item not used in a locked inventory (GM)", func(c *gin.Context) {
+		Controllers.DeleteInventoryItem(c, Services.DB)
+	})
+	protectedRouter.POST("/episode/:id/inventory/settings", "Turn inventory on or off for a scene (GM)", func(c *gin.Context) {
+		Controllers.SetSceneInventory(c, Services.DB)
+	})
+	protectedRouter.GET("/episode/:id/inventories", "Get every character's inventory in a scene (GM)", func(c *gin.Context) {
+		Controllers.GetSceneInventories(c, Services.DB)
+	})
+	protectedRouter.POST("/episode/:id/inventory/:profile_id/update", "Replace a character's starting inventory in a scene (GM)", func(c *gin.Context) {
+		Controllers.UpdateSceneInventory(c, Services.DB)
+	})
+	protectedRouter.POST("/episode/:id/inventory/:profile_id/lock", "Lock a character's inventory in a scene (GM)", func(c *gin.Context) {
+		Controllers.LockSceneInventory(c, Services.DB)
+	})
+	protectedRouter.POST("/episode/:id/start", "Start a pending scene once all inventories are locked (GM)", func(c *gin.Context) {
+		Controllers.StartScene(c, Services.DB)
+	})
+	protectedRouter.GET("/episode/:id/inventory/current", "Get the current inventories the user may see in a scene", func(c *gin.Context) {
+		Controllers.GetCurrentSceneInventories(c, Services.DB)
+	})
+	protectedRouter.GET("/post/:id/inventory", "Get a character's inventory as of a post (player and GMs)", func(c *gin.Context) {
+		Controllers.GetPostInventory(c, Services.DB)
+	})
+
 	// AI Agent routes (admin only)
 	protectedRouter.GET("/admin/ai-agent/list", "Get list of all AI agents", func(c *gin.Context) {
 		Controllers.AdminListAiAgents(c, Services.DB)

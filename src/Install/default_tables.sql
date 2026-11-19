@@ -1411,6 +1411,75 @@ create table npc_post
     constraint fk_npc_post_post foreign key (post_id) references posts  (id) on delete cascade
 );
 
+create table inventory_arc_settings
+(
+    arc_id     int      not null primary key,
+    enabled_at datetime not null,
+    constraint fk_inventory_arc_settings_arc foreign key (arc_id) references arcs (id) on delete cascade
+);
+
+create table inventory_items
+(
+    id            int auto_increment primary key,
+    arc_id        int          not null,
+    name          varchar(255) not null,
+    description   text         null,
+    icon          varchar(512) null,
+    is_hidden     tinyint(1)   not null default 0,
+    display_order int          not null default 0,
+    key idx_inventory_items_arc (arc_id),
+    constraint fk_inventory_items_arc foreign key (arc_id) references arcs (id) on delete cascade
+);
+
+create table inventory_episode_settings
+(
+    episode_id bigint unsigned not null primary key,
+    constraint fk_inventory_episode_settings_episode foreign key (episode_id) references episode_base (id) on delete cascade
+);
+
+create table inventory_scene
+(
+    id                   int auto_increment primary key,
+    episode_id           bigint unsigned not null,
+    character_profile_id bigint unsigned not null,
+    is_locked            tinyint(1)      not null default 0,
+    locked_at            datetime        null,
+    locked_by            int             null,
+    unique key uq_inventory_scene (episode_id, character_profile_id),
+    constraint fk_inventory_scene_episode   foreign key (episode_id)           references episode_base (id)           on delete cascade,
+    constraint fk_inventory_scene_profile   foreign key (character_profile_id) references character_profile_base (id) on delete cascade,
+    constraint fk_inventory_scene_locked_by foreign key (locked_by)            references users (id)                  on delete set null
+);
+
+create table inventory_scene_items
+(
+    scene_inventory_id int not null,
+    item_id            int not null,
+    quantity           int not null,
+    primary key (scene_inventory_id, item_id),
+    constraint fk_inventory_scene_items_scene foreign key (scene_inventory_id) references inventory_scene (id) on delete cascade,
+    constraint fk_inventory_scene_items_item  foreign key (item_id)            references inventory_items (id) on delete cascade
+);
+
+create table inventory_post
+(
+    post_id            bigint unsigned not null primary key,
+    scene_inventory_id int             not null,
+    key idx_inventory_post_scene (scene_inventory_id),
+    constraint fk_inventory_post_post  foreign key (post_id)            references posts (id)           on delete cascade,
+    constraint fk_inventory_post_scene foreign key (scene_inventory_id) references inventory_scene (id) on delete cascade
+);
+
+create table inventory_post_items
+(
+    post_id  bigint unsigned not null,
+    item_id  int             not null,
+    quantity int             not null,
+    primary key (post_id, item_id),
+    constraint fk_inventory_post_items_post foreign key (post_id) references inventory_post (post_id) on delete cascade,
+    constraint fk_inventory_post_items_item foreign key (item_id) references inventory_items (id)    on delete cascade
+);
+
 create table user_topic_subscription
 (
     user_id  int            not null,

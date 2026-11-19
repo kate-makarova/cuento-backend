@@ -852,6 +852,8 @@ func GetTopic(c *gin.Context, db *sql.DB) {
 					db.QueryRow("SELECT COUNT(*) FROM arc_game_masters WHERE arc_id = ? AND user_id = ?", arcID, currentUserID).Scan(&gmCount)
 					episode.IsGM = gmCount > 0
 				}
+				_ = db.QueryRow("SELECT EXISTS(SELECT 1 FROM inventory_episode_settings WHERE episode_id = ?)", episode.Id).Scan(&episode.UsesInventory)
+				episode.CanManageInventory = episode.UsesInventory && currentUserID != 0 && canEditArc(currentUserID, arcID, db)
 			}
 
 			topic.Episode = episode
@@ -965,6 +967,18 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 	if topicStatus == Entities.FullTopic {
 		c.JSON(http.StatusForbidden, gin.H{"error": "This topic has reached its post limit and is no longer accepting posts"})
 		return
+	}
+	// A pending scene is waiting for its inventories; only the arc's game masters may post in it.
+	var episodeStatus Entities.EpisodeStatus
+	var sceneArcID sql.NullInt64
+	if err := tx.QueryRow(
+		"SELECT e.episode_status, (SELECT ae.arc_id FROM arc_episodes ae WHERE ae.episode_id = e.id LIMIT 1) FROM episode_base e WHERE e.topic_id = ?",
+		req.TopicID,
+	).Scan(&episodeStatus, &sceneArcID); err == nil && episodeStatus == Entities.PendingEpisode {
+		if userID == 0 || !sceneArcID.Valid || !canEditArc(userID, int(sceneArcID.Int64), db) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "This scene hasn't started yet"})
+			return
+		}
 	}
 	if hasPerm, err := Services.HasPermission(userID, fmt.Sprintf("subforum_post:%d", subforumID), db); err != nil || !hasPerm {
 		c.JSON(http.StatusForbidden, gin.H{"error": "You don't have permission to post in this subforum"})

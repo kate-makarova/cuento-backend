@@ -248,18 +248,7 @@ func GetArc(c *gin.Context, db *sql.DB) {
 	}
 
 	if userID != 0 {
-		isCreator := a.CreatorID != nil && *a.CreatorID == userID
-		if !isCreator {
-			var gmCount int
-			_ = db.QueryRow("SELECT COUNT(*) FROM arc_game_masters WHERE arc_id = ? AND user_id = ?", a.ID, userID).Scan(&gmCount)
-			if gmCount > 0 {
-				a.CanEdit = true
-			} else {
-				a.CanEdit, _ = Services.HasPermission(userID, "/arc/update/:id", db)
-			}
-		} else {
-			a.CanEdit = true
-		}
+		a.CanEdit = canEditArc(userID, a.ID, db)
 	}
 
 	a.Factions = []Entities.FactionShort{}
@@ -556,6 +545,7 @@ type ArcEpisodeListItem struct {
 	LastPostAuthor        *Entities.ShortUser       `json:"last_post_author"`
 	Characters            []Entities.ShortCharacter `json:"characters"`
 	Factions              []Entities.FactionShort   `json:"factions"`
+	UsesInventory         bool                      `json:"uses_inventory"`
 }
 
 func GetArcEpisodes(c *gin.Context, db *sql.DB) {
@@ -603,7 +593,8 @@ func GetArcEpisodes(c *gin.Context, db *sql.DB) {
 
 	rows, err := db.Query(`
 		SELECT e.id, e.topic_id, e.name, e.episode_status, t.date_last_post,
-		       u.id, u.username
+		       u.id, u.username,
+		       EXISTS(SELECT 1 FROM inventory_episode_settings ies WHERE ies.episode_id = e.id)
 		FROM arc_episodes ae
 		JOIN episode_base e ON ae.episode_id = e.id
 		JOIN topics t ON e.topic_id = t.id
@@ -626,7 +617,7 @@ func GetArcEpisodes(c *gin.Context, db *sql.DB) {
 		var lastPostDate sql.NullString
 		var authorID sql.NullInt64
 		var authorUsername sql.NullString
-		if err := rows.Scan(&ep.ID, &ep.TopicID, &ep.Title, &ep.Status, &lastPostDate, &authorID, &authorUsername); err != nil {
+		if err := rows.Scan(&ep.ID, &ep.TopicID, &ep.Title, &ep.Status, &lastPostDate, &authorID, &authorUsername, &ep.UsesInventory); err != nil {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to scan episode: " + err.Error()})
 			c.Abort()
 			return

@@ -29,6 +29,7 @@ type CreateEpisodeRequest struct {
 	CustomFields   map[string]interface{} `json:"custom_fields"`
 	ArcID          *int                   `json:"arc_id"`
 	BlockSettings  map[string]string      `json:"block_settings"`
+	UseInventory   bool                   `json:"use_inventory"`
 }
 
 type UpdateEpisodeRequest struct {
@@ -91,6 +92,10 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 	if hasPerm, err := Services.HasPermission(userID, fmt.Sprintf("subforum_create_episode_topic:%d", req.SubforumID), db); err != nil || !hasPerm {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusForbidden, Message: "You don't have permission to create scenes in this subforum"})
 		c.Abort()
+		return
+	}
+
+	if req.UseInventory && !checkCanUseInventory(c, db, req.ArcID, userID) {
 		return
 	}
 
@@ -227,6 +232,14 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 		}
 	}
 
+	if req.UseInventory {
+		if err := Services.EnableSceneInventoryTx(tx, createdEpisode.Id); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: err.Error()})
+			c.Abort()
+			return
+		}
+	}
+
 	if err := tx.Commit(); err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
 		c.Abort()
@@ -243,6 +256,39 @@ func CreateEpisode(c *gin.Context, db *sql.DB) {
 	})
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Episode created successfully", "episode_id": createdEpisode.Id, "topic_id": topicID})
+}
+
+// checkCanUseInventory checks that a new scene may use inventory: it is created in an arc that has
+// inventory enabled, by a game master of that arc.
+func checkCanUseInventory(c *gin.Context, db *sql.DB, arcID *int, userID int) bool {
+	if arcID == nil {
+		abortWith(c, http.StatusBadRequest, "Only scenes of an arc can use inventory")
+		return false
+	}
+	if !canEditArc(userID, *arcID, db) {
+		abortWith(c, http.StatusForbidden, "Only the game masters of this arc can create scenes with inventory")
+		return false
+	}
+	enabled, _, err := Services.ArcInventoryState(db, *arcID)
+	if err != nil {
+		abortInventoryError(c, err)
+		return false
+	}
+	if !enabled {
+		abortInventoryError(c, Services.ErrInventoryNotEnabled)
+		return false
+	}
+	return true
+}
+
+// rejectPendingScene aborts with 409 when the scene is pending; only Start may change its status.
+func rejectPendingScene(c *gin.Context, db *sql.DB, episodeID int) bool {
+	var status Entities.EpisodeStatus
+	if err := db.QueryRow("SELECT episode_status FROM episode_base WHERE id = ?", episodeID).Scan(&status); err == nil && status == Entities.PendingEpisode {
+		abortWith(c, http.StatusConflict, "This scene is pending; start it from its inventory page")
+		return true
+	}
+	return false
 }
 
 func PreviewEpisode(c *gin.Context, db *sql.DB) {
@@ -1100,6 +1146,9 @@ func DeactivateEpisode(c *gin.Context, db *sql.DB) {
 		c.Abort()
 		return
 	}
+	if rejectPendingScene(c, db, id) {
+		return
+	}
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -1186,6 +1235,9 @@ func UpdateEpisodeStatus(c *gin.Context, db *sql.DB) {
 	if status != Entities.ActiveEpisode && status != Entities.InactiveEpisode && status != Entities.FinishedEpisode {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid status value"})
 		c.Abort()
+		return
+	}
+	if rejectPendingScene(c, db, id) {
 		return
 	}
 
@@ -1300,6 +1352,9 @@ func ActivateEpisode(c *gin.Context, db *sql.DB) {
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusBadRequest, Message: "Invalid episode ID"})
 		c.Abort()
+		return
+	}
+	if rejectPendingScene(c, db, id) {
 		return
 	}
 
