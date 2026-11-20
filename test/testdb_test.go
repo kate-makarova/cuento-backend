@@ -335,6 +335,8 @@ func newTestRouter(db *sql.DB) *gin.Engine {
 	optional.GET("/topic/get/:id", func(c *gin.Context) { Controllers.GetTopic(c, db) })
 	optional.GET("/character/get/:id", func(c *gin.Context) { Controllers.GetCharacter(c, db) })
 	optional.POST("/post/create", func(c *gin.Context) { Controllers.CreatePost(c, db) })
+	optional.POST("/post/preview", func(c *gin.Context) { Controllers.PreviewPost(c, db) })
+	optional.GET("/topic-posts/:id", func(c *gin.Context) { Controllers.GetPostsByTopic(c, db) })
 	optional.GET("/arc/:id/inventory/items", func(c *gin.Context) { Controllers.GetArcInventory(c, db) })
 	optional.GET("/inventory/item/:id", func(c *gin.Context) { Controllers.GetInventoryItem(c, db) })
 
@@ -344,6 +346,7 @@ func newTestRouter(db *sql.DB) *gin.Engine {
 	protected.POST("/episode/create", func(c *gin.Context) { Controllers.CreateEpisode(c, db) })
 	protected.POST("/wanted-character/create", func(c *gin.Context) { Controllers.CreateWantedCharacter(c, db) })
 	protected.POST("/post/update/:id", func(c *gin.Context) { Controllers.UpdatePost(c, db) })
+	protected.POST("/post/delete/:id", func(c *gin.Context) { Controllers.DeletePost(c, db) })
 	protected.POST("/topic/update/:id", func(c *gin.Context) { Controllers.UpdateTopic(c, db) })
 	protected.GET("/notifications/unread", func(c *gin.Context) { Controllers.GetUnreadNotifications(c, db) })
 	protected.POST("/notifications/dismiss/:id", func(c *gin.Context) { Controllers.DismissNotification(c, db) })
@@ -363,6 +366,7 @@ func newTestRouter(db *sql.DB) *gin.Engine {
 	protected.POST("/episode/:id/inventory/:profile_id/lock", func(c *gin.Context) { Controllers.LockSceneInventory(c, db) })
 	protected.POST("/episode/:id/start", func(c *gin.Context) { Controllers.StartScene(c, db) })
 	protected.GET("/episode/:id/inventory/current", func(c *gin.Context) { Controllers.GetCurrentSceneInventories(c, db) })
+	protected.GET("/episode/:id/inventory/recipients", func(c *gin.Context) { Controllers.GetInventoryRecipients(c, db) })
 	protected.GET("/post/:id/inventory", func(c *gin.Context) { Controllers.GetPostInventory(c, db) })
 	return r
 }

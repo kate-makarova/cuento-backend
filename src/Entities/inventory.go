@@ -36,3 +36,9 @@ type SceneInventory struct {
 	LockedAtLocalized string           `json:"locked_at,omitempty"`
 	Items             []InventoryEntry `json:"items"`
 }
+
+// InventoryRecipient is a profile of a scene that can receive items: it has a locked inventory there.
+type InventoryRecipient struct {
+	ProfileID int    `json:"profile_id"`
+	Name      string `json:"name"`
+}

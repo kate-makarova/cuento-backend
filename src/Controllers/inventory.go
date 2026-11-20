@@ -74,7 +74,10 @@ func abortWith(c *gin.Context, code int, message string) {
 
 // abortInventoryError maps inventory service errors to HTTP responses.
 func abortInventoryError(c *gin.Context, err error) {
+	var actionErr *Services.InventoryActionError
 	switch {
+	case errors.As(err, &actionErr):
+		abortWith(c, http.StatusBadRequest, actionErr.Message)
 	case errors.Is(err, sql.ErrNoRows):
 		abortWith(c, http.StatusNotFound, "Not found")
 	case errors.Is(err, Services.ErrInvalidInventoryItems), errors.Is(err, Services.ErrProfileNotInScene):
@@ -82,7 +85,8 @@ func abortInventoryError(c *gin.Context, err error) {
 	case errors.Is(err, Services.ErrInventoryNotEnabled), errors.Is(err, Services.ErrInventoryInUse),
 		errors.Is(err, Services.ErrInventoryItemInUse), errors.Is(err, Services.ErrInventoryLocked),
 		errors.Is(err, Services.ErrSceneHasLockedInv), errors.Is(err, Services.ErrSceneNotUsingInventory),
-		errors.Is(err, Services.ErrScenePending), errors.Is(err, Services.ErrSceneNotPending):
+		errors.Is(err, Services.ErrScenePending), errors.Is(err, Services.ErrSceneNotPending),
+		errors.Is(err, Services.ErrInventoryActionsFrozen):
 		abortWith(c, http.StatusConflict, err.Error())
 	default:
 		abortWith(c, http.StatusInternalServerError, "Inventory operation failed: "+err.Error())
@@ -449,6 +453,24 @@ func GetCurrentSceneInventories(c *gin.Context, db *sql.DB) {
 		list = own
 	}
 	Services.LocalizeSceneInventories(list, Services.GetUserLocaleFromContext(c))
+	c.JSON(http.StatusOK, list)
+}
+
+// GetInventoryRecipients lists who in a scene can receive items, for the give action.
+func GetInventoryRecipients(c *gin.Context, db *sql.DB) {
+	ctx, ok := sceneForReader(c, db)
+	if !ok {
+		return
+	}
+	if !ctx.UsesInventory {
+		abortInventoryError(c, Services.ErrSceneNotUsingInventory)
+		return
+	}
+	list, err := Services.ListInventoryRecipients(db, ctx.EpisodeID)
+	if err != nil {
+		abortInventoryError(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, list)
 }
 

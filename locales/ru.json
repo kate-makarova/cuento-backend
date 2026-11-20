@@ -68,5 +68,8 @@
 
   "absence.started_notification": "{{.Username}} ушёл в отсутствие до {{.EndDate}}.",
 
-  "ai.message_notification": "У вас сообщение от ИИ."
+  "ai.message_notification": "У вас сообщение от ИИ.",
+
+  "inventory.action.dropped": "Выброшено",
+  "inventory.action.given_to": "{{.Name}} получает"
 }

@@ -64,5 +64,8 @@
 
   "absence.started_notification": "{{.Username}} has started an absence until {{.EndDate}}.",
 
-  "ai.message_notification": "You have a message from AI."
+  "ai.message_notification": "You have a message from AI.",
+
+  "inventory.action.dropped": "Dropped",
+  "inventory.action.given_to": "Given to {{.Name}}"
 }

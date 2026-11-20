@@ -1666,4 +1666,10 @@ export const TRANSLATIONS_RU = {
   "sceneinventory.startError": "Не удалось начать эпизод.",
   "sceneinventory.startUnlocked": "Сначала закройте эти инвентари: {$names}",
   "sceneinventory.title": "Инвентари",
+  "inventoryAction.chooseRecipient": "Передать…",
+  "inventoryAction.drop": "Выбросить",
+  "inventoryAction.give": "Передать",
+  "postform.itemActionPlaceholder": "опишите, что делает персонаж",
+  "wysiwyg.itemDrop": "Выбросить предметы",
+  "wysiwyg.itemGive": "Передать предметы",
 };

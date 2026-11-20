@@ -950,5 +950,9 @@ func GetBBCompiler() bbcode.Compiler {
 		return out, false
 	})
 
+	for tag := range inventoryActionTags {
+		compiler.SetTag(tag, compileInventoryAction)
+	}
+
 	return compiler
 }

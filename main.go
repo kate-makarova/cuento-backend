@@ -1306,6 +1306,9 @@ protectedRouter.POST("/user/subforum-settings/update-all", "Replace all subforum
 	protectedRouter.GET("/episode/:id/inventory/current", "Get the current inventories the user may see in a scene", func(c *gin.Context) {
 		Controllers.GetCurrentSceneInventories(c, Services.DB)
 	})
+	protectedRouter.GET("/episode/:id/inventory/recipients", "List who in a scene can receive items", func(c *gin.Context) {
+		Controllers.GetInventoryRecipients(c, Services.DB)
+	})
 	protectedRouter.GET("/post/:id/inventory", "Get a character's inventory as of a post (player and GMs)", func(c *gin.Context) {
 		Controllers.GetPostInventory(c, Services.DB)
 	})

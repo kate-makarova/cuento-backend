@@ -593,6 +593,15 @@ func GetPostsByTopic(c *gin.Context, db *sql.DB) {
 		posts = append(posts, post)
 	}
 
+	postHtmls := make([]*string, len(posts))
+	for i := range posts {
+		postHtmls[i] = &posts[i].ContentHtml
+	}
+	if err := Services.ResolveInventoryActions(db, Services.GetUserLocaleFromContext(c).Lang, postHtmls...); err != nil {
+		abortWith(c, http.StatusInternalServerError, "Failed to render inventory actions: "+err.Error())
+		return
+	}
+
 	// Batch-fetch factions for character profiles
 	var charIDs []interface{}
 	charIDToPostIdxs := make(map[int][]int)
@@ -1127,6 +1136,15 @@ func CreatePost(c *gin.Context, db *sql.DB) {
 		return
 	}
 
+	var authorProfileID *int
+	if userID != 0 && req.UseCharacterProfile {
+		authorProfileID = req.CharacterProfileID
+	}
+	if err := Services.ApplyPostInventory(tx, postID, int64(req.TopicID), authorProfileID, req.Content); err != nil {
+		abortInventoryError(c, err)
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to commit transaction"})
 		return
@@ -1271,6 +1289,10 @@ func PreviewPost(c *gin.Context, db *sql.DB) {
 	post.Content = req.Content
 	previewDomain, _ := Services.GetGlobalSetting("domain", db)
 	post.ContentHtml = Services.LinkifyURLs(Services.ParseBBCode(req.Content), previewDomain, db)
+	if err := Services.ResolveInventoryActions(db, Services.GetUserLocaleFromContext(c).Lang, &post.ContentHtml); err != nil {
+		abortWith(c, http.StatusInternalServerError, "Failed to render inventory actions: "+err.Error())
+		return
+	}
 	post.UseCharacterProfile = req.UseCharacterProfile
 	post.GuestName = req.GuestName
 
@@ -1401,14 +1423,16 @@ func UpdatePost(c *gin.Context, db *sql.DB) {
 	var topicIDForUpdate int64
 	var topicTypeForUpdate int
 	var oldCharacterProfileID sql.NullInt64
+	var oldUseCharacterProfile bool
+	var oldContent string
 	var postDateCreated time.Time
 	err = db.QueryRow(`
-		SELECT p.author_user_id, p.character_profile_id, p.date_created,
+		SELECT p.author_user_id, p.character_profile_id, COALESCE(p.use_character_profile, 0), p.content, p.date_created,
 		       t.id, t.subforum_id, t.type
 		FROM posts p
 		JOIN topics t ON t.id = p.topic_id
 		WHERE p.id = ? AND COALESCE(p.is_deleted, 0) != 1
-	`, postID).Scan(&authorUserID, &oldCharacterProfileID, &postDateCreated, &topicIDForUpdate, &subforumID, &topicTypeForUpdate)
+	`, postID).Scan(&authorUserID, &oldCharacterProfileID, &oldUseCharacterProfile, &oldContent, &postDateCreated, &topicIDForUpdate, &subforumID, &topicTypeForUpdate)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			_ = c.Error(&Middlewares.AppError{Code: http.StatusNotFound, Message: "Post not found"})
@@ -1441,8 +1465,16 @@ func UpdatePost(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	// 3. Update post content
-	_, err = db.Exec("UPDATE posts SET content = ? WHERE id = ?", req.Content, postID)
+	// 3. Update post content; the content, profile and inventory changes commit together
+	tx, err := db.Begin()
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start transaction"})
+		c.Abort()
+		return
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec("UPDATE posts SET content = ? WHERE id = ?", req.Content, postID)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update post: " + err.Error()})
 		c.Abort()
@@ -1450,6 +1482,13 @@ func UpdatePost(c *gin.Context, db *sql.DB) {
 	}
 
 	// 4. Handle profile change if requested
+	var oldAuthorProfileID *int
+	if oldUseCharacterProfile && oldCharacterProfileID.Valid {
+		id := int(oldCharacterProfileID.Int64)
+		oldAuthorProfileID = &id
+	}
+	newAuthorProfileID := oldAuthorProfileID
+	var profileChanged *Events.PostProfileChangedEvent
 	if req.UseCharacterProfile != nil {
 		var newCharacterID *int
 
@@ -1523,18 +1562,36 @@ func UpdatePost(c *gin.Context, db *sql.DB) {
 		if !*req.UseCharacterProfile {
 			newProfileID = nil
 		}
-		_, _ = db.Exec(
+		if _, err := tx.Exec(
 			"UPDATE posts SET character_profile_id = ?, use_character_profile = ? WHERE id = ?",
 			newProfileID, *req.UseCharacterProfile, postID,
-		)
+		); err != nil {
+			_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update post profile: " + err.Error()})
+			c.Abort()
+			return
+		}
+		newAuthorProfileID = newProfileID
 
-		Events.Publish(db, Events.PostProfileChanged, Events.PostProfileChangedEvent{
+		profileChanged = &Events.PostProfileChangedEvent{
 			PostID:          postID,
 			TopicID:         topicIDForUpdate,
 			PostDateCreated: postDateCreated,
 			OldCharacterID:  oldCharacterID,
 			NewCharacterID:  newCharacterID,
-		})
+		}
+	}
+
+	if err := Services.UpdatePostInventory(tx, int64(postID), topicIDForUpdate, oldAuthorProfileID, newAuthorProfileID, oldContent, req.Content); err != nil {
+		abortInventoryError(c, err)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
+		c.Abort()
+		return
+	}
+	if profileChanged != nil {
+		Events.Publish(db, Events.PostProfileChanged, *profileChanged)
 	}
 
 	// 5. Fetch updated post and emit event
@@ -1614,10 +1671,27 @@ func DeletePost(c *gin.Context, db *sql.DB) {
 		return
 	}
 
-	// 3. Soft-delete the post
-	_, err = db.Exec("UPDATE posts SET is_deleted = 1 WHERE id = ?", postID)
+	// 3. Soft-delete the post; deleting the latest post also undoes its inventory actions
+	tx, err := db.Begin()
+	if err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to start transaction"})
+		c.Abort()
+		return
+	}
+	defer tx.Rollback()
+	if err := Services.RemovePostInventoryOnDelete(tx, int64(postID), topicID); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to update inventories: " + err.Error()})
+		c.Abort()
+		return
+	}
+	_, err = tx.Exec("UPDATE posts SET is_deleted = 1 WHERE id = ?", postID)
 	if err != nil {
 		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to delete post: " + err.Error()})
+		c.Abort()
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		_ = c.Error(&Middlewares.AppError{Code: http.StatusInternalServerError, Message: "Failed to commit transaction"})
 		c.Abort()
 		return
 	}

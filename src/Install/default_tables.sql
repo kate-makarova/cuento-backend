@@ -1463,21 +1463,23 @@ create table inventory_scene_items
 
 create table inventory_post
 (
-    post_id            bigint unsigned not null primary key,
+    post_id            bigint unsigned not null,
     scene_inventory_id int             not null,
-    key idx_inventory_post_scene (scene_inventory_id),
+    primary key (post_id, scene_inventory_id),
+    key idx_inventory_post_scene (scene_inventory_id, post_id),
     constraint fk_inventory_post_post  foreign key (post_id)            references posts (id)           on delete cascade,
     constraint fk_inventory_post_scene foreign key (scene_inventory_id) references inventory_scene (id) on delete cascade
 );
 
 create table inventory_post_items
 (
-    post_id  bigint unsigned not null,
-    item_id  int             not null,
-    quantity int             not null,
-    primary key (post_id, item_id),
-    constraint fk_inventory_post_items_post foreign key (post_id) references inventory_post (post_id) on delete cascade,
-    constraint fk_inventory_post_items_item foreign key (item_id) references inventory_items (id)    on delete cascade
+    post_id            bigint unsigned not null,
+    scene_inventory_id int             not null,
+    item_id            int             not null,
+    quantity           int             not null,
+    primary key (post_id, scene_inventory_id, item_id),
+    constraint fk_inventory_post_items_post foreign key (post_id, scene_inventory_id) references inventory_post (post_id, scene_inventory_id) on delete cascade,
+    constraint fk_inventory_post_items_item foreign key (item_id) references inventory_items (id) on delete cascade
 );
 
 create table user_topic_subscription

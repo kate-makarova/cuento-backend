@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 )
 
@@ -43,11 +44,23 @@ func RegisterPostEventHandlers() {
 		domain, _ := Services.GetGlobalSetting("domain", db)
 		baseHtml := Services.LinkifyURLs(Services.ResolveNPCPlaceholders(Services.ParseBBCode(event.Post.Content), db), domain, db)
 
+		// Inventory action hovers are rendered once per viewer language
+		htmlByLang := map[string]string{}
+
 		// Send to each user on the page with their localized date and per-user CanEdit
 		for _, uid := range userIDs {
 			userPost := event.Post
-			userPost.ContentHtml = Services.ProcessHideBlocks(baseHtml, uid, int(event.TopicID), db)
-			userPost.DateCreatedLocalized = Services.LocalizeTimeForUser(userPost.DateCreated, Services.GetUserLocale(uid, db))
+			locale := Services.GetUserLocale(uid, db)
+			langHtml, ok := htmlByLang[locale.Lang]
+			if !ok {
+				langHtml = baseHtml
+				if err := Services.ResolveInventoryActions(db, locale.Lang, &langHtml); err != nil {
+					log.Printf("PostCreated: failed to render inventory actions of post %d: %v", event.Post.Id, err)
+				}
+				htmlByLang[locale.Lang] = langHtml
+			}
+			userPost.ContentHtml = Services.ProcessHideBlocks(langHtml, uid, int(event.TopicID), db)
+			userPost.DateCreatedLocalized = Services.LocalizeTimeForUser(userPost.DateCreated, locale)
 
 			canEdit := false
 			if uid != 0 {

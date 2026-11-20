@@ -410,7 +410,8 @@ func GetCurrentSceneInventories(db *sql.DB, episodeID int) ([]Entities.SceneInve
 	err = fillInventoryEntries(db, list, index, `
 		SELECT s.character_profile_id, i.id, i.name, i.description, i.icon, pi.quantity
 		FROM inventory_scene s
-		JOIN inventory_post_items pi ON pi.post_id = (SELECT MAX(p.post_id) FROM inventory_post p WHERE p.scene_inventory_id = s.id)
+		JOIN inventory_post_items pi ON pi.scene_inventory_id = s.id
+			AND pi.post_id = (SELECT MAX(p.post_id) FROM inventory_post p WHERE p.scene_inventory_id = s.id)
 		JOIN inventory_items i ON i.id = pi.item_id
 		WHERE s.episode_id = ?
 		ORDER BY i.display_order, i.id`, episodeID)
@@ -565,57 +566,6 @@ func StartScene(db *sql.DB, ctx SceneInventoryContext, userID int) ([]string, er
 	return nil, tx.Commit()
 }
 
-// SnapshotPostInventory stores the inventory a post's profile holds as of that post: a copy of its
-// previous post's inventory, or of the starting inventory for its first post. Does nothing for posts
-// whose profile has no locked inventory in the scene, and is safe to run twice for the same post.
-func SnapshotPostInventory(db *sql.DB, postID int64) error {
-	var sceneInvID int
-	err := db.QueryRow(`
-		SELECT s.id
-		FROM posts p
-		JOIN episode_base e ON e.topic_id = p.topic_id
-		JOIN inventory_episode_settings es ON es.episode_id = e.id
-		JOIN inventory_scene s ON s.episode_id = e.id AND s.character_profile_id = p.character_profile_id
-		WHERE p.id = ? AND p.use_character_profile = 1 AND s.is_locked = 1`, postID,
-	).Scan(&sceneInvID)
-	if err == sql.ErrNoRows {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("finding inventory for post %d: %w", postID, err)
-	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		return fmt.Errorf("starting transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	res, err := tx.Exec("INSERT IGNORE INTO inventory_post (post_id, scene_inventory_id) VALUES (?, ?)", postID, sceneInvID)
-	if err != nil {
-		return fmt.Errorf("creating inventory copy for post %d: %w", postID, err)
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return nil
-	}
-
-	var prevPostID sql.NullInt64
-	if err := tx.QueryRow("SELECT MAX(post_id) FROM inventory_post WHERE scene_inventory_id = ? AND post_id < ?", sceneInvID, postID).Scan(&prevPostID); err != nil {
-		return fmt.Errorf("finding previous inventory copy for post %d: %w", postID, err)
-	}
-	if prevPostID.Valid {
-		_, err = tx.Exec("INSERT INTO inventory_post_items (post_id, item_id, quantity) SELECT ?, item_id, quantity FROM inventory_post_items WHERE post_id = ?",
-			postID, prevPostID.Int64)
-	} else {
-		_, err = tx.Exec("INSERT INTO inventory_post_items (post_id, item_id, quantity) SELECT ?, item_id, quantity FROM inventory_scene_items WHERE scene_inventory_id = ?",
-			postID, sceneInvID)
-	}
-	if err != nil {
-		return fmt.Errorf("copying inventory items for post %d: %w", postID, err)
-	}
-	return tx.Commit()
-}
-
 // PostInventoryContext identifies whose inventory a post shows and where the post lives.
 type PostInventoryContext struct {
 	Scene       SceneInventoryContext
@@ -645,12 +595,16 @@ func GetPostInventoryContext(db *sql.DB, postID int) (PostInventoryContext, erro
 	return ctx, err
 }
 
-// GetPostInventoryItems returns the inventory copy stored for a post; empty when the post has none.
+// GetPostInventoryItems returns the author's inventory copy stored for a post; empty when the post has none.
 func GetPostInventoryItems(db *sql.DB, postID int) ([]Entities.InventoryEntry, error) {
 	rows, err := db.Query(`
 		SELECT i.id, i.name, i.description, i.icon, pi.quantity
-		FROM inventory_post_items pi JOIN inventory_items i ON i.id = pi.item_id
-		WHERE pi.post_id = ?
+		FROM posts p
+		JOIN episode_base e ON e.topic_id = p.topic_id
+		JOIN inventory_scene s ON s.episode_id = e.id AND s.character_profile_id = p.character_profile_id
+		JOIN inventory_post_items pi ON pi.post_id = p.id AND pi.scene_inventory_id = s.id
+		JOIN inventory_items i ON i.id = pi.item_id
+		WHERE p.id = ?
 		ORDER BY i.display_order, i.id`, postID)
 	if err != nil {
 		return nil, fmt.Errorf("loading inventory of post %d: %w", postID, err)

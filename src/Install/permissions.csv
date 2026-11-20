@@ -231,6 +231,7 @@ role_id,type,permission
 2,0,/episode/:id/inventory/:profile_id/lock
 2,0,/episode/:id/start
 2,0,/episode/:id/inventory/current
+2,0,/episode/:id/inventory/recipients
 2,0,/post/:id/inventory
 3,0,/ai-chat/message
 3,0,/ai-chat/history

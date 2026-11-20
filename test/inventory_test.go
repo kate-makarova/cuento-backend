@@ -67,10 +67,38 @@ func (s *invScene) fillAndLock(t *testing.T, f *fixture, profileID int, items ma
 	return id
 }
 
+// addPost writes an in-character post straight to the database and stores its inventory copies the way
+// CreatePost does, so tests can post where the author has no posting permission.
 func (s *invScene) addPost(t *testing.T, f *fixture, userID, profileID int) int {
 	t.Helper()
-	return f.insert(t, "INSERT INTO posts (topic_id, author_user_id, content, use_character_profile, character_profile_id) VALUES (?, ?, 'post', 1, ?)",
-		s.topicID, userID, profileID)
+	postID, err := s.addActionPost(t, f, userID, profileID, "post")
+	if err != nil {
+		t.Fatalf("storing post inventory: %v", err)
+	}
+	return postID
+}
+
+// addActionPost is addPost with the given content; the post is rolled back when its inventory is refused.
+func (s *invScene) addActionPost(t *testing.T, f *fixture, userID, profileID int, content string) (int, error) {
+	t.Helper()
+	tx, err := f.db.Begin()
+	if err != nil {
+		t.Fatalf("starting transaction: %v", err)
+	}
+	defer tx.Rollback()
+	res, err := tx.Exec("INSERT INTO posts (topic_id, author_user_id, content, use_character_profile, character_profile_id) VALUES (?, ?, ?, 1, ?)",
+		s.topicID, userID, content, profileID)
+	if err != nil {
+		t.Fatalf("inserting post: %v", err)
+	}
+	postID, _ := res.LastInsertId()
+	if err := Services.ApplyPostInventory(tx, postID, int64(s.topicID), &profileID, content); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("committing post: %v", err)
+	}
+	return int(postID), nil
 }
 
 func decode[T any](t *testing.T, body []byte) T {
@@ -195,6 +223,7 @@ func TestInventory_SceneSubforumAccess(t *testing.T) {
 		}, http.StatusOK},
 		{"start", "POST", func(s *invScene) string { return fmt.Sprintf("/episode/%d/start", s.episodeID) }, http.StatusConflict},
 		{"current", "GET", func(s *invScene) string { return fmt.Sprintf("/episode/%d/inventory/current", s.episodeID) }, http.StatusOK},
+		{"recipients", "GET", func(s *invScene) string { return fmt.Sprintf("/episode/%d/inventory/recipients", s.episodeID) }, http.StatusOK},
 		{"update", "POST", func(s *invScene) string {
 			return fmt.Sprintf("/episode/%d/inventory/%d/update", s.episodeID, s.playerProfile)
 		}, http.StatusOK},
@@ -272,9 +301,6 @@ func TestPostInventory_Access(t *testing.T) {
 			s := newInvScene(t, f, tt.subforum(f), Entities.ActiveEpisode)
 			s.fillAndLock(t, f, s.playerProfile, map[int]int{s.coin: 20})
 			postID := s.addPost(t, f, s.player, s.playerProfile)
-			if err := Services.SnapshotPostInventory(f.db, int64(postID)); err != nil {
-				t.Fatalf("snapshot: %v", err)
-			}
 
 			w := f.do(t, "GET", fmt.Sprintf("/post/%d/inventory", postID), tt.caller(f, s), nil)
 			expectStatus(t, w, tt.want)
@@ -602,15 +628,9 @@ func TestSetSceneInventory(t *testing.T) {
 	})
 }
 
-func TestSnapshotPostInventory(t *testing.T) {
+func TestApplyPostInventory_Copies(t *testing.T) {
 	f := newFixture(t)
 	s := newInvScene(t, f, f.subA, Entities.ActiveEpisode)
-	snapshot := func(postID int) {
-		t.Helper()
-		if err := Services.SnapshotPostInventory(f.db, int64(postID)); err != nil {
-			t.Fatalf("snapshot of post %d: %v", postID, err)
-		}
-	}
 	itemsOf := func(postID int) map[string]int {
 		t.Helper()
 		items, err := Services.GetPostInventoryItems(f.db, postID)
@@ -621,30 +641,31 @@ func TestSnapshotPostInventory(t *testing.T) {
 	}
 
 	before := s.addPost(t, f, s.player, s.playerProfile)
-	snapshot(before)
 	if n := f.count(t, "SELECT COUNT(*) FROM inventory_post WHERE post_id = ?", before); n != 0 {
 		t.Errorf("a post before the lock must get no copy, got %d", n)
 	}
 
 	s.fillAndLock(t, f, s.playerProfile, map[int]int{s.coin: 20, s.sword: 1})
-	first := s.addPost(t, f, s.player, s.playerProfile)
-	snapshot(first)
-	snapshot(first) // safe to run twice
-	if got := itemsOf(first); got["Gold coin"] != 20 || got["Sword"] != 1 || len(got) != 2 {
-		t.Errorf("first post should copy the starting inventory, got %v", got)
+	first, err := s.addActionPost(t, f, s.player, s.playerProfile, fmt.Sprintf("[item-drop items=%d:15]spent[/item-drop]", s.coin))
+	if err != nil {
+		t.Fatalf("first post: %v", err)
+	}
+	if got := itemsOf(first); got["Gold coin"] != 5 || got["Sword"] != 1 || len(got) != 2 {
+		t.Errorf("first post should be the starting inventory minus the drop, got %v", got)
 	}
 
-	// Simulate spending in the first post: the next post continues from it, not from the start.
-	f.exec(t, "UPDATE inventory_post_items SET quantity = 5 WHERE post_id = ? AND item_id = ?", first, s.coin)
 	second := s.addPost(t, f, s.player, s.playerProfile)
-	snapshot(second)
 	if got := itemsOf(second); got["Gold coin"] != 5 {
 		t.Errorf("second post should continue from the first post's copy, got %v", got)
 	}
 
 	ooc := f.insert(t, "INSERT INTO posts (topic_id, author_user_id, content, use_character_profile, character_profile_id) VALUES (?, ?, 'ooc', 0, ?)",
 		s.topicID, s.player, s.playerProfile)
-	snapshot(ooc)
+	tx, _ := f.db.Begin()
+	defer tx.Rollback()
+	if err := Services.ApplyPostInventory(tx, int64(ooc), int64(s.topicID), nil, "ooc"); err != nil {
+		t.Fatalf("out-of-character post: %v", err)
+	}
 	if n := f.count(t, "SELECT COUNT(*) FROM inventory_post WHERE post_id = ?", ooc); n != 0 {
 		t.Errorf("an out-of-character post must get no copy, got %d", n)
 	}
@@ -655,11 +676,9 @@ func TestCurrentSceneInventories(t *testing.T) {
 	s := newInvScene(t, f, f.subA, Entities.ActiveEpisode)
 	s.fillAndLock(t, f, s.playerProfile, map[int]int{s.coin: 20})
 	s.fillAndLock(t, f, s.maskProfile, map[int]int{s.sword: 1})
-	post := s.addPost(t, f, s.player, s.playerProfile)
-	if err := Services.SnapshotPostInventory(f.db, int64(post)); err != nil {
-		t.Fatalf("snapshot: %v", err)
+	if _, err := s.addActionPost(t, f, s.player, s.playerProfile, fmt.Sprintf("[item-drop items=%d:13]x[/item-drop]", s.coin)); err != nil {
+		t.Fatalf("posting: %v", err)
 	}
-	f.exec(t, "UPDATE inventory_post_items SET quantity = 7 WHERE post_id = ?", post)
 
 	tests := []struct {
 		name      string
